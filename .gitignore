@@ -41,6 +41,10 @@ dist-ssr
 # Claude Code local settings
 .claude/
 
+# Agent skills (install locally with npx skills add)
+.agents/
+skills-lock.json
+
 # Keys and credentials
 *.pem
 *.key
