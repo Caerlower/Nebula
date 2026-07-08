@@ -31,4 +31,19 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
-.env*
+
+# Environment files (keep .env.example)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Claude Code local settings
+.claude/
+
+# Keys and credentials
+*.pem
+*.key
+*.p12
+credentials.json
+secrets.json
