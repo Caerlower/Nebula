@@ -1,119 +1,100 @@
-# Nebula MCP Server
+# Nebula MCP
 
-Stage 2: read-only Stellar wallet on testnet (`get_address`, `check_balance`).
-
-## Versions
-
-| Package | Version | Notes |
-|---------|---------|-------|
-| `@modelcontextprotocol/sdk` | ^1.29.0 | v1 API — `McpServer` + `StdioServerTransport` |
-| `@stellar/stellar-sdk` | ^16.0.1 | `Keypair.fromSecret()`, `Horizon.Server.loadAccount()` for balances |
-| `zod` | ^3.25.0 | MCP SDK peer dependency |
-| Node.js | >=18 | Required |
-
-**Stellar SDK usage (v16):** RPC `getAccount()` only returns sequence data for transaction building. For full balance lists (XLM + trustlines), this server uses **Horizon** `loadAccount()` — the current recommended pattern for read-only classic account balances.
-
-## Environment variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `STELLAR_SECRET_KEY` | Yes (for wallet tools) | — | Stellar secret key (`S...`). Never commit this. |
-| `NETWORK` | No | `testnet` | `testnet` or `mainnet` |
-
-If `STELLAR_SECRET_KEY` is missing or invalid, wallet tools return a readable error — the server keeps running.
-
-## Build and run
-
-From the repo root:
-
-```bash
-pnpm install
-pnpm --filter nebula-mcp-server build
-STELLAR_SECRET_KEY="S..." NETWORK=testnet pnpm --filter nebula-mcp-server start
-```
-
-Development:
-
-```bash
-STELLAR_SECRET_KEY="S..." NETWORK=testnet pnpm --filter nebula-mcp-server dev
-```
-
-## Fund a testnet account (Friendbot)
-
-1. Generate a keypair (one-time):
-
-```bash
-node -e "const {Keypair}=require('@stellar/stellar-sdk'); const k=Keypair.random(); console.log('SECRET:', k.secret()); console.log('PUBLIC:', k.publicKey());"
-```
-
-2. Set `STELLAR_SECRET_KEY` to the `S...` value.
-
-3. Fund via Friendbot (replace `G...` with your public key):
-
-```bash
-curl "https://friendbot.stellar.org?addr=GYOUR_PUBLIC_KEY_HERE"
-```
-
-Or open in a browser:
-
-```
-https://friendbot.stellar.org?addr=GYOUR_PUBLIC_KEY_HERE
-```
-
-Friendbot sends 10,000 test XLM. Only works on **testnet**.
-
-## Connect to Claude Code (terminal)
-
-After building, re-add the server with env vars:
-
-```bash
-pnpm --filter nebula-mcp-server build
-
-claude mcp remove nebula 2>/dev/null; claude mcp add nebula \
-  --env STELLAR_SECRET_KEY="SYOUR_SECRET_KEY" \
-  --env NETWORK=testnet \
-  -- node /Users/manavgoyal/Nebula/packages/mcp-server/dist/index.js
-```
-
-Restart Claude Code, then test:
-
-- *"Use get_address from Nebula"*
-- *"Use check_balance from Nebula"*
-
-## Connect to Claude Desktop
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**Give your AI agent a Stellar wallet** — payments, yield, spending policy, and on-chain reputation. One `npx` install, like [Pixa's wallet MCP](https://www.npmjs.com/package/pixa-wallet-mcp).
 
 ```json
 {
   "mcpServers": {
     "nebula": {
-      "command": "node",
-      "args": [
-        "/Users/manavgoyal/Nebula/packages/mcp-server/dist/index.js"
-      ],
+      "command": "npx",
+      "args": ["-y", "nebula-mcp"],
       "env": {
-        "STELLAR_SECRET_KEY": "SYOUR_SECRET_KEY",
-        "NETWORK": "testnet"
+        "STELLAR_SECRET_KEY": "S...",
+        "NETWORK": "testnet",
+        "MAX_PER_CALL": "1000",
+        "MAX_PER_DAY": "10000"
       }
     }
   }
 }
 ```
 
-Quit Claude Desktop completely (Cmd+Q), reopen, and test the tools.
+Copy [`mcp.example.json`](./mcp.example.json) · Full install guide: **[INSTALL.md](./INSTALL.md)** · Tool reference: **[TOOLS.md](./TOOLS.md)**
 
-## Tools
+---
 
-| Tool | Description |
-|------|-------------|
-| `ping` | Health check |
-| `get_address` | Public Stellar address (`G...`) |
-| `check_balance` | XLM + asset balances (or Friendbot instructions if unfunded) |
+## What your agent gets
 
-## Test with MCP Inspector (optional)
+| Capability | How |
+|------------|-----|
+| **Wallet** | Hold XLM + USDC, check balances, send transfers |
+| **x402 payments** | Auto-pay HTTP 402 APIs with USDC — no human in the loop |
+| **MPP sessions** | High-frequency micropayments in one on-chain deposit + off-chain commits |
+| **Treasury yield** | Idle funds auto-earn on Blend; withdraw when liquidity drops |
+| **Spending policy** | Per-call + daily caps — off-chain or enforced on Soroban |
+| **8004 identity** | On-chain agent registration + reputation |
+| **Live dashboard** | Interactive wallet UI inside chat (Claude Desktop / MCP Apps) |
+
+**22 tools** · Default **testnet** · Node **18+**
+
+---
+
+## Tools at a glance
+
+### Wallet
+`ping` · `get_address` · `check_balance` · `wallet_dashboard` · `request_funding`
+
+### Send
+`transfer_xlm` · `transfer_usdc`
+
+### Limits
+`spending_report` · `deploy_policy` · `get_policy_status` · `set_policy_limits`
+
+### Pay for APIs
+`x402_fetch` · `mpp_open_session` · `mpp_status` · `mpp_fetch` · `mpp_close_session`
+
+### Treasury
+`get_treasury_status` · `set_liquidity_threshold` · `optimize_treasury` · `blend_check_rates`
+
+### Identity
+`register_identity` · `get_my_reputation`
+
+See **[TOOLS.md](./TOOLS.md)** for parameters, env vars, and example prompts.
+
+---
+
+## Spending limits
+
+Before any transfer or payment signs, Nebula checks caps:
+
+- **Off-chain** — set `MAX_PER_CALL` and `MAX_PER_DAY` in MCP env
+- **On-chain** — set `POLICY_CONTRACT_ID` to a Soroban `nebula-policy` contract (deploy with `deploy_policy`)
+
+Treasury rebalancing is **not** subject to agent spending limits.
+
+---
+
+## Claude Desktop (no terminal)
 
 ```bash
-STELLAR_SECRET_KEY="S..." NETWORK=testnet \
-  npx @modelcontextprotocol/inspector node packages/mcp-server/dist/index.js
+pnpm --filter nebula-mcp build:mcpb   # from monorepo
 ```
+
+Double-click `nebula.mcpb` → enter secret key in the install wizard.
+
+---
+
+## First commands to try
+
+```
+Use wallet_dashboard from Nebula
+Use request_funding from Nebula
+Use check_balance from Nebula
+Use spending_report from Nebula
+```
+
+---
+
+## License
+
+MIT · [GitHub](https://github.com/manavgoyal/Nebula)

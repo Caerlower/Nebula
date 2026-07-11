@@ -3,8 +3,14 @@
   "private": true,
   "packageManager": "pnpm@10.13.1",
   "scripts": {
-    "build": "pnpm --filter nebula-frontend build",
-    "dev": "pnpm --filter nebula-frontend dev",
+    "build": "pnpm --filter nebula-mcp build",
+    "build:landing": "pnpm --filter nebula-landing build",
+    "build:web": "pnpm --filter nebula-frontend build",
+    "build:mcpb": "pnpm --filter nebula-mcp build:mcpb",
+    "dev:landing": "pnpm --filter nebula-landing dev",
+    "dev:mcp": "pnpm --filter nebula-mcp dev",
+    "dev:web": "pnpm --filter nebula-frontend dev",
+    "publish:mcp": "pnpm --filter nebula-mcp publish --access public",
     "vercel:configure": "node scripts/configure-vercel.mjs"
   }
 }

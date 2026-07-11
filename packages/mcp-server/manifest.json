@@ -1,0 +1,137 @@
+{
+  "manifest_version": "0.3",
+  "name": "nebula",
+  "display_name": "Nebula — Stellar Wallet for AI Agents",
+  "version": "1.0.0",
+  "icon": "nebula-icon.svg",
+  "description": "Stellar MCP wallet for AI agents — 22 tools: x402/MPP payments, Blend treasury, on-chain policy, 8004 identity, in-chat dashboard.",
+  "long_description": "Give your AI agent a Stellar wallet with Nebula.\n\n**22 MCP tools** across wallet, payments, treasury, policy, and identity.\n\n**Dashboard in chat** — `wallet_dashboard` renders an interactive UI (balances, limits, treasury, MPP, 8004).\n\n**Payments** — `x402_fetch` for per-request USDC; MPP session tools for streaming micropayments.\n\n**Treasury** — automated Blend yield on idle XLM/USDC.\n\n**Policy** — off-chain limits or on-chain Soroban `nebula-policy` contract.\n\n**Identity** — Stellar8004 registration + reputation.\n\nSet `STELLAR_SECRET_KEY` and spending limits. Testnet by default.",
+  "author": {
+    "name": "Nebula",
+    "url": "https://github.com/manavgoyal/Nebula"
+  },
+  "license": "MIT",
+  "keywords": [
+    "stellar",
+    "mcp",
+    "wallet",
+    "x402",
+    "mpp",
+    "soroban",
+    "agents",
+    "blend",
+    "stellar8004"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "STELLAR_SECRET_KEY": "${user_config.stellar_secret_key}",
+        "NETWORK": "${user_config.network}",
+        "MAX_PER_CALL": "${user_config.max_per_call}",
+        "MAX_PER_DAY": "${user_config.max_per_day}",
+        "POLICY_CONTRACT_ID": "${user_config.policy_contract_id}",
+        "TREASURY_ASSET": "${user_config.treasury_asset}",
+        "LIQUIDITY_THRESHOLD": "${user_config.liquidity_threshold}",
+        "REBALANCE_INTERVAL_SECONDS": "${user_config.rebalance_interval_seconds}",
+        "MPP_RECIPIENT": "${user_config.mpp_recipient}"
+      }
+    }
+  },
+  "user_config": {
+    "stellar_secret_key": {
+      "type": "string",
+      "title": "Stellar Secret Key",
+      "description": "Your Stellar secret key (S...). Stored securely in the OS keychain for .mcpb installs.",
+      "required": true,
+      "sensitive": true
+    },
+    "network": {
+      "type": "string",
+      "title": "Network",
+      "description": "testnet or mainnet",
+      "required": false,
+      "default": "testnet"
+    },
+    "max_per_call": {
+      "type": "string",
+      "title": "Max per call",
+      "description": "Spending cap per transfer/x402/MPP open (off-chain mode). Ignored when policy contract is set.",
+      "required": false,
+      "default": "100"
+    },
+    "max_per_day": {
+      "type": "string",
+      "title": "Max per day",
+      "description": "Rolling 24h spending cap (off-chain mode).",
+      "required": false,
+      "default": "500"
+    },
+    "policy_contract_id": {
+      "type": "string",
+      "title": "Policy contract ID",
+      "description": "Optional on-chain Soroban policy contract (C...).",
+      "required": false
+    },
+    "treasury_asset": {
+      "type": "string",
+      "title": "Treasury asset",
+      "description": "xlm or usdc",
+      "required": false,
+      "default": "xlm"
+    },
+    "liquidity_threshold": {
+      "type": "string",
+      "title": "Liquidity threshold",
+      "description": "Minimum liquid balance before auto-deposit to Blend.",
+      "required": false,
+      "default": "10"
+    },
+    "rebalance_interval_seconds": {
+      "type": "string",
+      "title": "Rebalance interval",
+      "description": "Seconds between automatic treasury rebalances.",
+      "required": false,
+      "default": "60"
+    },
+    "mpp_recipient": {
+      "type": "string",
+      "title": "MPP recipient",
+      "description": "Default G... address for MPP channel payouts.",
+      "required": false
+    }
+  },
+  "tools": [
+    { "name": "ping", "description": "Health check." },
+    { "name": "get_address", "description": "Wallet public key (G...)." },
+    { "name": "check_balance", "description": "XLM and USDC balances." },
+    { "name": "wallet_dashboard", "description": "Interactive in-chat wallet dashboard (MCP Apps)." },
+    { "name": "request_funding", "description": "Testnet Friendbot / mainnet funding links." },
+    { "name": "transfer_xlm", "description": "Send XLM (spending-limited)." },
+    { "name": "transfer_usdc", "description": "Send USDC (spending-limited)." },
+    { "name": "spending_report", "description": "Limits, daily spent, remaining budget." },
+    { "name": "deploy_policy", "description": "Deploy on-chain Soroban spending policy." },
+    { "name": "get_policy_status", "description": "Read on-chain policy usage." },
+    { "name": "set_policy_limits", "description": "Update on-chain policy caps." },
+    { "name": "x402_fetch", "description": "Fetch URL with automatic x402 USDC payment." },
+    { "name": "mpp_open_session", "description": "Open MPP payment channel with USDC budget." },
+    { "name": "mpp_status", "description": "Active MPP session status." },
+    { "name": "mpp_fetch", "description": "Pay MPP-gated URL off-chain." },
+    { "name": "mpp_close_session", "description": "Settle MPP session on-chain." },
+    { "name": "get_treasury_status", "description": "Liquid vs Blend treasury balances." },
+    { "name": "set_liquidity_threshold", "description": "Set treasury liquidity threshold." },
+    { "name": "optimize_treasury", "description": "Manual treasury rebalance." },
+    { "name": "blend_check_rates", "description": "Blend supply APY (read-only)." },
+    { "name": "register_identity", "description": "Stellar8004 on-chain agent identity." },
+    { "name": "get_my_reputation", "description": "This agent's 8004 reputation summary." }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

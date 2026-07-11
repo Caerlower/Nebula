@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "nebula": {
+      "command": "npx",
+      "args": ["-y", "nebula-mcp"],
+      "env": {
+        "STELLAR_SECRET_KEY": "YOUR_STELLAR_SECRET_KEY",
+        "NETWORK": "testnet",
+        "MAX_PER_CALL": "1000",
+        "MAX_PER_DAY": "10000",
+        "POLICY_CONTRACT_ID": "",
+        "TREASURY_ASSET": "xlm",
+        "LIQUIDITY_THRESHOLD": "10",
+        "REBALANCE_INTERVAL_SECONDS": "60",
+        "MPP_RECIPIENT": ""
+      }
+    }
+  }
+}

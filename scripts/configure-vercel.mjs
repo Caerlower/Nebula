@@ -24,7 +24,7 @@ const response = await fetch(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      rootDirectory: "frontend",
+      rootDirectory: "apps/web",
       framework: "tanstack-start",
       installCommand: "pnpm install",
       buildCommand: "pnpm build",

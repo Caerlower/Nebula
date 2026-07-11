@@ -1,6 +1,10 @@
 import { Horizon, Keypair, StrKey } from "@stellar/stellar-sdk";
 
 import { getNetworkConfig, type NetworkConfig } from "./config.js";
+import {
+  formatFundingInstructions,
+  formatWalletBlock,
+} from "./lib/format-output.js";
 
 export type WalletLoadResult =
   | { ok: true; keypair: Keypair; network: NetworkConfig }
@@ -82,24 +86,17 @@ export function unfundedAccountMessage(
   publicKey: string,
   network: NetworkConfig,
 ): string {
-  const lines = [
-    `Account ${publicKey} is not funded on ${network.name} yet.`,
-    "",
-    "Fund it with Friendbot (testnet only):",
-  ];
-
-  if (network.friendbotUrl) {
-    lines.push(
-      `  curl "${network.friendbotUrl}?addr=${publicKey}"`,
-      "",
-      "Or open this URL in a browser:",
-      `  ${network.friendbotUrl}?addr=${publicKey}`,
-    );
-  } else {
-    lines.push("  Friendbot is only available on testnet.");
-  }
-
-  return lines.join("\n");
+  const funding = formatFundingInstructions(network, publicKey);
+  return funding.replace(
+    /^Nebula · Fund on testnet/m,
+    "Nebula · Account not funded",
+  ).replace(
+    /^Nebula · Fund wallet/m,
+    "Nebula · Account not funded",
+  ).replace(
+    /^Nebula · Wallet/m,
+    "Nebula · Account not funded",
+  );
 }
 
 export function isAccountNotFound(error: unknown): boolean {

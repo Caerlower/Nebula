@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "tanstack-start",
   "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter nebula-frontend build && mkdir -p .vercel && cp -R frontend/.vercel/output .vercel/output"
+  "buildCommand": "pnpm --filter nebula-frontend build && mkdir -p .vercel && cp -R apps/web/.vercel/output .vercel/output"
 }

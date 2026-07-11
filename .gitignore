@@ -38,6 +38,9 @@ dist-ssr
 .env.*.local
 !.env.example
 
+# Reference / vendor trees (not part of Nebula)
+Pixa/
+
 # Claude Code local settings
 .claude/
 
@@ -45,7 +48,9 @@ dist-ssr
 .agents/
 skills-lock.json
 
-# Keys and credentials
+# MCP bundles
+*.mcpb
+.mcpb-build/
 *.pem
 *.key
 *.p12

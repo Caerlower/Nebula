@@ -1,0 +1,10 @@
+src/
+scripts/
+contracts/
+.env
+.env.*
+!.env.example
+*.mcpb
+.mcpb-build/
+tsconfig.json
+node_modules/

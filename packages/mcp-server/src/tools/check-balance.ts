@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { formatWalletBlock, section } from "../lib/format-output.js";
 import {
   fetchAccountBalances,
   formatBalances,
@@ -38,9 +39,8 @@ export function registerCheckBalanceTool(server: McpServer): void {
 
       return textToolResult(
         [
-          `Network: ${wallet.network.name}`,
-          `Address: ${publicKey}`,
-          "",
+          ...formatWalletBlock(wallet.network.name, publicKey),
+          section("Balances"),
           formatBalances(result.balances),
         ].join("\n"),
       );
