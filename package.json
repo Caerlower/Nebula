@@ -6,6 +6,7 @@
     "build": "pnpm --filter nebula-mcp build",
     "build:landing": "pnpm --filter nebula-landing build",
     "build:web": "pnpm --filter nebula-frontend build",
+    "build:site": "pnpm --filter nebula-landing build && pnpm --filter nebula-frontend build",
     "build:mcpb": "pnpm --filter nebula-mcp build:mcpb",
     "dev:landing": "pnpm --filter nebula-landing dev",
     "dev:mcp": "pnpm --filter nebula-mcp dev",
