@@ -25,9 +25,10 @@ const response = await fetch(
     },
     body: JSON.stringify({
       rootDirectory: "apps/web",
-      framework: "tanstack-start",
+      framework: "nextjs",
       installCommand: "pnpm install",
-      buildCommand: "pnpm build",
+      buildCommand:
+        "pnpm --filter nebula-landing build && pnpm --filter nebula-frontend build",
     }),
   },
 );

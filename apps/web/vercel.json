@@ -2,6 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "pnpm install",
-  "buildCommand": "pnpm run build:site",
-  "outputDirectory": "apps/web/.next"
+  "buildCommand": "pnpm --filter nebula-landing build && pnpm --filter nebula-frontend build"
 }
