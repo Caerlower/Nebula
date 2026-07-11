@@ -1,7 +1,7 @@
 {
   "name": "nebula-mcp",
   "version": "1.0.0",
-  "description": "Stellar MCP wallet for AI agents — 22 tools: x402/MPP payments, Blend treasury, on-chain policy, 8004 identity, in-chat dashboard",
+  "description": "Stellar MCP wallet for AI agents — 23 tools: x402/MPP payments, Blend treasury, on-chain policy, 8004 identity, in-chat dashboard",
   "type": "module",
   "license": "MIT",
   "author": "Nebula",

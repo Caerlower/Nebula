@@ -1,6 +1,6 @@
 # Nebula MCP — Tool Reference
 
-**22 tools** across wallet, payments, treasury, on-chain policy, and agent identity.
+**23 tools** across wallet, payments, treasury, on-chain policy, and agent identity.
 
 Default network: **testnet**. Spending limits apply to agent outgoing payments (transfers, x402, MPP) — not treasury rebalancing.
 
@@ -11,6 +11,7 @@ Default network: **testnet**. Spending limits apply to agent outgoing payments (
 | Tool | Parameters | What it does |
 |------|------------|--------------|
 | `ping` | — | Health check — confirms the server is running. |
+| `help` | `category?` | Full feature guide: all tools by category, env vars, quick-start prompts, and your current config. Categories: `wallet`, `transfers`, `limits`, `policy`, `x402`, `mpp`, `treasury`, `identity`. |
 | `get_address` | — | Returns the wallet public key (`G...`). |
 | `check_balance` | — | XLM and USDC balances on the configured network. |
 | `wallet_dashboard` | — | **Interactive in-chat UI** (MCP Apps): balances, limits, treasury, MPP session, 8004 identity. |
@@ -153,6 +154,7 @@ Start on testnet: fund XLM via `request_funding`, add USDC trustline, use [Circl
 ## Quick start prompts
 
 ```
+Use help from Nebula
 Use ping from Nebula
 Use get_address from Nebula
 Use request_funding from Nebula

@@ -4,8 +4,8 @@
   "display_name": "Nebula — Stellar Wallet for AI Agents",
   "version": "1.0.0",
   "icon": "nebula-icon.svg",
-  "description": "Stellar MCP wallet for AI agents — 22 tools: x402/MPP payments, Blend treasury, on-chain policy, 8004 identity, in-chat dashboard.",
-  "long_description": "Give your AI agent a Stellar wallet with Nebula.\n\n**22 MCP tools** across wallet, payments, treasury, policy, and identity.\n\n**Dashboard in chat** — `wallet_dashboard` renders an interactive UI (balances, limits, treasury, MPP, 8004).\n\n**Payments** — `x402_fetch` for per-request USDC; MPP session tools for streaming micropayments.\n\n**Treasury** — automated Blend yield on idle XLM/USDC.\n\n**Policy** — off-chain limits or on-chain Soroban `nebula-policy` contract.\n\n**Identity** — Stellar8004 registration + reputation.\n\nSet `STELLAR_SECRET_KEY` and spending limits. Testnet by default.",
+  "description": "Stellar MCP wallet for AI agents — 23 tools: x402/MPP payments, Blend treasury, on-chain policy, 8004 identity, in-chat dashboard.",
+  "long_description": "Give your AI agent a Stellar wallet with Nebula.\n\n**23 MCP tools** across wallet, payments, treasury, policy, and identity.\n\n**Dashboard in chat** — `wallet_dashboard` renders an interactive UI (balances, limits, treasury, MPP, 8004).\n\n**Payments** — `x402_fetch` for per-request USDC; MPP session tools for streaming micropayments.\n\n**Treasury** — automated Blend yield on idle XLM/USDC.\n\n**Policy** — off-chain limits or on-chain Soroban `nebula-policy` contract.\n\n**Identity** — Stellar8004 registration + reputation.\n\nSet `STELLAR_SECRET_KEY` and spending limits. Testnet by default.",
   "author": {
     "name": "Nebula",
     "url": "https://github.com/manavgoyal/Nebula"
@@ -106,6 +106,7 @@
   },
   "tools": [
     { "name": "ping", "description": "Health check." },
+    { "name": "help", "description": "Tool catalog, env vars, quick-start prompts." },
     { "name": "get_address", "description": "Wallet public key (G...)." },
     { "name": "check_balance", "description": "XLM and USDC balances." },
     { "name": "wallet_dashboard", "description": "Interactive in-chat wallet dashboard (MCP Apps)." },

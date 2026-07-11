@@ -18,6 +18,7 @@ const pkg = JSON.parse(
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { registerHelpTool } from "./tools/help.js";
 import { registerBlendCheckRatesTool } from "./tools/blend-check-rates.js";
 import { registerCheckBalanceTool } from "./tools/check-balance.js";
 import { registerGetAddressTool } from "./tools/get-address.js";
@@ -48,6 +49,7 @@ const server = new McpServer({
 });
 
 registerPingTool(server);
+registerHelpTool(server);
 registerGetAddressTool(server);
 registerCheckBalanceTool(server);
 registerWalletDashboardTool(server);

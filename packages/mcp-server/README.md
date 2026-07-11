@@ -35,14 +35,14 @@ Copy [`mcp.example.json`](./mcp.example.json) · Full install guide: **[INSTALL.
 | **8004 identity** | On-chain agent registration + reputation |
 | **Live dashboard** | Interactive wallet UI inside chat (Claude Desktop / MCP Apps) |
 
-**22 tools** · Default **testnet** · Node **18+**
+**23 tools** · Default **testnet** · Node **18+**
 
 ---
 
 ## Tools at a glance
 
 ### Wallet
-`ping` · `get_address` · `check_balance` · `wallet_dashboard` · `request_funding`
+`ping` · `help` · `get_address` · `check_balance` · `wallet_dashboard` · `request_funding`
 
 ### Send
 `transfer_xlm` · `transfer_usdc`
@@ -87,6 +87,7 @@ Double-click `nebula.mcpb` → enter secret key in the install wizard.
 ## First commands to try
 
 ```
+Use help from Nebula
 Use wallet_dashboard from Nebula
 Use request_funding from Nebula
 Use check_balance from Nebula
