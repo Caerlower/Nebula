@@ -19,13 +19,20 @@ const Ctx = createContext<WaitlistCtx | null>(null)
 
 export function WaitlistProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
-  // In-memory only, by design. Resets on refresh — wire to a backend later.
+  // Local copy for this session; the source of truth is the app's API.
   const emails = useRef<string[]>([])
 
   const open = useCallback(() => setIsOpen(true), [])
   const close = useCallback(() => setIsOpen(false), [])
   const submit = useCallback((email: string) => {
     emails.current.push(email)
+    // Served same-origin by the Next.js app in production; in standalone
+    // vite dev there is no API, so failures stay silent by design.
+    void fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, source: 'landing' }),
+    }).catch(() => {})
   }, [])
 
   const value = useMemo(

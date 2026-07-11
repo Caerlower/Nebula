@@ -201,10 +201,41 @@ input:focus-visible {
   text-align: center;
 }
 
+/*
+ * Legibility over the scene's bloom comes from layered dark shadows on the
+ * letterforms only — no scrim panels, the artwork stays fully visible.
+ */
+.hero-copy h1 {
+  text-shadow:
+    0 0 2px color-mix(in srgb, var(--nebula-bg) 95%, transparent),
+    0 0 6px color-mix(in srgb, var(--nebula-bg) 85%, transparent),
+    0 2px 14px color-mix(in srgb, var(--nebula-bg) 75%, transparent),
+    0 6px 36px color-mix(in srgb, var(--nebula-bg) 60%, transparent);
+}
+
+/* Small copy: brighter ink and a light shadow — heavy stacks smudge at this size. */
+.hero-copy p {
+  color: color-mix(in srgb, var(--nebula-text) 86%, transparent);
+  text-shadow:
+    0 1px 2px color-mix(in srgb, var(--nebula-bg) 85%, transparent),
+    0 2px 10px color-mix(in srgb, var(--nebula-bg) 55%, transparent);
+}
+
+.hero-copy .eyebrow {
+  text-shadow:
+    0 1px 2px color-mix(in srgb, var(--nebula-bg) 85%, transparent),
+    0 2px 10px color-mix(in srgb, var(--nebula-bg) 55%, transparent);
+}
+
 .story-line {
   font-family: var(--font-display);
   font-size: clamp(1.35rem, 3.2vw, 2.1rem);
-  color: color-mix(in srgb, var(--nebula-text) 92%, transparent);
+  color: var(--nebula-text);
+  text-shadow:
+    0 0 2px color-mix(in srgb, var(--nebula-bg) 95%, transparent),
+    0 0 6px color-mix(in srgb, var(--nebula-bg) 85%, transparent),
+    0 2px 14px color-mix(in srgb, var(--nebula-bg) 75%, transparent),
+    0 6px 32px color-mix(in srgb, var(--nebula-bg) 60%, transparent);
 }
 
 .story-accent {
@@ -212,13 +243,21 @@ input:focus-visible {
   font-style: italic;
   font-size: clamp(1.7rem, 4.4vw, 3rem);
   color: var(--nebula-text);
-  text-shadow: 0 0 28px color-mix(in srgb, var(--nebula-accent) 40%, transparent);
+  text-shadow:
+    0 0 2px color-mix(in srgb, var(--nebula-bg) 95%, transparent),
+    0 0 7px color-mix(in srgb, var(--nebula-bg) 88%, transparent),
+    0 2px 16px color-mix(in srgb, var(--nebula-bg) 78%, transparent),
+    0 6px 36px color-mix(in srgb, var(--nebula-bg) 60%, transparent),
+    0 0 30px color-mix(in srgb, var(--nebula-accent) 22%, transparent);
 }
 
 .text-glow-strong {
   text-shadow:
-    0 0 20px color-mix(in srgb, var(--nebula-accent-3) 45%, transparent),
-    0 0 48px color-mix(in srgb, var(--nebula-accent) 35%, transparent);
+    0 0 2px color-mix(in srgb, var(--nebula-bg) 96%, transparent),
+    0 0 8px color-mix(in srgb, var(--nebula-bg) 90%, transparent),
+    0 2px 18px color-mix(in srgb, var(--nebula-bg) 80%, transparent),
+    0 6px 40px color-mix(in srgb, var(--nebula-bg) 62%, transparent),
+    0 0 36px color-mix(in srgb, var(--nebula-accent-3) 25%, transparent);
 }
 
 .hint-line {

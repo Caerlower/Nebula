@@ -12,11 +12,13 @@ export function Footer() {
           <a className="transition hover:text-text" href="#">
             Docs
           </a>
-          <a className="transition hover:text-text" href="#">
+          <a
+            className="transition hover:text-text"
+            href="https://x.com/nebulamcp"
+            target="_blank"
+            rel="noreferrer"
+          >
             X
-          </a>
-          <a className="transition hover:text-text" href="#">
-            GitHub
           </a>
         </nav>
       </div>

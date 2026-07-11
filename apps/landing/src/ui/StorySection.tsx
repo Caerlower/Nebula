@@ -53,6 +53,14 @@ export function StorySection() {
       show('[data-beat="4"]', 0.64)
       hide('[data-beat="4"]', 0.775)
 
+      // At the final beat the scene recedes a touch so the copy lands —
+      // full-bleed dim, no visible panel edges.
+      tl.fromTo(
+        '[data-hero-dim]',
+        { autoAlpha: 0 },
+        { autoAlpha: 0.42, duration: 0.1 },
+        0.865,
+      )
       tl.fromTo(
         '[data-hero]',
         { autoAlpha: 0, y: 44, scale: 0.985 },
@@ -73,6 +81,12 @@ export function StorySection() {
 
       <div className="story-fade-top pointer-events-none absolute inset-x-0 top-0 h-36" />
       <div className="story-fade-bottom pointer-events-none absolute inset-x-0 bottom-0 h-44" />
+      <div
+        data-hero-dim
+        aria-hidden="true"
+        className="invisible pointer-events-none absolute inset-0"
+        style={{ background: 'var(--nebula-bg)' }}
+      />
 
       <div className="pointer-events-none absolute inset-0">
         <div
@@ -105,7 +119,7 @@ export function StorySection() {
           data-hero
           className="invisible absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 text-center"
         >
-          <div className="pointer-events-auto mx-auto max-w-3xl">
+          <div className="hero-copy pointer-events-auto mx-auto max-w-3xl">
             <p className="eyebrow">Nebula · MCP on Stellar</p>
             <h1 className="font-display mt-5 text-balance text-5xl leading-[1.05] text-text sm:text-6xl md:text-7xl">
               Give your AI agent powers on Stellar.

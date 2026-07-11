@@ -47,6 +47,12 @@ export function Nav() {
         </a>
         <div className="flex items-center gap-3">
           <ThemeToggle />
+          <a
+            href="/login"
+            className="btn-ghost rounded-full px-4 py-2 text-xs font-medium tracking-wide"
+          >
+            Sign in
+          </a>
           <button
             onClick={open}
             className="btn-ghost rounded-full px-4 py-2 text-xs font-medium tracking-wide"

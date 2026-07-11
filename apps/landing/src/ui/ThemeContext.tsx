@@ -13,6 +13,7 @@ import {
   type ThemeMode,
   type ThemeTokens,
 } from '../lib/theme'
+import { createThemeChannel, readThemeCookie, writeThemeCookie } from '../lib/theme-cookie'
 
 type ThemeContextValue = {
   mode: ThemeMode
@@ -47,8 +48,11 @@ function tweenCssVars(from: ThemeTokens, to: ThemeTokens, duration: number): gsa
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>(resolveInitialTheme)
+  const [mode, setMode] = useState<ThemeMode>(() => readThemeCookie() ?? resolveInitialTheme())
   const animating = useRef(false)
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const channelRef = useRef<BroadcastChannel | null>(null)
 
   const theme = THEMES[mode]
   const colors = useMemo(() => buildThreeColors(theme), [theme])
@@ -57,17 +61,46 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyCssTheme(THEMES[mode], mode)
   }, [])
 
-  const toggleTheme = useCallback(() => {
-    if (animating.current) return
-    const next: ThemeMode = mode === 'light' ? 'dark' : 'light'
+  const applyMode = useCallback((next: ThemeMode, broadcast: boolean) => {
+    if (next === modeRef.current || animating.current) return
     animating.current = true
     document.documentElement.dataset.theme = next
-    tweenCssVars(THEMES[mode], THEMES[next], 0.6)
+    writeThemeCookie(next)
+    if (broadcast) channelRef.current?.postMessage(next)
+    tweenCssVars(THEMES[modeRef.current], THEMES[next], 0.6)
     setMode(next)
     window.setTimeout(() => {
       animating.current = false
     }, 650)
-  }, [mode])
+  }, [])
+
+  // Live sync with the dashboard: theme changes made there arrive over the
+  // BroadcastChannel; bfcache restores re-check the shared cookie.
+  useLayoutEffect(() => {
+    const channel = createThemeChannel()
+    channelRef.current = channel
+    if (channel) {
+      channel.onmessage = (event: MessageEvent) => {
+        if (event.data === 'light' || event.data === 'dark') applyMode(event.data, false)
+      }
+    }
+    const syncFromCookie = () => {
+      const saved = readThemeCookie()
+      if (saved) applyMode(saved, false)
+    }
+    window.addEventListener('pageshow', syncFromCookie)
+    document.addEventListener('visibilitychange', syncFromCookie)
+    return () => {
+      channel?.close()
+      channelRef.current = null
+      window.removeEventListener('pageshow', syncFromCookie)
+      document.removeEventListener('visibilitychange', syncFromCookie)
+    }
+  }, [applyMode])
+
+  const toggleTheme = useCallback(() => {
+    applyMode(modeRef.current === 'light' ? 'dark' : 'light', true)
+  }, [applyMode])
 
   const value = useMemo(
     () => ({ mode, theme, colors, toggleTheme }),
