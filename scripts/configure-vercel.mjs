@@ -1,15 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const authPath = path.join(
-  process.env.HOME ?? "",
-  ".local/share/com.vercel.cli/auth.json",
-);
+const authCandidates = [
+  path.join(process.env.HOME ?? "", ".local/share/com.vercel.cli/auth.json"),
+  path.join(
+    process.env.HOME ?? "",
+    "Library/Application Support/com.vercel.cli/auth.json",
+  ),
+  path.join(process.env.HOME ?? "", ".config/com.vercel.cli/auth.json"),
+];
+
+const authPath = authCandidates.find((candidate) => fs.existsSync(candidate));
 const teamId = "team_qZq6suFAAmeS10A2vDey30Yd";
 const projectName = "nebula-onchain";
 
-if (!fs.existsSync(authPath)) {
-  console.error("Vercel auth not found. Run: pnpm dlx vercel login");
+if (!authPath) {
+  console.error(
+    "Vercel auth not found. Run: pnpm dlx vercel login",
+  );
   process.exit(1);
 }
 
