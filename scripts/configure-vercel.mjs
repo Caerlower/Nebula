@@ -26,9 +26,8 @@ const response = await fetch(
     body: JSON.stringify({
       rootDirectory: "apps/web",
       framework: "nextjs",
-      installCommand: "pnpm install",
-      buildCommand:
-        "pnpm --filter nebula-landing build && pnpm --filter nebula-frontend build",
+      installCommand: "cd ../.. && pnpm install",
+      buildCommand: "cd ../.. && pnpm build:site",
     }),
   },
 );
@@ -42,4 +41,5 @@ if (!response.ok) {
 
 console.log("Vercel project configured:");
 console.log(`  rootDirectory: ${data.rootDirectory}`);
-console.log(`  framework: ${data.framework}`);
+console.log(`  installCommand: ${data.installCommand}`);
+console.log(`  buildCommand: ${data.buildCommand}`);
