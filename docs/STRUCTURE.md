@@ -5,15 +5,15 @@ Nebula is a **pnpm monorepo**. Application code lives under `apps/`, shared pack
 ```
 nebula/
 ├── apps/
-│   ├── landing/          # 3D scroll-story marketing site (Vite + R3F)
-│   └── web/              # TanStack Start marketing site (paused)
+│   ├── nebula-hub/       # Custody Hub (Privy + MCP HTTP + dashboard)
+│   └── landing/          # Marketing site
 ├── packages/
-│   └── mcp-server/       # Nebula MCP server (`nebula-mcp`)
+│   ├── nebula-core/      # Tool schemas / registry (`@nebula/core`)
+│   └── nebula-mcp-stdio/ # Stdio MCP → Hub (`@nebula/mcp`, bin: `nebula`)
 ├── contracts/
-│   └── policy/           # Soroban spending-policy contract (source)
-├── scripts/              # Repo-level tooling (Vercel config, etc.)
-├── docs/                 # Internal docs
-├── package.json          # Workspace root scripts
+│   └── policy/           # Soroban spending-policy contract
+├── docs/
+├── package.json
 └── pnpm-workspace.yaml
 ```
 
@@ -21,24 +21,21 @@ nebula/
 
 | Package | Path | Command |
 |---------|------|---------|
+| `nebula-hub` | `apps/nebula-hub` | `pnpm --filter nebula-hub dev` |
 | `nebula-landing` | `apps/landing` | `pnpm dev:landing` |
-| `nebula-frontend` | `apps/web` | `pnpm dev:web` |
 
 ## Packages
 
 | Package | Path | Command |
 |---------|------|---------|
-| `nebula-mcp` | `packages/mcp-server` | `pnpm dev:mcp` · **npm:** `npx nebula-mcp` |
-
-MCP server dev/test harnesses live in `packages/mcp-server/scripts/dev/`. Build scripts are in `packages/mcp-server/scripts/build/`.
+| `@nebula/core` | `packages/nebula-core` | `pnpm --filter @nebula/core build` |
+| `@nebula/mcp` | `packages/nebula-mcp-stdio` | `pnpm --filter @nebula/mcp build` · **npx:** `npx @nebula/mcp` |
 
 ## Contracts
 
-- **Source:** `contracts/policy/` — Rust Soroban project, tests, deploy scripts
-- **Bundled WASM:** `packages/mcp-server/contracts/*.wasm` — copied into the MCP server dist on build
+- **Source:** `contracts/policy/` — Rust Soroban project
+- **Hub WASM / channel:** `apps/nebula-hub/contracts/`
 
 ## What not to commit
 
-- `Pixa/` — local reference clone (gitignored)
-- `node_modules/`, `dist/`, `.env`, `.vercel/`
-- Agent tooling: `.agents/`, `.claude/`, `skills-lock.json`
+Secrets (`.env.local`), generated `dist/`, and large binary artifacts unless intentional.

@@ -5,24 +5,27 @@
 ## Monorepo layout
 
 ```
-apps/landing   → 3D scroll-story site (active)
-apps/web       → TanStack Start site (paused)
-packages/mcp-server  → MCP server (npm: nebula-mcp)
-contracts/policy     → Soroban policy contract
+apps/landing        → 3D marketing site
+apps/nebula-hub     → Next.js Hub (dashboard + API + remote /mcp)
+packages/nebula-core       → Transport-agnostic tools + policy matrix
+packages/nebula-mcp-stdio  → npm `@nebula/mcp` (bin: `nebula`, NEBULA_TOKEN → Hub)
+contracts/policy           → Soroban policy contract
 ```
 
-See [docs/STRUCTURE.md](docs/STRUCTURE.md) for the full map and dev commands.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/STRUCTURE.md](docs/STRUCTURE.md).
+
+**Database:** Supabase — see [docs/SUPABASE.md](docs/SUPABASE.md).
 
 **Quick start**
 
 ```bash
 pnpm install
+pnpm build:core && pnpm build:mcp
+pnpm dev:hub        # Hub on :3000
 pnpm dev:landing    # marketing site
-pnpm dev:mcp        # MCP server
-pnpm build          # MCP server production build
-pnpm publish:mcp    # publish nebula-mcp to npm (after npm login)
 ```
 
+MCP clients use `NEBULA_TOKEN` only — never a Stellar secret key.
 ---
 
 Something strange happens when you watch a capable AI agent work. It reads, it reasons, it plans across a dozen steps, it writes code and calls tools and chains everything together toward a goal. And then it hits a paywall, and it just stops. It turns around and asks you, the human, to go handle the money.
