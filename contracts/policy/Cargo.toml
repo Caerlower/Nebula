@@ -5,7 +5,9 @@ members = [
 ]
 
 [workspace.dependencies]
-soroban-sdk = "26.1.0"
+# 26.x testutils currently break on ed25519-dalek 3 / rand_core mismatch in this env.
+# 22 tracks protocol compatible enough for unit tests + testnet deploy via stellar-cli.
+soroban-sdk = "22.0.1"
 
 [profile.release]
 opt-level = "z"

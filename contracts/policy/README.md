@@ -1,25 +1,18 @@
-# Nebula spending policy (Soroban)
+# Nebula spending + treasury policy (Soroban)
 
-On-chain per-call and rolling daily spend limits for a single owner wallet.
+Shared multi-tenant contract: **one deploy for all users**. Each Stellar `G…` address owns a policy slot (`DataKey::Policy(owner)`).
 
-Deploy **once** per user. Update limits with `set_limits` (no redeploy).
+Enforces / stores:
 
-## Research baseline (current Stellar stack)
+- Global `max_per_call` + `max_per_day` (**USDC** stroops)
+- Per-category daily caps for **outbound** spend: **Transfer / X402 / MPP** (**USDC** stroops)
+- **Treasury band**: `liquid_low` / `liquid_high` (**USDC** stroops) + `auto_yield`
 
-| Item | Version / pattern |
-|------|-------------------|
-| **Soroban SDK** | `26.1.0` (matches OpenZeppelin `stellar-contracts` 0.7.1) |
-| **Stellar CLI** | `23.0.0` (`stellar contract build/deploy/invoke`) |
-| **Rust toolchain** | `1.92.0` + `wasm32v1-none` (see `rust-toolchain.toml`) |
-| **Policy interface** | OpenZeppelin [`Policy`](https://docs.openzeppelin.com/stellar-contracts/accounts/policies) trait: `install`, `enforce`, `uninstall` |
-| **Auth model** | Smart accounts implement `CustomAccountInterface::__check_auth`; policies attach to **context rules** and panic to reject |
-| **Passkey Kit** | Legacy; new work uses [OpenZeppelin Smart Account Kit](https://github.com/kalepail/smart-account-kit) |
+Same 7-decimal scaler (`10_000_000`) throughout. Hub converts XLM↔USDC via CoinGecko for transfers and for comparing the liquid band against native Blend balances.
 
-This contract is a **single-tenant policy** (one deploy per user) with an `enforce` entrypoint shaped for future smart-account attachment. For isolated testing, use `check_spend`.
+Blend deposits themselves are not a spend category — the band tells Hub when to park/pull.
 
-Amounts are **stroops** (same integer units as token `transfer` amounts).
-
-Rolling window: **17,280 ledgers** (~24h at 5s/ledger), same convention as OpenZeppelin spending-limit policy.
+Hub wires this when `POLICY_CONTRACT_ID` is set: Policy/Treasury PATCH → `set_limits` / `set_category_limits` / `set_treasury_band`; transfers → `check_spend`.
 
 ## Build
 
@@ -28,17 +21,17 @@ cd contracts/policy
 stellar contract build --package nebula-policy
 ```
 
-WASM output: `target/wasm32v1-none/release/nebula_policy.wasm`
+WASM: `target/wasm32v1-none/release/nebula_policy.wasm`
+
+> Unit tests (`cargo test`) may fail in this workspace due to an `ed25519-dalek` / `rand_core` mismatch in Soroban testutils. Release/wasm builds are fine.
 
 ## Deploy to testnet (once)
-
-Replace `OWNER` with your funded testnet `G...` address and `SOURCE` with the secret-key identity name in stellar CLI.
 
 ```bash
 cd contracts/policy
 
-# If needed: stellar keys add nebula --secret-key S...
-# Fund: stellar keys fund nebula --network testnet
+# stellar keys add nebula --secret-key S…
+# stellar keys fund nebula --network testnet
 
 stellar contract deploy \
   --wasm target/wasm32v1-none/release/nebula_policy.wasm \
@@ -47,139 +40,63 @@ stellar contract deploy \
   --alias nebula-policy
 ```
 
-Save the returned `C...` contract id.
-
-## Initialize (sets owner + initial limits)
-
-Example: max 1 XLM per call, 5 XLM per day (in stroops):
+Put the returned `C…` id in Hub:
 
 ```bash
-POLICY_ID=C...   # from deploy
-OWNER=G...       # same as deploy source account
+# apps/nebula-hub/.env.local
+POLICY_CONTRACT_ID=C…
+```
 
+Do **not** reuse older single-tenant contract ids — the ABI changed (owner arg + categories).
+
+### Deployed (testnet)
+
+| Field | Value |
+|-------|-------|
+| Contract | `CA723RL3FJW42NSB6TGBWX4BOYQ3PMPXEHG447RUVX6K2LGHRXJ63EAM` |
+| WASM hash | `e9b020adff61947962eb34df073fba959c5bd1918dafba03bcf4fc1da28f00ac` |
+| Deploy tx | [stellar.expert](https://stellar.expert/explorer/testnet/tx/f11158f30cbdac3d1470e78ba5132d0f91b0b4975eb40d73365b1af114e86a58) |
+
+Redeploy required after treasury-band ABI change — previous contract IDs are obsolete.
+
+**USDC spend semantics** are a Hub convention on the existing ABI (no redeploy required for the unit change). Re-save Policy limits in Hub after switching so on-chain caps match USDC values.
+
+## Initialize a user slot
+
+Hub calls this automatically on first Policy/Treasury save or spend. Manual:
+
+```bash
+POLICY_ID=C…
+OWNER=G…   # user's custody address
+
+# Spend + band: USDC stroops (example: $5 / $20 daily, band $2–$10)
 stellar contract invoke \
   --id "$POLICY_ID" \
-  --source nebula \
+  --source "$OWNER" \
   --network testnet \
   --send yes \
   -- \
   initialize \
   --owner "$OWNER" \
-  --max_per_call 10000000 \
-  --max_per_day 50000000
+  --max_per_call 50000000 \
+  --max_per_day 200000000 \
+  --category_daily '{"transfer":200000000,"x402":50000000,"mpp":50000000}' \
+  --liquid_low 20000000 \
+  --liquid_high 100000000 \
+  --auto_yield true
 ```
 
-## Read status
-
-```bash
-stellar contract invoke \
-  --id "$POLICY_ID" \
-  --source nebula \
-  --network testnet \
-  -- \
-  get_status
-```
-
-## Test: spend under limit (succeeds)
-
-```bash
-# 0.5 XLM — under per-call (1) and daily (5)
-stellar contract invoke \
-  --id "$POLICY_ID" \
-  --source nebula \
-  --network testnet \
-  --send yes \
-  -- \
-  check_spend \
-  --amount 5000000
-```
-
-Re-run `get_status` — `daily_spent` should increase.
-
-## Test: over per-call limit (rejected on-chain)
-
-```bash
-# 1.5 XLM — exceeds max_per_call 1 XLM
-stellar contract invoke \
-  --id "$POLICY_ID" \
-  --source nebula \
-  --network testnet \
-  --send yes \
-  -- \
-  check_spend \
-  --amount 15000000
-```
-
-Expected: transaction fails with contract error **#5** (`PerCallLimitExceeded`).
-
-## Update limits without redeploy
-
-Raise per-call cap to 2 XLM, keep daily at 5 XLM:
-
-```bash
-stellar contract invoke \
-  --id "$POLICY_ID" \
-  --source nebula \
-  --network testnet \
-  --send yes \
-  -- \
-  set_limits \
-  --max_per_call 20000000 \
-  --max_per_day 50000000
-```
-
-## Confirm new limits take effect
-
-```bash
-# Now 1.5 XLM should succeed (was rejected before)
-stellar contract invoke \
-  --id "$POLICY_ID" \
-  --source nebula \
-  --network testnet \
-  --send yes \
-  -- \
-  check_spend \
-  --amount 15000000
-
-stellar contract invoke \
-  --id "$POLICY_ID" \
-  --source nebula \
-  --network testnet \
-  -- \
-  get_status
-```
-
-Same `POLICY_ID` throughout — no second deploy.
-
-> **Auth-required calls** (`initialize`, `check_spend`, `set_limits`) need `--send yes` so the CLI attaches Soroban auth entries for `owner.require_auth()`.
-
-### One-shot testnet script
-
-```bash
-contracts/policy/scripts/testnet-deploy-and-test.sh
-```
-
-Reads `STELLAR_SECRET_KEY` from `packages/mcp-server/.env`, deploys, runs the full pass/fail/update flow.
-
-### Already deployed (testnet)
-
-| Field | Value |
-|-------|-------|
-| Contract | `CCDTZVYQXQPO33K76BXICTVHA4NWI3CKTGHT57W2YHKJODDMKJVZJ4AH` |
-| WASM hash | `b9ada4ab98a7b3e840377c90c582ba12596583da43c80a7e46ad792b5693ebb2` |
-| Deploy tx | [stellar.expert/testnet/tx/d2c4ef16…](https://stellar.expert/explorer/testnet/tx/d2c4ef167e0c8607748323506fffbd79faa9617ba0fb575f4f1f0fbe7da7a725) |
-
-Run `initialize` with `--send yes` on this id if you want to reuse it instead of redeploying.
-
+Amounts use **USDC stroops** (`1 USDC = 10_000_000`), including the liquid band.
 ## Contract API
 
 | Function | Auth | Description |
 |----------|------|-------------|
-| `initialize(owner, max_per_call, max_per_day)` | owner | One-time setup after deploy |
-| `set_limits(max_per_call, max_per_day)` | owner | Cheap limit update |
-| `get_status()` | — | Limits + rolling daily usage |
-| `check_spend(amount)` | owner | Isolation test: enforce + record |
-| `enforce(context, smart_account)` | smart_account | Policy-signer path for token `transfer` contexts |
+| `initialize(..., category_daily, liquid_low, liquid_high, auto_yield)` | owner | One-time slot setup |
+| `set_limits(owner, max_per_call, max_per_day)` | owner | Global USDC caps |
+| `set_category_limits(owner, category_daily)` | owner | Per-category daily USDC caps |
+| `set_treasury_band(owner, liquid_low, liquid_high, auto_yield)` | owner | Liquid USDC band + auto-yield |
+| `get_status(owner)` | — | Limits, band, rolling usage |
+| `check_spend(owner, category, amount)` | owner | Enforce + record USDC spend |
 
 ## Errors
 
@@ -194,7 +111,7 @@ Run `initialize` with `--send yes` on this id if you want to reuse it instead of
 | 7 | NegativeAmount |
 | 8 | NotAllowed |
 | 9 | HistoryCapacityExceeded |
+| 10 | CategoryDailyLimitExceeded |
+| 11 | InvalidTreasuryBand |
 
-## Future MCP wiring (not this stage)
-
-Attach this contract to an OpenZeppelin smart account context rule as a policy signer. `enforce` will inspect `transfer` auth contexts and update rolling spend automatically during wallet authorization.
+Rolling window: **17,280 ledgers** (~24h at 5s/ledger).
