@@ -1,0 +1,37 @@
+{
+  "name": "@nebula/mcp",
+  "version": "0.1.0",
+  "description": "Nebula stdio MCP — presents NEBULA_TOKEN to the Hub. Never holds private keys.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "nebula": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "mcp.example.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@nebula/core": "workspace:^",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

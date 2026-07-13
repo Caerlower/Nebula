@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "nebula": {
+      "command": "npx",
+      "args": ["-y", "@nebula/mcp"],
+      "env": {
+        "NEBULA_TOKEN": "nbl_live_YOUR_TOKEN",
+        "NEBULA_HUB": "https://nebulaonchain.xyz"
+      }
+    }
+  }
+}
