@@ -1,0 +1,410 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Nebula app tokens — mirrors apps/landing/src/lib/theme.ts and src/lib/theme.ts.
+ * Values are written as rgb()/rgba() triplets on purpose: the canonical hex
+ * tokens live in src/lib/theme.ts and nowhere else.
+ */
+
+/* ------- warm midnight (default, data-theme="light") ------- */
+:root {
+  --background: rgb(15 18 32);
+  --foreground: rgb(243 240 234);
+  --surface: rgb(25 28 47);
+  --surface-elevated: rgb(34 38 62);
+  --card: rgb(25 28 47);
+  --card-foreground: rgb(243 240 234);
+  --popover: rgb(34 38 62);
+  --popover-foreground: rgb(243 240 234);
+  --primary: rgb(242 107 122);
+  --primary-2: rgb(235 152 120);
+  --primary-foreground: rgb(42 17 24);
+  --secondary: rgb(34 38 62);
+  --secondary-foreground: rgb(243 240 234);
+  --muted: rgb(34 38 62);
+  --muted-foreground: rgb(174 168 190);
+  --subtle-foreground: rgb(128 121 146);
+  --accent: rgb(34 38 62);
+  --accent-foreground: rgb(243 240 234);
+  --accent-teal: rgb(85 196 179);
+  --accent-warm: rgb(238 197 124);
+  --destructive: rgb(233 79 84);
+  --destructive-foreground: rgb(255 241 242);
+  --success: rgb(85 196 179);
+  --warning: rgb(238 197 124);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --input: rgba(255, 255, 255, 0.13);
+  --ring: rgba(242, 107, 122, 0.75);
+  --selection: rgba(242, 107, 122, 0.45);
+  --edge-highlight: rgba(255, 255, 255, 0.09);
+  --chart-1: rgb(224 80 106);
+  --chart-2: rgb(15 156 136);
+  --chart-3: rgb(190 136 39);
+  --chart-4: rgb(107 130 236);
+  --chart-5: rgb(139 132 163);
+  --aurora-a: rgba(242, 107, 122, 0.2);
+  --aurora-b: rgba(79, 184, 168, 0.14);
+  --aurora-c: rgba(235, 193, 120, 0.1);
+  --shadow-primary: rgba(242, 107, 122, 0.35);
+  --ambient-a: rgba(242, 107, 122, 0.07);
+  --ambient-b: rgba(79, 184, 168, 0.05);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 16px 44px -18px rgba(242, 107, 122, 0.16);
+}
+
+/* ------- violet night (data-theme="dark") ------- */
+:root[data-theme="dark"] {
+  --background: rgb(11 10 20);
+  --foreground: rgb(240 237 247);
+  --surface: rgb(20 18 34);
+  --surface-elevated: rgb(30 27 48);
+  --card: rgb(20 18 34);
+  --card-foreground: rgb(240 237 247);
+  --popover: rgb(30 27 48);
+  --popover-foreground: rgb(240 237 247);
+  --primary: rgb(124 107 240);
+  --primary-2: rgb(91 141 239);
+  --primary-foreground: rgb(19 15 30);
+  --secondary: rgb(30 27 48);
+  --secondary-foreground: rgb(240 237 247);
+  --muted: rgb(30 27 48);
+  --muted-foreground: rgb(166 160 186);
+  --subtle-foreground: rgb(118 112 136);
+  --accent: rgb(30 27 48);
+  --accent-foreground: rgb(240 237 247);
+  --accent-teal: rgb(45 212 191);
+  --accent-warm: rgb(245 178 72);
+  --destructive: rgb(233 79 84);
+  --destructive-foreground: rgb(255 241 242);
+  --success: rgb(45 212 191);
+  --warning: rgb(245 178 72);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.17);
+  --input: rgba(255, 255, 255, 0.13);
+  --ring: rgba(124, 107, 240, 0.8);
+  --selection: rgba(124, 107, 240, 0.45);
+  --edge-highlight: rgba(255, 255, 255, 0.08);
+  --chart-1: rgb(224 80 106);
+  --chart-2: rgb(15 156 136);
+  --chart-3: rgb(190 136 39);
+  --chart-4: rgb(107 130 236);
+  --chart-5: rgb(139 132 163);
+  --aurora-a: rgba(124, 107, 240, 0.22);
+  --aurora-b: rgba(45, 212, 191, 0.14);
+  --aurora-c: rgba(245, 178, 72, 0.08);
+  --shadow-primary: rgba(124, 107, 240, 0.45);
+  --ambient-a: rgba(124, 107, 240, 0.11);
+  --ambient-b: rgba(45, 212, 191, 0.07);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 44px -18px rgba(124, 107, 240, 0.22);
+}
+
+
+/* ------- daybreak (data-theme="day") — true light, purple-first ------- */
+:root[data-theme="day"] {
+  --background: rgb(244 241 250);
+  --foreground: rgb(26 21 46);
+  --surface: rgb(255 255 255);
+  --surface-elevated: rgb(238 234 248);
+  --card: rgb(255 255 255);
+  --card-foreground: rgb(26 21 46);
+  --popover: rgb(255 255 255);
+  --popover-foreground: rgb(26 21 46);
+  --primary: rgb(109 40 217);
+  --primary-2: rgb(59 130 246);
+  --primary-foreground: rgb(255 255 255);
+  --secondary: rgb(238 234 248);
+  --secondary-foreground: rgb(26 21 46);
+  --muted: rgb(238 234 248);
+  --muted-foreground: rgb(74 68 102);
+  --subtle-foreground: rgb(122 115 142);
+  --accent: rgb(238 234 248);
+  --accent-foreground: rgb(26 21 46);
+  --accent-teal: rgb(15 118 110);
+  --accent-warm: rgb(194 65 12);
+  --destructive: rgb(220 38 38);
+  --destructive-foreground: rgb(255 245 245);
+  --success: rgb(15 118 110);
+  --warning: rgb(194 65 12);
+  --border: rgba(26, 21, 46, 0.12);
+  --border-strong: rgba(26, 21, 46, 0.22);
+  --input: rgba(26, 21, 46, 0.18);
+  --ring: rgba(109, 40, 217, 0.4);
+  --selection: rgba(109, 40, 217, 0.2);
+  --edge-highlight: rgba(255, 255, 255, 0.95);
+  --chart-1: rgb(216 55 82);
+  --chart-2: rgb(0 137 122);
+  --chart-3: rgb(194 65 12);
+  --chart-4: rgb(90 111 227);
+  --chart-5: rgb(110 104 144);
+  --aurora-a: rgba(109, 40, 217, 0.18);
+  --aurora-b: rgba(59, 130, 246, 0.12);
+  --aurora-c: rgba(194, 65, 12, 0.08);
+  --shadow-primary: rgba(109, 40, 217, 0.28);
+  --ambient-a: rgba(109, 40, 217, 0.12);
+  --ambient-b: rgba(59, 130, 246, 0.09);
+  --card-shadow: 0 1px 2px rgba(26, 21, 46, 0.06), 0 14px 36px -16px rgba(109, 40, 217, 0.28);
+}
+
+/* motion language: soft-out for big moves, bounce for micro-interactions */
+:root {
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.2, 0.64, 1);
+  --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 130%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-elevated: var(--surface-elevated);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-teal: var(--accent-teal);
+  --color-warm: var(--accent-warm);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
+}
+
+/* ------------------------------- base ------------------------------- */
+
+:root {
+  color-scheme: dark;
+}
+
+:root[data-theme="day"] {
+  color-scheme: light;
+}
+
+:root[data-theme="day"] ::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+}
+
+html,
+body {
+  background: var(--background);
+}
+
+/* living nebula: two slow-drifting gradient fields behind everything.
+   The page sits IN space, not on a black rectangle. */
+body {
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  transition: color 0.45s ease;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: -30%;
+  z-index: -1;
+  pointer-events: none;
+  will-change: transform;
+}
+
+body::before {
+  background:
+    radial-gradient(42% 38% at 30% 28%, var(--ambient-a), transparent 70%),
+    radial-gradient(36% 40% at 74% 64%, var(--ambient-b), transparent 70%);
+  animation: nebula-drift-a 90s ease-in-out infinite alternate;
+}
+
+body::after {
+  background:
+    radial-gradient(30% 34% at 68% 22%, var(--aurora-a), transparent 72%),
+    radial-gradient(26% 30% at 22% 78%, var(--aurora-b), transparent 72%);
+  opacity: 0.5;
+  animation: nebula-drift-b 130s ease-in-out infinite alternate;
+}
+
+@keyframes nebula-drift-a {
+  0% {
+    transform: translate3d(-2%, -1%, 0) rotate(0deg) scale(1);
+  }
+  100% {
+    transform: translate3d(3%, 2%, 0) rotate(4deg) scale(1.08);
+  }
+}
+
+@keyframes nebula-drift-b {
+  0% {
+    transform: translate3d(2%, 1%, 0) rotate(0deg) scale(1.05);
+  }
+  100% {
+    transform: translate3d(-3%, -2%, 0) rotate(-5deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none;
+  }
+}
+
+/* daybreak keeps a still, soft atmosphere */
+:root[data-theme="day"] body::before,
+:root[data-theme="day"] body::after {
+  animation: none;
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--foreground);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-elevated);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+button {
+  cursor: pointer;
+}
+
+/* --------------------------- shared primitives --------------------------- */
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+}
+
+.eyebrow-dot {
+  color: var(--primary);
+  letter-spacing: 0;
+  text-shadow: 0 0 12px var(--shadow-primary);
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* flat surface card with one hairline top-edge highlight */
+.card-edge {
+  position: relative;
+}
+.card-edge::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--edge-highlight) 30%, var(--edge-highlight) 70%, transparent);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* springy press for anything clickable that opts in */
+.pressable {
+  transition:
+    transform 0.28s var(--ease-bounce),
+    box-shadow 0.28s var(--ease-out-soft),
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+.pressable:active {
+  transform: scale(0.97);
+}
+
+/* auth decorative panel — CSS-only slow aurora */
+.aurora-panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 15% 20%, var(--aurora-a), transparent 55%),
+    radial-gradient(110% 80% at 85% 30%, var(--aurora-b), transparent 60%),
+    radial-gradient(130% 100% at 50% 95%, var(--aurora-c), transparent 55%),
+    var(--surface);
+}
+.aurora-panel::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(45% 40% at 30% 40%, var(--aurora-b), transparent 70%),
+    radial-gradient(40% 45% at 70% 60%, var(--aurora-a), transparent 70%);
+  animation: aurora-drift 26s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(-4%, -3%, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, 4%, 0) rotate(6deg) scale(1.06);
+  }
+  100% {
+    transform: translate3d(-2%, 2%, 0) rotate(-5deg) scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-panel::after {
+    animation: none;
+  }
+  .pressable,
+  .pressable:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
