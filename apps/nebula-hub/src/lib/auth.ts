@@ -274,7 +274,8 @@ export async function ensureUserFromPrivy(claims: {
   if (!user.privyWalletId || !user.stellarAddress) {
     // Await provisioning briefly so the first /api/me response usually has a
     // wallet. Cap wait so Privy latency cannot hang OAuth/login forever.
-    const provision = createStellarWalletForUser(user.id);
+    const userId = user.id;
+    const provision = createStellarWalletForUser(userId);
     try {
       const wallet = await Promise.race([
         provision,
@@ -284,7 +285,7 @@ export async function ensureUserFromPrivy(claims: {
       ]);
       if (wallet) {
         user = await prisma.user.update({
-          where: { id: user.id },
+          where: { id: userId },
           data: {
             privyWalletId: wallet.walletId,
             stellarAddress: wallet.address,
@@ -296,7 +297,7 @@ export async function ensureUserFromPrivy(claims: {
           .then(async (late) => {
             if (!late) return;
             await prisma.user.update({
-              where: { id: user.id },
+              where: { id: userId },
               data: {
                 privyWalletId: late.walletId,
                 stellarAddress: late.address,
