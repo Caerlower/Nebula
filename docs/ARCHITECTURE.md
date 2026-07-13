@@ -1,41 +1,68 @@
-# Architecture (Phase 1+)
+# Architecture
 
-```
-packages/nebula-core      Transport-agnostic Zod tools + confirmation matrix
-packages/nebula-mcp-stdio Thin stdio MCP → Hub /api/tools/* with NEBULA_TOKEN (@nebula/mcp)
-apps/nebula-hub           Next.js Hub: Privy login+custody, Prisma→Supabase, dashboard, /mcp, APIs
-apps/landing              Marketing Vite site → nebula-hub/public/landing
+Nebula is a **custody Hub** for AI agents on Stellar. Agents never hold private keys — they authenticate with `nbl_live_…` (or OAuth) and call tools; the Hub enforces policy, signs via Privy, and submits to the network.
+
+```mermaid
+flowchart LR
+  subgraph edge [Edge]
+    A[Agent / LLM]
+    M["@nebula/mcp<br/>stdio"]
+    O[Remote MCP + OAuth]
+  end
+
+  subgraph hub [Hub]
+    T["POST /api/tools/:name"]
+    C[Confirmations]
+    P[Policy DB + Soroban]
+    S[Privy sign + submit]
+  end
+
+  subgraph stellar [Stellar]
+    X[Payments / x402 / MPP]
+    B[Blend treasury]
+    R[Policy contract]
+  end
+
+  A --> M --> T
+  A --> O --> T
+  T --> C --> S
+  T --> P
+  P --> R
+  S --> X
+  S --> B
 ```
 
-**Database:** Supabase Postgres (free). Schema: `apps/nebula-hub/supabase/hub.sql`. Setup: [docs/SUPABASE.md](./SUPABASE.md).
+## Packages
+
+| Piece | Path | Role |
+|-------|------|------|
+| Hub | `apps/nebula-hub` | Privy login + custody, Prisma → Supabase, dashboard, `/mcp`, APIs |
+| Core | `packages/nebula-core` | Transport-agnostic Zod tools + confirmation matrix |
+| Stdio MCP | `packages/nebula-mcp-stdio` | `@nebula/mcp` → Hub `/api/tools/*` with `NEBULA_TOKEN` |
+| Landing | `apps/landing` | Marketing → built into `nebula-hub/public/landing` |
+| Policy | `contracts/policy` | Soroban spend caps / treasury bands |
+
+**Database:** Supabase Postgres. Schema: `apps/nebula-hub/supabase/hub.sql`. Setup: [SUPABASE.md](./SUPABASE.md).
 
 **Rule:** private keys never leave the Hub. Clients present `nbl_live_…` or OAuth only.
 
-## Phase 2
+## Status
 
 | Piece | Status |
 |-------|--------|
-| Privy session → Hub user + Stellar wallet provision | Done |
-| Tool pipeline `POST /api/tools/:name` | Done (`ping` / `help` / wallet / `transfer` + confirmation; treasury tools below) |
-| Human approve → Privy sign+submit (or dev dry-run) | Done |
-| Policy whitelist / denylist / caps APIs (Hub/DB) | Done |
-| Dashboard live data | Done (reputation from agent/wallet auto-provision) |
-| Remote Streamable HTTP MCP + OAuth DCR | Done — `POST /mcp`, DCR `/api/oauth/register`, `/authorize`, `/oauth/token` |
-| `PRIVY_AUTHORIZATION_PRIVATE_KEY` real signing | Done (`wallet-auth:` PEM wrap + SHA-256) |
-| Hub Blend XLM treasury (testnet) | Done — rates, status, deposit/withdraw, threshold, `optimize_treasury` |
-| Auto-yield on wallet activity | Done — when a spend needs Blend, **one** Stellar tx bundles WithdrawCollateral + Payment (fallback to sequential if memo / simulate fails); post-transfer only parks excess ≥1 XLM |
-
-## Later
-
-| Piece | Status |
-|-------|--------|
-| Publish `@nebula/mcp` (+ `@nebula/core`) + `.mcpb` | Pending |
-| Soroban policy spend caps + treasury band (`liquid_low` / `liquid_high` / `auto_yield`) | Done when `POLICY_CONTRACT_ID` set — Policy & Treasury UI sync on-chain; transfers call `check_spend` |
-| x402 tools (`x402_fetch` / `x402_pay`) in Hub | Done — Privy signs auth entries; USDC via facilitator settle; policy + `check_spend` category `x402` |
-| MPP session tools (`mpp_open` / `fetch` / `status` / `close`) in Hub | Done — Hub-hosted `/api/mpp-demo/[channel]` for demos (no local merchant); `mpp_pay` hidden; close settles |
-| Stellar8004 reputation / identity | Hub auto-provisions reputation on agent create; `get_my_reputation` live. On-chain Stellar8004 sync still pending |
-| Blend USDC + periodic background loop | Pending (XLM + activity-triggered auto-yield covers demo) |
-| Approval UX (inbox / notify / agent poll-resume) | Partial — `await_confirmation` tool polls until human approves; inbox polish later |
-| Phase 6 demo rehearsals (Claude Desktop + remote connector) | Pending |
+| Privy session → Hub user + Stellar wallet | Done |
+| Tool pipeline `POST /api/tools/:name` | Done |
+| Human approve → Privy sign+submit | Done |
+| Policy whitelist / denylist / caps (Hub DB) | Done |
+| On-chain policy (`POLICY_CONTRACT_ID` → `check_spend`) | Done when configured |
+| Dashboard live data | Done |
+| Remote Streamable HTTP MCP + OAuth DCR | Done |
+| Blend XLM treasury + activity-triggered auto-yield | Done |
+| x402 tools | Done |
+| MPP session tools + Hub demo merchant | Done |
+| Stellar8004 reputation (Hub provision) | Done — on-chain sync still pending |
+| Publish `@nebula/mcp` / `@nebula/core` + `.mcpb` | Pending |
+| Blend USDC + background yield loop | Pending |
+| Approval inbox / notify polish | Partial (`await_confirmation` works) |
 
 Env template: `apps/nebula-hub/.env.example`.

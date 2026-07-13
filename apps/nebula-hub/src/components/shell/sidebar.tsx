@@ -149,7 +149,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
           <Users className="size-4" /> Team
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => window.open("https://github.com/manavgoyal/Nebula#readme", "_blank")}
+          onSelect={() => window.open("https://docs.nebulaonchain.xyz", "_blank")}
         >
           <BookOpen className="size-4" /> Docs
         </DropdownMenuItem>

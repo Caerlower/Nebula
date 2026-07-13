@@ -6,16 +6,18 @@ Nebula is a **pnpm monorepo**. Application code lives under `apps/`, shared pack
 nebula/
 ├── apps/
 │   ├── nebula-hub/       # Custody Hub (Privy + MCP HTTP + dashboard)
-│   └── landing/          # Marketing site
+│   └── landing/          # Marketing → hub public/landing on build:site
 ├── packages/
 │   ├── nebula-core/      # Tool schemas / registry (`@nebula/core`)
 │   └── nebula-mcp-stdio/ # Stdio MCP → Hub (`@nebula/mcp`, bin: `nebula`)
 ├── contracts/
 │   └── policy/           # Soroban spending-policy contract
-├── docs/
+├── docs/                 # ARCHITECTURE, SUPABASE, MCP-DEV, …
 ├── package.json
 └── pnpm-workspace.yaml
 ```
+
+Production site: Hub roots on Vercel; landing is static under Hub. See root [README.md](../README.md).
 
 ## Apps
 

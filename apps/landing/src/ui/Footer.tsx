@@ -9,7 +9,12 @@ export function Footer() {
           </p>
         </div>
         <nav className="flex items-center gap-8 text-sm text-muted">
-          <a className="transition hover:text-text" href="#">
+          <a
+            className="transition hover:text-text"
+            href="https://docs.nebulaonchain.xyz"
+            target="_blank"
+            rel="noreferrer"
+          >
             Docs
           </a>
           <a
