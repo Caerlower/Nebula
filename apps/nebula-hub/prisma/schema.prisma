@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Direct connection for prisma migrate / db push (Supabase "Direct connection")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  privyUserId    String   @unique
+  email          String   @unique
+  name           String?
+  privyWalletId  String?  @unique
+  stellarAddress String?  @unique
+  /// On-chain Stellar8004 agent id for this wallet (null until register_identity).
+  stellar8004AgentId Int?
+  /// Cached Stellar8004 avgScore (0–100).
+  reputationScore Int     @default(0)
+  /// Cached confidence: unrated | low | medium | high
+  reputationTier  String  @default("unrated")
+  createdAt      DateTime @default(now())
+
+  tokens           NebulaToken[]
+  agents           Agent[]
+  transactions     Transaction[]
+  confirmations    Confirmation[]
+  whitelistEntries WhitelistEntry[]
+  denylistEntries  DenylistEntry[]
+  policySettings   PolicySettings?
+  mppSessions      MppSession[]
+}
+
+model NebulaToken {
+  id         String    @id @default(cuid())
+  userId     String
+  agentId    String?
+  label      String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  /// When set, token is invalid after this time (OAuth access tokens). Null = until revoked.
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user  User   @relation(fields: [userId], references: [id])
+  agent Agent? @relation(fields: [agentId], references: [id])
+}
+
+model Agent {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  framework       String
+  status          String   @default("active")
+  /// Cached Stellar8004 avgScore (0–100); wallet shares one on-chain identity.
+  reputationScore Int      @default(0)
+  reputationTier  String   @default("unrated")
+  createdAt       DateTime @default(now())
+
+  user   User          @relation(fields: [userId], references: [id])
+  tokens NebulaToken[]
+}
+
+model Transaction {
+  id             String   @id @default(cuid())
+  userId         String
+  agentId        String?
+  type           String
+  destination    String
+  amountXlm      Decimal  @db.Decimal(18, 7)
+  memo           String?
+  reason         String
+  txHash         String?  @unique
+  status         String
+  confirmationId String?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Confirmation {
+  id         String    @id @default(cuid())
+  userId     String
+  toolName   String
+  input      Json
+  summary    String
+  status     String    @default("pending")
+  expiresAt  DateTime
+  approvedAt DateTime?
+  txHash     String?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model WhitelistEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  address   String
+  label     String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, address])
+}
+
+model DenylistEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  address   String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, address])
+}
+
+model PolicySettings {
+  userId          String  @id
+  /// Confirmation micro threshold (USDC).
+  microThreshold  Decimal @default(0.1) @db.Decimal(18, 7)
+  /// Per-transaction spend cap (USDC).
+  perTxCap        Decimal @default(5) @db.Decimal(18, 7)
+  /// Global daily spend cap (USDC).
+  dailyCap        Decimal @default(20) @db.Decimal(18, 7)
+  paused          Boolean @default(false)
+  autoYield       Boolean @default(true)
+  /// Liquid band low (USDC): pull from Blend when liquid XLM value falls below this.
+  liquidThreshold Decimal @default(2) @db.Decimal(18, 7)
+  /// Liquid band high (USDC): park excess to Blend when liquid XLM value rises above this.
+  liquidHigh      Decimal @default(10) @db.Decimal(18, 7)
+  /// Per-category daily caps (USDC). XLM transfers convert via oracle. Blend not capped.
+  catTransfer     Decimal @default(20) @db.Decimal(18, 7)
+  catX402         Decimal @default(5) @db.Decimal(18, 7)
+  catMpp          Decimal @default(5) @db.Decimal(18, 7)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+/// Active MPP payment-channel session (one open session per user).
+model MppSession {
+  id                   String    @id @default(cuid())
+  userId               String
+  channel              String
+  recipient            String
+  budgetUsdc           Decimal   @db.Decimal(18, 7)
+  budgetStroops        String
+  cumulativeStroops    String    @default("0")
+  commitmentSecretHex  String
+  commitmentPubkeyHex  String
+  networkId            String
+  status               String    @default("open")
+  openedAt             DateTime  @default(now())
+  closedAt             DateTime?
+  closeTxHash          String?
+  deployWasmHash       String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+/// OAuth Dynamic Client Registration (MCP remote connectors).
+model OAuthClient {
+  clientId         String   @id
+  clientSecretHash String?
+  clientName       String?
+  redirectUris     Json
+  createdAt        DateTime @default(now())
+}
+
+model OAuthAuthorizationCode {
+  codeHash            String    @id
+  clientId            String
+  userId              String
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String    @default("S256")
+  expiresAt           DateTime
+  usedAt              DateTime?
+  createdAt           DateTime  @default(now())
+}
+
+/// Landing waitlist — managed via service-role client; keep in schema so db push won't drop it.
+model Waitlist {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String   @unique
+  source    String   @default("landing")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("waitlist")
+}
