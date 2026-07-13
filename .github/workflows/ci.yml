@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @nebula/core
+        run: pnpm --filter @nebula/core build
+
+      - name: Typecheck Hub
+        run: pnpm --filter nebula-hub typecheck
+
+      - name: Build MCP CLI
+        run: pnpm --filter @nebula/mcp build
+
+      - name: Build site (landing + hub)
+        run: pnpm build:site
+        env:
+          # Prisma generate / next build need a placeholder URL when no DB is available.
+          DATABASE_URL: postgresql://user:pass@127.0.0.1:5432/nebula?schema=public
+          DIRECT_URL: postgresql://user:pass@127.0.0.1:5432/nebula?schema=public
+          NEXT_PUBLIC_PRIVY_APP_ID: clxxxxxxxxxxxxxxxxxxxx
+          NEXT_PUBLIC_APP_URL: https://example.com
+          APP_BASE_URL: https://example.com
+          STELLAR_NETWORK: testnet
+          NEBULA_BETA_CODES: CI-ONLY-CODE
