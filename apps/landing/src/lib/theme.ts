@@ -299,8 +299,28 @@ export function resolveInitialTheme(): ThemeMode {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-export function hexToColor(hex: string, target = new THREE.Color()): THREE.Color {
-  return target.set(hex)
+/**
+ * Theme is shared with the Hub dashboard (same origin) through this cookie,
+ * so crossing between landing and app keeps the same look.
+ */
+export const THEME_COOKIE = 'nebula_theme'
+
+export function readThemeCookie(): ThemeMode | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/(?:^|; )nebula_theme=(dark|light)/)
+  return match ? (match[1] as ThemeMode) : null
+}
+
+export function writeThemeCookie(mode: ThemeMode): void {
+  document.cookie = `${THEME_COOKIE}=${mode}; path=/; max-age=31536000; samesite=lax`
+}
+
+/** Live cross-surface sync — both landing and dashboard listen on this channel. */
+export const THEME_CHANNEL = 'nebula_theme'
+
+export function createThemeChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === 'undefined') return null
+  return new BroadcastChannel(THEME_CHANNEL)
 }
 
 export function tweenThreeColor(

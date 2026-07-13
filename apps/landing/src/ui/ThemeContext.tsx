@@ -6,14 +6,16 @@ import {
   THEMES,
   applyCssTheme,
   buildThreeColors,
+  createThemeChannel,
+  readThemeCookie,
   resolveInitialTheme,
   themeToCssVars,
   tweenThreeColor,
+  writeThemeCookie,
   type ThemeColors,
   type ThemeMode,
   type ThemeTokens,
 } from '../lib/theme'
-import { createThemeChannel, readThemeCookie, writeThemeCookie } from '../lib/theme-cookie'
 
 type ThemeContextValue = {
   mode: ThemeMode
@@ -114,10 +116,6 @@ export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext)
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider')
   return ctx
-}
-
-export function useThemeColors(): ThemeColors {
-  return useTheme().colors
 }
 
 export { tweenThreeColor }

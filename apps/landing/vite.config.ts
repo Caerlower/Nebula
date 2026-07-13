@@ -4,11 +4,11 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // The landing ships as static files served by the Next.js app (apps/web)
+  // The landing ships as static files served by the Next.js Hub (apps/nebula-hub)
   // under /landing, with a rewrite mapping / to /landing/index.html.
   base: '/landing/',
   build: {
-    outDir: '../web/public/landing',
+    outDir: '../nebula-hub/public/landing',
     emptyOutDir: true,
   },
 })
