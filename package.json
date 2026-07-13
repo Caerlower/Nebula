@@ -3,15 +3,48 @@
   "private": true,
   "packageManager": "pnpm@10.13.1",
   "scripts": {
-    "build": "pnpm --filter nebula-mcp build",
+    "build": "pnpm -r --filter @nebula/core --filter @nebula/mcp --filter nebula-hub --filter nebula-landing build",
+    "build:core": "pnpm --filter @nebula/core build",
+    "build:mcp": "pnpm --filter @nebula/mcp build",
     "build:landing": "pnpm --filter nebula-landing build",
-    "build:web": "pnpm --filter nebula-frontend build",
-    "build:site": "pnpm --filter nebula-landing build && pnpm --filter nebula-frontend build",
-    "build:mcpb": "pnpm --filter nebula-mcp build:mcpb",
+    "build:hub": "pnpm --filter nebula-hub build",
+    "build:site": "pnpm --filter @nebula/core build && pnpm --filter nebula-landing build && pnpm --filter nebula-hub build",
     "dev:landing": "pnpm --filter nebula-landing dev",
-    "dev:mcp": "pnpm --filter nebula-mcp dev",
-    "dev:web": "pnpm --filter nebula-frontend dev",
-    "publish:mcp": "pnpm --filter nebula-mcp publish --access public",
+    "dev:mcp": "pnpm --filter @nebula/mcp start",
+    "dev:hub": "pnpm --filter nebula-hub dev",
+    "test:core": "pnpm --filter @nebula/core exec tsx src/policy/confirmation.test.ts",
+    "publish:mcp": "pnpm --filter @nebula/mcp publish --access public",
     "vercel:configure": "node scripts/configure-vercel.mjs"
+  },
+  "pnpm": {
+    "overrides": {
+      "viem": "^2.55.0",
+      "uuid": "^11.1.0",
+      "@walletconnect/ethereum-provider": "2.23.10",
+      "@walletconnect/universal-provider": "2.23.10",
+      "@walletconnect/sign-client": "2.23.10",
+      "@paulmillr/qr": "npm:qr@0.6.0",
+      "@stellar/stellar-sdk": "^16.0.1"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@stellar/stellar-sdk": "*",
+        "mppx": "*",
+        "react": "19",
+        "utf-8-validate": "*"
+      },
+      "ignoreMissing": ["utf-8-validate", "bufferutil"]
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp",
+      "keccak",
+      "bufferutil",
+      "utf-8-validate",
+      "@reown/appkit"
+    ]
   }
 }

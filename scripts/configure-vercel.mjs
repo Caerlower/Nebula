@@ -32,7 +32,7 @@ const response = await fetch(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      rootDirectory: "apps/web",
+      rootDirectory: "apps/nebula-hub",
       framework: "nextjs",
       installCommand: "cd ../.. && pnpm install",
       buildCommand: "cd ../.. && pnpm build:site",
