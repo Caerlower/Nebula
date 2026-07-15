@@ -76,6 +76,30 @@ export async function updateTreasurySettings(
   });
 }
 
+/**
+ * Turn off auto-yield and pull all Blend XLM back to liquid.
+ * Call only after the user confirms in the UI.
+ */
+export async function disableAutoYieldAndUnwind(): Promise<{
+  settings: TreasurySettings;
+  withdrawnXlm: number;
+  txHashes: string[];
+}> {
+  const positions = await getBlendPositions();
+  const txHashes: string[] = [];
+  let withdrawnXlm = 0;
+
+  for (const position of positions) {
+    if (position.deposited <= 0) continue;
+    const { txHash } = await withdraw(position.deposited);
+    txHashes.push(txHash);
+    withdrawnXlm += position.deposited;
+  }
+
+  const settings = await updateTreasurySettings({ autoYield: false });
+  return { settings, withdrawnXlm, txHashes };
+}
+
 export async function transferXlm(input: {
   destination: string;
   amountXlm: number;

@@ -330,11 +330,18 @@ function WithdrawDialog({
   );
 }
 
-function AutoYieldCard() {
+function AutoYieldCard({
+  onUnwindComplete,
+}: {
+  onUnwindComplete?: () => void;
+}) {
   const { data, loading, setData } = useLoad(() => api.getTreasurySettings(), []);
   const [draftLow, setDraftLow] = useState<string | null>(null);
   const [draftHigh, setDraftHigh] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmOffOpen, setConfirmOffOpen] = useState(false);
+  const [blendInYield, setBlendInYield] = useState(0);
+  const [switchBusy, setSwitchBusy] = useState(false);
 
   const lowText =
     draftLow ?? (data != null ? String(data.liquidityFloorXLM) : "");
@@ -352,18 +359,69 @@ function AutoYieldCard() {
     ((draftLow != null && parsedLow !== data.liquidityFloorXLM) ||
       (draftHigh != null && parsedHigh !== data.liquidityCeilingXLM));
 
-  const toggleAuto = async (next: boolean) => {
+  const enableAutoYield = async () => {
     if (!data) return;
     const previous = data;
-    setData({ ...data, autoYield: next });
+    setData({ ...data, autoYield: true });
+    setSwitchBusy(true);
     try {
-      await api.updateTreasurySettings({ autoYield: next });
-      toast.success(next ? "Auto-yield enabled" : "Auto-yield paused");
+      await api.updateTreasurySettings({ autoYield: true });
+      toast.success("Auto-yield enabled");
     } catch {
       setData(previous);
       toast.error("Couldn't update auto-yield", {
-        action: { label: "Retry", onClick: () => void toggleAuto(next) },
+        action: { label: "Retry", onClick: () => void enableAutoYield() },
       });
+    } finally {
+      setSwitchBusy(false);
+    }
+  };
+
+  const requestDisableAutoYield = async () => {
+    setSwitchBusy(true);
+    try {
+      const positions = await api.getBlendPositions();
+      const total = positions.reduce((sum, p) => sum + (p.deposited ?? 0), 0);
+      setBlendInYield(total);
+      setConfirmOffOpen(true);
+    } catch {
+      setBlendInYield(0);
+      setConfirmOffOpen(true);
+    } finally {
+      setSwitchBusy(false);
+    }
+  };
+
+  const confirmDisableAutoYield = async () => {
+    if (!data) return;
+    const previous = data;
+    try {
+      const { settings, withdrawnXlm, txHashes } =
+        await api.disableAutoYieldAndUnwind();
+      setData(settings);
+      if (withdrawnXlm > 0 && txHashes[0]) {
+        toast.success("Auto-yield off · Blend withdrawn", {
+          description: `${fmtXLM(withdrawnXlm)} XLM returned to liquid · tx ${truncMiddle(txHashes[0], 6, 6)}`,
+        });
+      } else if (withdrawnXlm > 0) {
+        toast.success("Auto-yield off · Blend withdrawn", {
+          description: `${fmtXLM(withdrawnXlm)} XLM returned to liquid`,
+        });
+      } else {
+        toast.success("Auto-yield paused");
+      }
+      onUnwindComplete?.();
+    } catch (error) {
+      setData(previous);
+      toast.error("Couldn't turn off auto-yield", {
+        description:
+          error instanceof Error ? error.message : "Withdraw or settings update failed",
+        action: {
+          label: "Retry",
+          onClick: () => void confirmDisableAutoYield(),
+        },
+      });
+      throw error;
     }
   };
 
@@ -409,10 +467,29 @@ function AutoYieldCard() {
             </div>
             <Switch
               checked={data.autoYield}
-              onCheckedChange={(next) => void toggleAuto(next)}
+              disabled={switchBusy}
+              onCheckedChange={(next) => {
+                if (next) void enableAutoYield();
+                else void requestDisableAutoYield();
+              }}
               aria-label="Auto-route idle funds to Blend"
             />
           </div>
+          <ConfirmDialog
+            open={confirmOffOpen}
+            onOpenChange={setConfirmOffOpen}
+            title="Turn off auto-yield?"
+            description={
+              blendInYield > 0
+                ? `This withdraws about ${fmtXLM(blendInYield)} XLM from Blend back to your liquid balance, and stops parking idle funds. Yield stops accruing on that position after the withdraw.`
+                : "This stops parking idle funds into Blend. If any XLM is still in Blend, it will be withdrawn to your liquid balance."
+            }
+            confirmLabel={
+              blendInYield > 0 ? "Withdraw & turn off" : "Turn off auto-yield"
+            }
+            destructive
+            onConfirm={() => confirmDisableAutoYield()}
+          />
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">Liquid band (USDC)</p>
@@ -774,7 +851,12 @@ export default function TreasuryPage() {
       </Card>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AutoYieldCard />
+        <AutoYieldCard
+          onUnwindComplete={() => {
+            void reloadWallet();
+            void reloadPositions();
+          }}
+        />
         <YieldChartCard />
       </div>
 
