@@ -13,6 +13,7 @@ import {
   type SwapAsset,
 } from "../swap";
 import { formatAmt, loadPolicySnapshot, requireNotPaused } from "./context";
+import { scheduleParkExcessAfterActivity } from "./treasury";
 
 export async function executeGetSwapQuote(
   input: { from_asset: SwapAsset; to_asset: SwapAsset; amount: number },
@@ -186,6 +187,8 @@ export async function executeSwap(
         confirmationId,
       },
     });
+
+    scheduleParkExcessAfterActivity(principal, ctx, "after_swap");
 
     return {
       status: "ok",

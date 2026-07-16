@@ -94,7 +94,11 @@ export const HELP_CATALOG: Record<
   treasury: [
     { name: "get_treasury_status", summary: "Liquid vs Blend XLM + USDC band + APY" },
     { name: "blend_check_rates", summary: "Blend supply APY" },
-    // deposit / withdraw / optimize are Hub-dashboard only (not MCP)
+    {
+      name: "optimize_treasury",
+      summary:
+        "Park liquid above the high band to Blend (or top up if below low). Auto-runs after swap/x402/mpp/transfer when auto-yield is on.",
+    },
   ],
   identity: [
     {

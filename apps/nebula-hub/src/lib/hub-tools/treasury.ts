@@ -1,4 +1,5 @@
 import type { ToolContext, ToolResult } from "@nebula/core";
+import { after } from "next/server";
 
 import type { AuthPrincipal } from "../auth";
 import { privyConfigured } from "../auth";
@@ -355,14 +356,19 @@ export async function ensureLiquidForSpendSequential(
   return null;
 }
 
+/** Serialize Blend parks per user so concurrent tool calls cannot double-deposit. */
+const parkTailByUser = new Map<string, Promise<void>>();
+
 export function scheduleAutoRebalance(
   principal: AuthPrincipal,
   ctx: ToolContext,
   reason: string,
   opts?: { depositOnly?: boolean; minMove?: number },
 ): void {
-  void (async () => {
-    try {
+  const prev = parkTailByUser.get(principal.userId) ?? Promise.resolve();
+  const next = prev
+    .catch(() => {})
+    .then(async () => {
       const result = await executeOptimizeTreasury(principal, ctx, {
         depositOnly: opts?.depositOnly,
         minMove: opts?.minMove ?? MIN_AUTO_REBALANCE,
@@ -377,8 +383,39 @@ export function scheduleAutoRebalance(
           "reason" in result ? result.reason : result,
         );
       }
-    } catch (error) {
+    })
+    .catch((error) => {
       console.error(`[treasury] auto-rebalance (${reason}) failed`, error);
-    }
-  })();
+    })
+    .finally(() => {
+      if (parkTailByUser.get(principal.userId) === next) {
+        parkTailByUser.delete(principal.userId);
+      }
+    });
+  parkTailByUser.set(principal.userId, next);
+
+  // Keep the serverless invocation alive until Blend park finishes.
+  try {
+    after(async () => {
+      await next;
+    });
+  } catch {
+    // Outside a Next request context (rare) — still run best-effort.
+    void next;
+  }
+}
+
+/**
+ * Park liquid XLM above the high band after agent activity (x402 / swap / mpp / …).
+ * Safe to call from many tools: no-ops when auto-yield is off or liquid is in-band.
+ */
+export function scheduleParkExcessAfterActivity(
+  principal: AuthPrincipal,
+  ctx: ToolContext,
+  reason: string,
+): void {
+  scheduleAutoRebalance(principal, ctx, reason, {
+    depositOnly: true,
+    minMove: MIN_AUTO_REBALANCE,
+  });
 }

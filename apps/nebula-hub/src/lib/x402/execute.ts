@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { onchainCheckSpend } from "@/lib/policy-onchain";
 import { privyConfigured } from "@/lib/auth";
 import { explorerTxUrl } from "@/lib/stellar";
+import { scheduleParkExcessAfterActivity } from "@/lib/hub-tools/treasury";
 
 import { fetchUsdcBalance, payX402Challenge, probeX402Url } from "./fetch";
 
@@ -254,6 +255,8 @@ export async function executeX402Tool(params: {
       confirmationId: params.confirmationId,
     },
   });
+
+  scheduleParkExcessAfterActivity(principal, ctx, "after_x402");
 
   return {
     status: "ok",

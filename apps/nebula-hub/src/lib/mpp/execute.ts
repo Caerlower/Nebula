@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db";
 import { onchainCheckSpend } from "@/lib/policy-onchain";
 import { privyConfigured } from "@/lib/auth";
 import { explorerTxUrl } from "@/lib/stellar";
+import { scheduleParkExcessAfterActivity } from "@/lib/hub-tools/treasury";
 import { fetchUsdcBalance } from "@/lib/x402/fetch";
 
 import {
@@ -228,6 +229,8 @@ export async function executeMppOpenSession(params: {
     },
   });
 
+  scheduleParkExcessAfterActivity(principal, ctx, "after_mpp_open");
+
   return {
     status: "ok",
     data: {
@@ -409,6 +412,7 @@ export async function executeMppFetch(params: {
     },
   });
 
+  // Micropayments are frequent — park on open/close instead of every fetch.
   return {
     status: "ok",
     data: {
@@ -508,6 +512,12 @@ export async function executeMppCloseSession(params: {
       status: "confirmed",
     },
   });
+
+  scheduleParkExcessAfterActivity(
+    params.principal,
+    params.ctx,
+    "after_mpp_close",
+  );
 
   return {
     status: "ok",

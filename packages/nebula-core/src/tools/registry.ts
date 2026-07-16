@@ -99,7 +99,7 @@ export const tools = {
     dashboardOnly: true,
     mcpHidden: true,
   }),
-  optimize_treasury: wrap(optimizeTreasuryTool, { dashboardOnly: true }),
+  optimize_treasury: wrap(optimizeTreasuryTool),
   spending_report: wrap(spendingReportTool),
   get_policy_status: wrap(getPolicyStatusTool),
   set_policy_limits: wrap(setPolicyLimitsTool, {
