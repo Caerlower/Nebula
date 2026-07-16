@@ -118,7 +118,13 @@ Minimum for a working Hub: `DATABASE_URL`, `DIRECT_URL`, Privy (`NEXT_PUBLIC_PRI
 ## Connect an agent (MCP)
 
 1. Sign in at [nebulaonchain.xyz](https://nebulaonchain.xyz) → **Connect** → create an agent → copy `nbl_live_…`.
-2. Add to Claude Desktop / Cursor:
+2. Pick a path below. Prefer the **www** Hub host so Bearer tokens survive redirects.
+
+### npm package (Claude Desktop / Cursor)
+
+Published: [`nebulamcp-stdio`](https://www.npmjs.com/package/nebulamcp-stdio) (depends on [`nebulamcp-core`](https://www.npmjs.com/package/nebulamcp-core)).
+
+Use this when the client only speaks **local stdio MCP** — it runs `npx` and forwards tools to the Hub. You do **not** need it for Claude Code or custom agents that can call HTTP.
 
 ```json
 {
@@ -135,13 +141,32 @@ Minimum for a working Hub: `DATABASE_URL`, `DIRECT_URL`, Privy (`NEXT_PUBLIC_PRI
 }
 ```
 
-`args` is required — that's how the client launches `nebulamcp-stdio`. Prefer `www` for `NEBULA_HUB` so Bearer tokens survive redirects.
+```bash
+npx -y nebulamcp-stdio
+```
 
 **Never put a Stellar secret key in MCP config** — only `NEBULA_TOKEN`.
 
-More: [packages/nebulamcp/README.md](packages/nebulamcp/README.md) · [docs/MCP-DEV.md](docs/MCP-DEV.md).
+Package docs: [packages/nebulamcp/README.md](packages/nebulamcp/README.md).
 
-Remote MCP (Streamable HTTP + OAuth) is also served at Hub `POST /mcp`.
+### Remote HTTP (Claude Code / custom agents)
+
+No npm install. Point the client at Hub Streamable HTTP:
+
+`POST https://www.nebulaonchain.xyz/mcp`  
+`Authorization: Bearer nbl_live_…`
+
+Claude Code:
+
+```bash
+claude mcp add --transport http nebula https://www.nebulaonchain.xyz/mcp \
+  -s user \
+  --header "Authorization: Bearer nbl_live_…"
+```
+
+OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/authorize` → `/oauth/token`).
+
+More: [docs/MCP-DEV.md](docs/MCP-DEV.md).
 
 ---
 
