@@ -33,7 +33,7 @@ const SNIPPETS: Record<Framework, Snippet> = {
     install: {
       title: "prerequisites",
       language: "bash",
-      code: `# 1. Mint a token below (nbl_live_…)
+      code: `# 1. Mint a token above (nbl_live_…)
 # 2. Node 20+ on the machine that runs Claude Desktop
 node --version`,
     },
@@ -59,7 +59,7 @@ node --version`,
     install: {
       title: "prerequisites",
       language: "bash",
-      code: `# Mint a token below first (nbl_live_…)
+      code: `# Mint a token above first (nbl_live_…)
 claude --version`,
     },
     config: {
@@ -85,7 +85,7 @@ claude mcp list
       title: "install",
       language: "bash",
       code: `npm install @modelcontextprotocol/sdk
-# Mint a token below first (nbl_live_…)`,
+# Mint a token above first (nbl_live_…)`,
     },
     config: {
       title: "remote Streamable HTTP",
@@ -123,7 +123,7 @@ console.log(balance);`,
       title: "install",
       language: "bash",
       code: `pip install openai-agents
-# Mint a token below first (nbl_live_…)
+# Mint a token above first (nbl_live_…)
 # Requires Node 20+ on PATH for npx nebulamcp`,
     },
     config: {
