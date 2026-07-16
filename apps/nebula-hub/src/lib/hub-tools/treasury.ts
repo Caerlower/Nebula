@@ -20,6 +20,12 @@ import {
   recordBlendTx,
   requireNotPaused,
 } from "./context";
+import { prisma } from "../db";
+
+/** Min time between auto-park *attempts* (skips Horizon/Blend spam on rapid x402). */
+const PARK_ATTEMPT_COOLDOWN_MS = 60_000;
+/** Min time after a successful Blend deposit before auto-parking again. */
+const PARK_SUCCESS_COOLDOWN_MS = 5 * 60_000;
 
 export async function executeBlendDeposit(
   input: { amount_xlm: number; pool_id?: string },
@@ -358,6 +364,31 @@ export async function ensureLiquidForSpendSequential(
 
 /** Serialize Blend parks per user so concurrent tool calls cannot double-deposit. */
 const parkTailByUser = new Map<string, Promise<void>>();
+/** Last time we *attempted* an auto-park (including no-ops). */
+const lastParkAttemptAt = new Map<string, number>();
+
+async function shouldSkipAutoPark(userId: string): Promise<string | null> {
+  const now = Date.now();
+  const lastAttempt = lastParkAttemptAt.get(userId);
+  if (lastAttempt != null && now - lastAttempt < PARK_ATTEMPT_COOLDOWN_MS) {
+    return `attempt_cooldown_${Math.ceil((PARK_ATTEMPT_COOLDOWN_MS - (now - lastAttempt)) / 1000)}s`;
+  }
+
+  const recentDeposit = await prisma.transaction.findFirst({
+    where: {
+      userId,
+      type: "blend_deposit",
+      status: "confirmed",
+      createdAt: { gt: new Date(now - PARK_SUCCESS_COOLDOWN_MS) },
+    },
+    select: { id: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (recentDeposit) {
+    return "recent_blend_deposit";
+  }
+  return null;
+}
 
 export function scheduleAutoRebalance(
   principal: AuthPrincipal,
@@ -369,6 +400,15 @@ export function scheduleAutoRebalance(
   const next = prev
     .catch(() => {})
     .then(async () => {
+      const skip = await shouldSkipAutoPark(principal.userId);
+      if (skip) {
+        console.error(
+          `[treasury] auto-rebalance (${reason}) skipped: ${skip}`,
+        );
+        return;
+      }
+      lastParkAttemptAt.set(principal.userId, Date.now());
+
       const result = await executeOptimizeTreasury(principal, ctx, {
         depositOnly: opts?.depositOnly,
         minMove: opts?.minMove ?? MIN_AUTO_REBALANCE,
@@ -407,7 +447,8 @@ export function scheduleAutoRebalance(
 
 /**
  * Park liquid XLM above the high band after agent activity (x402 / swap / mpp / …).
- * Safe to call from many tools: no-ops when auto-yield is off or liquid is in-band.
+ * Throttled: at most one attempt / minute, and skips if we already deposited
+ * in the last 5 minutes. Use MCP `optimize_treasury` to force a pass.
  */
 export function scheduleParkExcessAfterActivity(
   principal: AuthPrincipal,

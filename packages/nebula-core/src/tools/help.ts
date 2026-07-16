@@ -97,7 +97,7 @@ export const HELP_CATALOG: Record<
     {
       name: "optimize_treasury",
       summary:
-        "Park liquid above the high band to Blend (or top up if below low). Auto-runs after swap/x402/mpp/transfer when auto-yield is on.",
+        "Force park/top-up vs the liquid band. Auto-park also runs (throttled) after swap/x402/mpp/transfer when auto-yield is on.",
     },
   ],
   identity: [
