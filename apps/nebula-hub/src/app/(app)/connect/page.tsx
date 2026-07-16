@@ -15,19 +15,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as api from "@/lib/api";
 import type { Framework } from "@/types/domain";
 
+const HUB = "https://www.nebulaonchain.xyz";
+const MCP_URL = `${HUB}/mcp`;
+
 interface Snippet {
   install: { code: string; language: "bash"; title: string };
-  config: { code: string; language: "bash" | "json" | "typescript" | "python"; title: string };
+  config: {
+    code: string;
+    language: "bash" | "json" | "typescript" | "python";
+    title: string;
+  };
   note: string;
 }
 
 const SNIPPETS: Record<Framework, Snippet> = {
   "claude-desktop": {
     install: {
-      title: "install",
+      title: "prerequisites",
       language: "bash",
-      code: `# Node 20+. After publish: npx -y nebulamcp
-# Local monorepo: pnpm --filter nebulamcp build && node packages/nebulamcp/dist/index.js
+      code: `# 1. Mint a token below (nbl_live_…)
+# 2. Node 20+ on the machine that runs Claude Desktop
 node --version`,
     },
     config: {
@@ -40,39 +47,45 @@ node --version`,
       "args": ["-y", "nebulamcp"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
-        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
+        "NEBULA_HUB": "${HUB}"
       }
     }
   }
 }`,
     },
-    note: "Mint a token below and paste this in. Prefer www for NEBULA_HUB. Private keys never leave Nebula.",
+    note: `macOS: ~/Library/Application Support/Claude/claude_desktop_config.json · Windows: %APPDATA%\\Claude\\claude_desktop_config.json. Restart Claude Desktop after saving. Same JSON works in Cursor (.cursor/mcp.json). Never put a Stellar secret key here — only NEBULA_TOKEN.`,
   },
   "claude-code": {
     install: {
-      title: "install",
+      title: "prerequisites",
       language: "bash",
-      code: `# Claude Code ships an MCP manager — no separate install.
+      code: `# Mint a token below first (nbl_live_…)
 claude --version`,
     },
     config: {
-      title: "add the server",
+      title: "add Nebula (recommended)",
       language: "bash",
-      code: `claude mcp add nebula \\
-  -e NEBULA_TOKEN=nbl_live_… \\
-  -e NEBULA_HUB=https://www.nebulaonchain.xyz \\
-  -- npx -y nebulamcp
+      code: `# Remote Streamable HTTP — no npm install. Talks straight to the Hub.
+claude mcp add --transport http nebula ${MCP_URL} \\
+  --header "Authorization: Bearer nbl_live_…"
 
-# verify
-claude mcp list`,
+# Confirm it registered
+claude mcp list
+
+# Optional: project-only vs user-wide
+#   claude mcp add --transport http nebula ${MCP_URL} --scope project \\
+#     --header "Authorization: Bearer nbl_live_…"
+#   claude mcp add --transport http nebula ${MCP_URL} --scope user \\
+#     --header "Authorization: Bearer nbl_live_…"`,
     },
-    note: "Run inside your project for a project-scoped server, or add --scope user to share it across projects.",
+    note: `Prefer HTTP for Claude Code — it hits ${MCP_URL} with your token. Stdio fallback (local npx bridge): claude mcp add nebula -e NEBULA_TOKEN=nbl_live_… -e NEBULA_HUB=${HUB} -- npx -y nebulamcp`,
   },
   "custom-mcp": {
     install: {
       title: "install",
       language: "bash",
-      code: `npm install @modelcontextprotocol/sdk`,
+      code: `npm install @modelcontextprotocol/sdk
+# Mint a token below first (nbl_live_…)`,
     },
     config: {
       title: "remote Streamable HTTP",
@@ -80,11 +93,13 @@ claude mcp list`,
       code: `import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+const token = process.env.NEBULA_TOKEN!; // nbl_live_…
+
 const transport = new StreamableHTTPClientTransport(
-  new URL("https://www.nebulaonchain.xyz/mcp"),
+  new URL("${MCP_URL}"),
   {
     requestInit: {
-      headers: { Authorization: \`Bearer \${process.env.NEBULA_TOKEN}\` },
+      headers: { Authorization: \`Bearer \${token}\` },
     },
   },
 );
@@ -92,19 +107,24 @@ const transport = new StreamableHTTPClientTransport(
 const client = new Client({ name: "my-agent", version: "1.0.0" });
 await client.connect(transport);
 
+const tools = await client.listTools();
+console.log(tools.tools.map((t) => t.name));
+
 const balance = await client.callTool({
   name: "check_balance",
   arguments: {},
 });
 console.log(balance);`,
     },
-    note: "Remote MCP speaks Streamable HTTP at /mcp. OAuth DCR is at /api/oauth/register → /authorize → /oauth/token.",
+    note: `Endpoint: POST ${MCP_URL} with Authorization: Bearer nbl_live_…. Use the www host (apex redirects can drop the Bearer header). OAuth DCR for hosted connectors: /api/oauth/register → /authorize → /oauth/token.`,
   },
   "openai-sdk": {
     install: {
       title: "install",
       language: "bash",
-      code: `pip install openai-agents`,
+      code: `pip install openai-agents
+# Mint a token below first (nbl_live_…)
+# Requires Node 20+ on PATH for npx nebulamcp`,
     },
     config: {
       title: "agent.py",
@@ -114,42 +134,49 @@ from agents import Agent, Runner
 from agents.mcp import MCPServerStdio
 
 nebula = MCPServerStdio(
+    name="nebula",
     params={
         "command": "npx",
         "args": ["-y", "nebulamcp"],
         "env": {
+            **os.environ,
             "NEBULA_TOKEN": os.environ["NEBULA_TOKEN"],
-            "NEBULA_HUB": os.environ.get("NEBULA_HUB", "https://www.nebulaonchain.xyz"),
+            "NEBULA_HUB": os.environ.get("NEBULA_HUB", "${HUB}"),
         },
-    }
-)
-
-agent = Agent(
-    name="Treasurer",
-    instructions="Manage the wallet. Respect the spending policy.",
-    mcp_servers=[nebula],
-)
-
-result = Runner.run_sync(agent, "What's my balance?")
-print(result.final_output)`,
     },
-    note: "Stdio via nebulamcp, or point a remote MCP client at POST /mcp with Bearer nbl_live_…",
+)
+
+async def main() -> None:
+    async with nebula:
+        agent = Agent(
+            name="Treasurer",
+            instructions="Manage the wallet. Respect the spending policy.",
+            mcp_servers=[nebula],
+        )
+        result = await Runner.run(agent, "What's my balance?")
+        print(result.final_output)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())`,
+    },
+    note: `Stdio bridge: nebulamcp presents NEBULA_TOKEN to the Hub. Prefer async with MCPServerStdio so the subprocess cleans up. For remote HTTP instead, POST ${MCP_URL} with Bearer nbl_live_… (same as Custom MCP).`,
   },
 };
 
-function TestConnection({ framework }: { framework: Framework }) {
+function TestHubSession() {
   const [state, setState] = useState<"idle" | "testing" | "ok">("idle");
   const [latency, setLatency] = useState<number | null>(null);
 
   const test = async () => {
     setState("testing");
     try {
-      const { latencyMs } = await api.testConnection(framework);
+      const { latencyMs } = await api.testConnection("claude-desktop");
       setLatency(latencyMs);
       setState("ok");
     } catch {
       setState("idle");
-      toast.error("Connection test failed", {
+      toast.error("Hub session check failed — sign in again", {
         action: { label: "Retry", onClick: () => void test() },
       });
     }
@@ -159,7 +186,7 @@ function TestConnection({ framework }: { framework: Framework }) {
     return (
       <p className="inline-flex items-center gap-2 text-sm text-success" role="status">
         <CheckCircle2 className="size-4" aria-hidden />
-        Connected — MCP handshake complete{latency != null ? ` (${latency}ms)` : ""}
+        Hub session OK{latency != null ? ` (${latency}ms)` : ""} — paste your token into the client next
       </p>
     );
   }
@@ -168,11 +195,11 @@ function TestConnection({ framework }: { framework: Framework }) {
     <Button variant="outline" onClick={() => void test()} disabled={state === "testing"}>
       {state === "testing" ? (
         <>
-          <Loader2 className="size-4 animate-spin" /> Testing…
+          <Loader2 className="size-4 animate-spin" /> Checking…
         </>
       ) : (
         <>
-          <PlugZap className="size-4" /> Test connection
+          <PlugZap className="size-4" /> Check Hub session
         </>
       )}
     </Button>
@@ -302,10 +329,35 @@ export default function ConnectPage() {
       <PageHeader
         eyebrow="setup"
         title="Connect"
-        subtitle="One server, 22 tools. Your agent is a paste away."
+        subtitle="Mint a token, then wire your client to the Hub. Keys stay in Privy — agents only present nbl_live_…."
       />
 
-      <Tabs defaultValue="claude-desktop">
+      <Card className="mb-6 space-y-2 p-5">
+        <p className="text-sm font-medium text-foreground">How MCP connects</p>
+        <ul className="list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed text-muted-foreground">
+          <li>
+            <span className="text-foreground">Claude Code / custom agents</span>{" "}
+            — call the Hub directly at{" "}
+            <code className="text-[12px]">{MCP_URL}</code> (Streamable HTTP +
+            Bearer token). No local package required.
+          </li>
+          <li>
+            <span className="text-foreground">Claude Desktop / Cursor / OpenAI Agents</span>{" "}
+            — run <code className="text-[12px]">npx -y nebulamcp</code> over
+            stdio; it forwards tools to the Hub with your token.
+          </li>
+          <li>
+            Always use the <code className="text-[12px]">www</code> Hub host.
+            Apex redirects can strip <code className="text-[12px]">Authorization</code>.
+          </li>
+        </ul>
+      </Card>
+
+      <div className="mb-6">
+        <ApiKeysCard />
+      </div>
+
+      <Tabs defaultValue="claude-code">
         <TabsList aria-label="Framework">
           {(Object.keys(SNIPPETS) as Framework[]).map((framework) => (
             <TabsTrigger key={framework} value={framework}>
@@ -326,7 +378,7 @@ export default function ConnectPage() {
               <Card className="space-y-5 p-5">
                 <div>
                   <p className="mb-2 text-[13px] font-medium text-muted-foreground">
-                    1 · Install
+                    1 · Prerequisites
                   </p>
                   <CodeBlock
                     code={snippet.install.code}
@@ -348,8 +400,16 @@ export default function ConnectPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="mb-2 text-[13px] font-medium text-muted-foreground">3 · Verify</p>
-                  <TestConnection framework={framework} />
+                  <p className="mb-2 text-[13px] font-medium text-muted-foreground">
+                    3 · Verify Hub session
+                  </p>
+                  <p className="mb-2.5 text-[13px] text-muted-foreground">
+                    Confirms you&apos;re signed into this Hub. MCP itself is
+                    verified in your client (e.g.{" "}
+                    <code className="text-[12px]">claude mcp list</code> or a{" "}
+                    <code className="text-[12px]">check_balance</code> call).
+                  </p>
+                  <TestHubSession />
                 </div>
               </Card>
             </TabsContent>
@@ -359,10 +419,6 @@ export default function ConnectPage() {
 
       <div className="mt-6">
         <UsdcTrustlineCard />
-      </div>
-
-      <div className="mt-6">
-        <ApiKeysCard />
       </div>
     </div>
   );
