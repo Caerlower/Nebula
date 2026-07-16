@@ -6,6 +6,7 @@ export type TxType =
   | "blend_deposit"
   | "blend_withdraw"
   | "transfer"
+  | "swap"
   | "policy_change";
 export type TxStatus = "pending" | "confirmed" | "failed";
 

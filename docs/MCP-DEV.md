@@ -29,6 +29,15 @@ pnpm --filter nebula-hub dev
 # NEBULA_HUB=http://localhost:3000
 ```
 
+## Testing swaps (XLM ↔ USDC)
+
+1. Fund XLM; open Circle USDC trustline on Connect if swapping into USDC
+2. MCP: `get_swap_quote` with `from_asset` / `to_asset` / `amount`
+3. MCP: `swap` with the same fields (optional `max_slippage_bps`, default 100 = 1%)
+4. Large notional (> per-tx USDC cap) may require Hub approval + `await_confirmation`
+
+Swaps use the Stellar DEX (path payment strict-send). They do **not** count toward daily outbound spend caps.
+
 ## Testing x402
 
 1. Fund XLM (Friendbot), open Circle USDC trustline on Connect, [Circle faucet](https://faucet.circle.com/)

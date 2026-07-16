@@ -43,6 +43,11 @@ import {
 } from "./treasury";
 import { executeTransfer } from "./transfer";
 import {
+  decideSwapConfirmation,
+  executeGetSwapQuote,
+  executeSwap,
+} from "./swap";
+import {
   executeGetMyReputation,
   executeRegisterIdentity,
 } from "./identity";
@@ -218,6 +223,63 @@ export async function runHubTool(
       };
     }
     return executeTransfer(input, principal, ctx);
+  }
+
+  if (toolName === "get_swap_quote") {
+    const input = parsed.data as {
+      from_asset: "XLM" | "USDC";
+      to_asset: "XLM" | "USDC";
+      amount: number;
+    };
+    return executeGetSwapQuote(input, ctx);
+  }
+
+  if (toolName === "swap") {
+    const input = parsed.data as {
+      from_asset: "XLM" | "USDC";
+      to_asset: "XLM" | "USDC";
+      amount: number;
+      max_slippage_bps?: number;
+      reason: string;
+    };
+    const decision = await decideSwapConfirmation(input, principal, ctx);
+    if (decision.action === "reject") {
+      await prisma.transaction.create({
+        data: {
+          userId: principal.userId,
+          agentId: principal.agentId,
+          type: "swap",
+          destination: ctx.stellarAddress,
+          amountXlm: input.amount,
+          reason: `${input.reason}; rejected:${decision.reason}`,
+          status: "rejected",
+        },
+      });
+      return { status: "rejected", reason: decision.reason };
+    }
+    if (decision.action === "confirm") {
+      const expiresAt = new Date(Date.now() + 15 * 60_000);
+      const conf = await prisma.confirmation.create({
+        data: {
+          userId: principal.userId,
+          toolName,
+          input,
+          summary:
+            `Swap ${input.amount} ${input.from_asset} → ${input.to_asset} ` +
+            `(≈ $${formatAmt(decision.amountUsdc)} USDC notional; ${decision.reason})`,
+          status: "pending",
+          expiresAt,
+        },
+      });
+      return {
+        status: "confirmation_required",
+        confirmation_id: conf.id,
+        approve_url: `${APP_URL}/approve/${conf.id}`,
+        expires_in: 15 * 60,
+        summary: conf.summary,
+      };
+    }
+    return executeSwap(input, principal, ctx);
   }
 
   if (toolName === "blend_check_rates") {
@@ -744,6 +806,7 @@ export async function executeApprovedConfirmation(
   }
   if (
     conf.toolName !== "transfer" &&
+    conf.toolName !== "swap" &&
     conf.toolName !== "x402_fetch" &&
     conf.toolName !== "x402_pay" &&
     conf.toolName !== "mpp_open_session" &&
@@ -822,6 +885,24 @@ export async function executeApprovedConfirmation(
       skipConfirmation: true,
       confirmationId,
     });
+    return result;
+  }
+
+  if (conf.toolName === "swap") {
+    const input = conf.input as {
+      from_asset: "XLM" | "USDC";
+      to_asset: "XLM" | "USDC";
+      amount: number;
+      max_slippage_bps?: number;
+      reason: string;
+    };
+    const result = await executeSwap(input, principal, ctx, confirmationId);
+    if (result.status === "ok" && result.tx_hash) {
+      await prisma.confirmation.update({
+        where: { id: confirmationId },
+        data: { txHash: result.tx_hash },
+      });
+    }
     return result;
   }
 

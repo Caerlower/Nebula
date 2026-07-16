@@ -38,6 +38,7 @@ import {
   registerIdentityTool,
 } from "./hub-stubs.js";
 import { helpTool } from "./help.js";
+import { getSwapQuoteTool, swapTool } from "./swap.js";
 
 export interface NebulaToolDefinition<TSchema extends z.ZodType = z.ZodType> {
   name: string;
@@ -81,6 +82,8 @@ export const tools = {
   check_balance: wrap(checkBalanceTool),
   request_funding: wrap(requestFundingTool),
   transfer: wrap(transferTool),
+  get_swap_quote: wrap(getSwapQuoteTool),
+  swap: wrap(swapTool),
   x402_fetch: wrap(x402FetchTool),
   x402_pay: wrap(x402PayTool),
   mpp_open_session: wrap(mppOpenSessionTool),

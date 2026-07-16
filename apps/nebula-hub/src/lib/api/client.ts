@@ -253,6 +253,7 @@ export function mapTxType(type: string): TxType {
   if (type === "blend_deposit") return "blend_deposit";
   if (type === "blend_withdraw") return "blend_withdraw";
   if (type === "policy_change") return "policy_change";
+  if (type === "swap") return "swap";
   return "transfer";
 }
 

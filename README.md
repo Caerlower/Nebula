@@ -152,6 +152,7 @@ Remote MCP (Streamable HTTP + OAuth) is also served at Hub `POST /mcp`.
 | Capability    | Tools / surface                                                  |
 | ------------- | ---------------------------------------------------------------- |
 | Wallet        | Balances, identity, fund (testnet), transfer                     |
+| Swap          | XLM ↔ Circle USDC on Stellar DEX (`get_swap_quote`, `swap`)      |
 | Policy        | Caps, allow/deny lists; on-chain when policy contract configured |
 | Confirmations | Human approve flow + `await_confirmation`                        |
 | x402          | Pay-walled HTTP via Stellar USDC                                 |

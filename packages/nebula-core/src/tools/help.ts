@@ -5,6 +5,7 @@ import type { ToolContext, ToolResult } from "../types/context.js";
 export const helpCategorySchema = z.enum([
   "wallet",
   "transfers",
+  "swap",
   "limits",
   "policy",
   "x402",
@@ -33,6 +34,17 @@ export const HELP_CATALOG: Record<
     {
       name: "transfer",
       summary: "Send XLM (policy + confirmation; Privy signs on Hub)",
+    },
+  ],
+  swap: [
+    {
+      name: "get_swap_quote",
+      summary: "Quote XLM ↔ Circle USDC on the Stellar DEX (no signing)",
+    },
+    {
+      name: "swap",
+      summary:
+        "Execute XLM ↔ USDC DEX swap (strict-send + slippage; may need confirmation)",
     },
   ],
   limits: [

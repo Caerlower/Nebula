@@ -98,6 +98,7 @@ export const TX_TYPE_META: Record<TxType, { label: string; icon: LucideIcon }> =
   blend_deposit: { label: "Blend deposit", icon: Layers },
   blend_withdraw: { label: "Blend withdraw", icon: Layers },
   transfer: { label: "Transfer", icon: ArrowRightLeft },
+  swap: { label: "Swap", icon: ArrowRightLeft },
   policy_change: { label: "Policy change", icon: Shield },
 };
 
