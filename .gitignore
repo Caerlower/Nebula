@@ -48,6 +48,9 @@ Pixa/
 .agents/
 skills-lock.json
 
+# Local Claude / Cursor MCP project config (use user-scope or Connect docs)
+.mcp.json
+
 # MCP bundles
 *.mcpb
 .mcpb-build/
