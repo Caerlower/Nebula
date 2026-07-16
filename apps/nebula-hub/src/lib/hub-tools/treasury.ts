@@ -385,6 +385,8 @@ async function shouldSkipAutoPark(userId: string): Promise<string | null> {
     orderBy: { createdAt: "desc" },
   });
   if (recentDeposit) {
+    // Avoid a DB hit on every subsequent tool call during the success window.
+    lastParkAttemptAt.set(userId, now);
     return "recent_blend_deposit";
   }
   return null;
