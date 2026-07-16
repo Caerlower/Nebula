@@ -26,8 +26,8 @@ const SNIPPETS: Record<Framework, Snippet> = {
     install: {
       title: "install",
       language: "bash",
-      code: `# Node 20+. After publish: npx -y @nebula/mcp
-# Local monorepo: pnpm --filter @nebula/mcp build && node packages/nebula-mcp-stdio/dist/index.js
+      code: `# Node 20+. After publish: npx -y nebulamcp
+# Local monorepo: pnpm --filter nebulamcp build && node packages/nebulamcp/dist/index.js
 node --version`,
     },
     config: {
@@ -37,16 +37,16 @@ node --version`,
   "mcpServers": {
     "nebula": {
       "command": "npx",
-      "args": ["-y", "@nebula/mcp"],
+      "args": ["-y", "nebulamcp"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
-        "NEBULA_HUB": "http://localhost:3000"
+        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
       }
     }
   }
 }`,
     },
-    note: "Mint a token below and paste this in. Private keys never leave Nebula.",
+    note: "Mint a token below and paste this in. Prefer www for NEBULA_HUB. Private keys never leave Nebula.",
   },
   "claude-code": {
     install: {
@@ -60,8 +60,8 @@ claude --version`,
       language: "bash",
       code: `claude mcp add nebula \\
   -e NEBULA_TOKEN=nbl_live_… \\
-  -e NEBULA_HUB=http://localhost:3000 \\
-  -- npx -y @nebula/mcp
+  -e NEBULA_HUB=https://www.nebulaonchain.xyz \\
+  -- npx -y nebulamcp
 
 # verify
 claude mcp list`,
@@ -81,7 +81,7 @@ claude mcp list`,
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const transport = new StreamableHTTPClientTransport(
-  new URL("http://localhost:3000/mcp"),
+  new URL("https://www.nebulaonchain.xyz/mcp"),
   {
     requestInit: {
       headers: { Authorization: \`Bearer \${process.env.NEBULA_TOKEN}\` },
@@ -116,10 +116,10 @@ from agents.mcp import MCPServerStdio
 nebula = MCPServerStdio(
     params={
         "command": "npx",
-        "args": ["-y", "@nebula/mcp"],
+        "args": ["-y", "nebulamcp"],
         "env": {
             "NEBULA_TOKEN": os.environ["NEBULA_TOKEN"],
-            "NEBULA_HUB": os.environ.get("NEBULA_HUB", "http://localhost:3000"),
+            "NEBULA_HUB": os.environ.get("NEBULA_HUB", "https://www.nebulaonchain.xyz"),
         },
     }
 )
@@ -133,7 +133,7 @@ agent = Agent(
 result = Runner.run_sync(agent, "What's my balance?")
 print(result.final_output)`,
     },
-    note: "Stdio via @nebula/mcp, or point a remote MCP client at POST /mcp with Bearer nbl_live_…",
+    note: "Stdio via nebulamcp, or point a remote MCP client at POST /mcp with Bearer nbl_live_…",
   },
 };
 

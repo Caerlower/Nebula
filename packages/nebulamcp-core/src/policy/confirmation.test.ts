@@ -1,5 +1,5 @@
-import { evaluateConfirmation } from "../src/policy/confirmation.js";
-import type { PolicySnapshot } from "../src/types/context.js";
+import { evaluateConfirmation } from "./confirmation.js";
+import type { PolicySnapshot } from "../types/context.js";
 
 const base: PolicySnapshot = {
   microThreshold: 0.1,

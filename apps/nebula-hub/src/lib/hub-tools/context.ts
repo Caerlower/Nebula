@@ -1,4 +1,4 @@
-import type { PolicySnapshot, ToolContext, ToolResult } from "@nebula/core";
+import type { PolicySnapshot, ToolContext, ToolResult } from "nebulamcp-core";
 
 import type { AuthPrincipal } from "../auth";
 import { prisma } from "../db";

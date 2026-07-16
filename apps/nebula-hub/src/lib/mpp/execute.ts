@@ -5,7 +5,7 @@ import {
   type PolicySnapshot,
   type ToolContext,
   type ToolResult,
-} from "@nebula/core";
+} from "nebulamcp-core";
 
 import type { AuthPrincipal } from "@/lib/auth";
 import { prisma } from "@/lib/db";

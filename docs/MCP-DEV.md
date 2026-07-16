@@ -2,13 +2,13 @@
 
 Internal reference for monorepo contributors.
 
-**Stack:** Hub (`apps/nebula-hub`) + `@nebula/mcp` (`packages/nebula-mcp-stdio`) + `@nebula/core`.
+**Stack:** Hub (`apps/nebula-hub`) + `nebulamcp` (`packages/nebulamcp`) + `nebulamcp-core`.
 
 ## Package versions
 
 | Package | Version |
 |---------|---------|
-| `@nebula/core` / `@nebula/mcp` | 0.1.0 |
+| `nebulamcp-core` / `nebulamcp` | 0.1.0 |
 | `@trionlabs/stellar8004` | 0.0.11 |
 | `@stellar/mpp` | 0.7.1 |
 | `mppx` | 0.8.6 |
@@ -20,8 +20,8 @@ Internal reference for monorepo contributors.
 ## Build & run
 
 ```bash
-pnpm --filter @nebula/core build
-pnpm --filter @nebula/mcp build
+pnpm --filter nebulamcp-core build
+pnpm --filter nebulamcp build
 pnpm --filter nebula-hub dev
 
 # Claude Desktop / Cursor env:

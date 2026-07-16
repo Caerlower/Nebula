@@ -1,10 +1,11 @@
 {
-  "name": "@nebula/mcp",
+  "name": "nebulamcp",
   "version": "0.1.0",
   "description": "Nebula stdio MCP — presents NEBULA_TOKEN to the Hub. Never holds private keys.",
   "type": "module",
   "license": "MIT",
   "bin": {
+    "nebulamcp": "./dist/index.js",
     "nebula": "./dist/index.js"
   },
   "main": "./dist/index.js",
@@ -24,7 +25,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@nebula/core": "workspace:^",
+    "nebulamcp-core": "workspace:^",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -33,5 +34,21 @@
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Caerlower/Nebula.git",
+    "directory": "packages/nebulamcp"
+  },
+  "homepage": "https://nebulaonchain.xyz",
+  "keywords": [
+    "stellar",
+    "mcp",
+    "wallet",
+    "x402",
+    "mpp",
+    "soroban",
+    "ai-agents",
+    "blend"
+  ]
 }

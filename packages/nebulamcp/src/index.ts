@@ -8,9 +8,9 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { formatToolResultForMcp, listToolsForMcp } from "@nebula/core";
+import { formatToolResultForMcp, listToolsForMcp } from "nebulamcp-core";
 
-const HUB = (process.env.NEBULA_HUB ?? "https://nebulaonchain.xyz").replace(
+const HUB = (process.env.NEBULA_HUB ?? "https://www.nebulaonchain.xyz").replace(
   /\/$/,
   "",
 );
@@ -18,7 +18,7 @@ const TOKEN = process.env.NEBULA_TOKEN?.trim();
 
 if (!TOKEN) {
   console.error(
-    "NEBULA_TOKEN not set. Generate one at https://nebulaonchain.xyz/connect",
+    "NEBULA_TOKEN not set. Generate one at https://www.nebulaonchain.xyz/connect",
   );
   process.exit(1);
 }

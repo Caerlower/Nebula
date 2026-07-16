@@ -6,7 +6,7 @@ Nebula is a **custody Hub** for AI agents on Stellar. Agents never hold private 
 flowchart LR
   subgraph edge [Edge]
     A[Agent / LLM]
-    M["@nebula/mcp<br/>stdio"]
+    M["nebulamcp<br/>stdio"]
     O[Remote MCP + OAuth]
   end
 
@@ -37,8 +37,8 @@ flowchart LR
 | Piece | Path | Role |
 |-------|------|------|
 | Hub | `apps/nebula-hub` | Privy login + custody, Prisma → Supabase, dashboard, `/mcp`, APIs |
-| Core | `packages/nebula-core` | Transport-agnostic Zod tools + confirmation matrix |
-| Stdio MCP | `packages/nebula-mcp-stdio` | `@nebula/mcp` → Hub `/api/tools/*` with `NEBULA_TOKEN` |
+| Core | `packages/nebulamcp-core` | Transport-agnostic Zod tools + confirmation matrix |
+| Stdio MCP | `packages/nebulamcp` | `nebulamcp` → Hub `/api/tools/*` with `NEBULA_TOKEN` |
 | Landing | `apps/landing` | Marketing → built into `nebula-hub/public/landing` |
 | Policy | `contracts/policy` | Soroban spend caps / treasury bands |
 
@@ -61,7 +61,7 @@ flowchart LR
 | x402 tools | Done |
 | MPP session tools + Hub demo merchant | Done |
 | Stellar8004 reputation (Hub provision) | Done — on-chain sync still pending |
-| Publish `@nebula/mcp` / `@nebula/core` + `.mcpb` | Pending |
+| Publish `nebulamcp` / `nebulamcp-core` | In progress |
 | Blend USDC + background yield loop | Pending |
 | Approval inbox / notify polish | Partial (`await_confirmation` works) |
 

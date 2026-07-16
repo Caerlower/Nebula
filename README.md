@@ -19,7 +19,7 @@ flowchart TB
   end
 
   subgraph npm [MCP package]
-    STDIO["@nebula/mcp<br/>stdio → Hub HTTP"]
+    STDIO["nebulamcp<br/>stdio → Hub HTTP"]
   end
 
   subgraph hub [Nebula Hub — apps/nebula-hub]
@@ -59,8 +59,8 @@ flowchart TB
 | Layer                                    | Role                                                                                |
 | ---------------------------------------- | ----------------------------------------------------------------------------------- |
 | **Hub** (`apps/nebula-hub`)              | Next.js app: Privy auth + custody, dashboard, tool APIs, remote Streamable HTTP MCP |
-| `**@nebula/core**`                       | Shared Zod tool schemas + confirmation / policy matrix                              |
-| `**@nebula/mcp**`                        | Thin stdio MCP client → Hub (`npx @nebula/mcp` when published)                      |
+| **`nebulamcp-core`**                     | Shared Zod tool schemas + confirmation / policy matrix                              |
+| **`nebulamcp`**                          | Thin stdio MCP client → Hub (`npx nebulamcp` when published)                        |
 | **Landing** (`apps/landing`)             | Marketing site; built into Hub `public/landing` for deploy                          |
 | **Policy contract** (`contracts/policy`) | On-chain spend caps / treasury bands when `POLICY_CONTRACT_ID` is set               |
 
@@ -79,8 +79,8 @@ nebula/
 │   ├── nebula-hub/          # Custody Hub (dashboard + APIs + /mcp)
 │   └── landing/             # Marketing site → hub public/landing
 ├── packages/
-│   ├── nebula-core/         # @nebula/core
-│   └── nebula-mcp-stdio/    # @nebula/mcp  (bin: nebula)
+│   ├── nebulamcp-core/      # nebulamcp-core
+│   └── nebulamcp/           # nebulamcp  (bin: nebulamcp)
 ├── contracts/policy/        # Soroban policy
 └── docs/
 ```
@@ -97,11 +97,11 @@ See [docs/STRUCTURE.md](docs/STRUCTURE.md).
 pnpm install
 
 # Hub locally (needs apps/nebula-hub/.env.local — copy from .env.example)
-pnpm --filter @nebula/core build
+pnpm --filter nebulamcp-core build
 pnpm --filter nebula-hub dev          # http://localhost:3000
 
 # Optional: marketing site alone
-pnpm --filter @nebula/core build && pnpm --filter nebula-landing build
+pnpm --filter nebulamcp-core build && pnpm --filter nebula-landing build
 pnpm --filter nebula-landing preview
 ```
 
@@ -125,20 +125,21 @@ Minimum for a working Hub: `DATABASE_URL`, `DIRECT_URL`, Privy (`NEXT_PUBLIC_PRI
   "mcpServers": {
     "nebula": {
       "command": "npx",
-      "args": ["-y", "@nebula/mcp"],
+      "args": ["-y", "nebulamcp"],
       "env": {
-        "NEBULA_TOKEN": "nbl_live_…"
+        "NEBULA_TOKEN": "nbl_live_…",
+        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
       }
     }
   }
 }
 ```
 
-`args` is required — that's how the client launches `@nebula/mcp`.
+`args` is required — that's how the client launches `nebulamcp`. Prefer `www` for `NEBULA_HUB` so Bearer tokens survive redirects.
 
 **Never put a Stellar secret key in MCP config** — only `NEBULA_TOKEN`.
 
-More: [packages/nebula-mcp-stdio/README.md](packages/nebula-mcp-stdio/README.md) · [docs/MCP-DEV.md](docs/MCP-DEV.md).
+More: [packages/nebulamcp/README.md](packages/nebulamcp/README.md) · [docs/MCP-DEV.md](docs/MCP-DEV.md).
 
 Remote MCP (Streamable HTTP + OAuth) is also served at Hub `POST /mcp`.
 

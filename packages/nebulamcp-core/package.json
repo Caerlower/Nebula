@@ -1,5 +1,5 @@
 {
-  "name": "@nebula/core",
+  "name": "nebulamcp-core",
   "version": "0.1.0",
   "description": "Transport-agnostic Nebula tool schemas and handlers. No MCP or HTTP.",
   "type": "module",
@@ -29,9 +29,26 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Caerlower/Nebula.git",
+    "directory": "packages/nebulamcp-core"
+  },
+  "homepage": "https://nebulaonchain.xyz",
+  "keywords": [
+    "stellar",
+    "mcp",
+    "wallet",
+    "x402",
+    "mpp",
+    "soroban",
+    "ai-agents",
+    "blend"
+  ]
 }

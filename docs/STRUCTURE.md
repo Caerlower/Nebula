@@ -8,8 +8,8 @@ nebula/
 │   ├── nebula-hub/       # Custody Hub (Privy + MCP HTTP + dashboard)
 │   └── landing/          # Marketing → hub public/landing on build:site
 ├── packages/
-│   ├── nebula-core/      # Tool schemas / registry (`@nebula/core`)
-│   └── nebula-mcp-stdio/ # Stdio MCP → Hub (`@nebula/mcp`, bin: `nebula`)
+│   ├── nebulamcp-core/   # Tool schemas / registry (`nebulamcp-core`)
+│   └── nebulamcp/        # Stdio MCP → Hub (`nebulamcp`, bin: `nebulamcp`)
 ├── contracts/
 │   └── policy/           # Soroban spending-policy contract
 ├── docs/                 # ARCHITECTURE, SUPABASE, MCP-DEV, …
@@ -30,8 +30,8 @@ Production site: Hub roots on Vercel; landing is static under Hub. See root [REA
 
 | Package | Path | Command |
 |---------|------|---------|
-| `@nebula/core` | `packages/nebula-core` | `pnpm --filter @nebula/core build` |
-| `@nebula/mcp` | `packages/nebula-mcp-stdio` | `pnpm --filter @nebula/mcp build` · **npx:** `npx @nebula/mcp` |
+| `nebulamcp-core` | `packages/nebulamcp-core` | `pnpm --filter nebulamcp-core build` |
+| `nebulamcp` | `packages/nebulamcp` | `pnpm --filter nebulamcp build` · **npx:** `npx nebulamcp` |
 
 ## Contracts
 

@@ -1,4 +1,4 @@
-import type { ToolResult } from "@nebula/core";
+import type { ToolResult } from "nebulamcp-core";
 
 import type { AuthPrincipal } from "../auth";
 import { privyConfigured } from "../auth";

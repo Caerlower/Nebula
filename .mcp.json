@@ -2,10 +2,10 @@
   "mcpServers": {
     "nebula": {
       "command": "node",
-      "args": ["${workspaceFolder}/packages/nebula-mcp-stdio/dist/index.js"],
+      "args": ["${workspaceFolder}/packages/nebulamcp/dist/index.js"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_YOUR_TOKEN",
-        "NEBULA_HUB": "http://localhost:3000"
+        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
       }
     }
   }

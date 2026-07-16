@@ -1,5 +1,5 @@
-import type { PolicySnapshot, ToolContext, ToolResult } from "@nebula/core";
-import { evaluateConfirmation } from "@nebula/core";
+import type { PolicySnapshot, ToolContext, ToolResult } from "nebulamcp-core";
+import { evaluateConfirmation } from "nebulamcp-core";
 
 import type { AuthPrincipal } from "@/lib/auth";
 import { prisma } from "@/lib/db";

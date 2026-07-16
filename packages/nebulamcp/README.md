@@ -1,4 +1,4 @@
-# @nebula/mcp
+# nebulamcp
 
 Local stdio MCP for Claude Desktop, Cursor, and Claude Code.
 
@@ -8,14 +8,14 @@ Local stdio MCP for Claude Desktop, Cursor, and Claude Code.
 
 ```bash
 # monorepo
-pnpm --filter @nebula/core build
-pnpm --filter @nebula/mcp build
+pnpm --filter nebulamcp-core build
+pnpm --filter nebulamcp build
 
 # when published (pnpm rewrites workspace:^ → ^0.1.0 on publish)
-npx -y @nebula/mcp
+npx -y nebulamcp
 ```
 
-Publish order: `@nebula/core` first, then `@nebula/mcp`.
+Publish order: `nebulamcp-core` first, then `nebulamcp`.
 
 The CLI binary is `nebula`.
 
@@ -24,7 +24,7 @@ The CLI binary is `nebula`.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NEBULA_TOKEN` | yes | `nbl_live_…` from the Hub Connect page |
-| `NEBULA_HUB` | no | Default `https://nebulaonchain.xyz` — use `http://localhost:3000` locally |
+| `NEBULA_HUB` | no | Default `https://www.nebulaonchain.xyz` — use `http://localhost:3000` locally |
 
 ## Claude Desktop
 
@@ -33,10 +33,10 @@ The CLI binary is `nebula`.
   "mcpServers": {
     "nebula": {
       "command": "npx",
-      "args": ["-y", "@nebula/mcp"],
+      "args": ["-y", "nebulamcp"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
-        "NEBULA_HUB": "http://localhost:3000"
+        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
       }
     }
   }

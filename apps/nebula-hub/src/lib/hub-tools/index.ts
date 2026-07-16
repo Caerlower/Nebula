@@ -2,7 +2,7 @@ import {
   evaluateConfirmation,
   getTool,
   type ToolResult,
-} from "@nebula/core";
+} from "nebulamcp-core";
 
 import type { AuthPrincipal } from "../auth";
 import {

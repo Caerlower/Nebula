@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { AuthPrincipal } from "@/lib/auth";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
 import { runHubTool } from "@/lib/hub-tools";
-import { formatToolResultForMcp, listToolsForMcp } from "@nebula/core";
+import { formatToolResultForMcp, listToolsForMcp } from "nebulamcp-core";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import {

@@ -1,4 +1,4 @@
-import type { ToolContext, ToolResult } from "@nebula/core";
+import type { ToolContext, ToolResult } from "nebulamcp-core";
 import { after } from "next/server";
 
 import type { AuthPrincipal } from "../auth";
