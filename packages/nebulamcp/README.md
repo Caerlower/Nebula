@@ -1,4 +1,4 @@
-# nebulamcp
+# nebulamcp-stdio
 
 Local stdio MCP for Claude Desktop, Cursor, and Claude Code.
 
@@ -9,15 +9,15 @@ Local stdio MCP for Claude Desktop, Cursor, and Claude Code.
 ```bash
 # monorepo
 pnpm --filter nebulamcp-core build
-pnpm --filter nebulamcp build
+pnpm --filter nebulamcp-stdio build
 
-# when published (pnpm rewrites workspace:^ → ^0.1.0 on publish)
-npx -y nebulamcp
+# published
+npx -y nebulamcp-stdio
 ```
 
-Publish order: `nebulamcp-core` first, then `nebulamcp`.
+Publish order: `nebulamcp-core` first, then `nebulamcp-stdio`.
 
-The CLI binary is `nebula`.
+The CLI binaries are `nebulamcp` and `nebula`.
 
 ## Env
 
@@ -33,7 +33,7 @@ The CLI binary is `nebula`.
   "mcpServers": {
     "nebula": {
       "command": "npx",
-      "args": ["-y", "nebulamcp"],
+      "args": ["-y", "nebulamcp-stdio"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
         "NEBULA_HUB": "https://www.nebulaonchain.xyz"
@@ -50,7 +50,7 @@ Do **not** put `STELLAR_SECRET_KEY` here.
 Hub also speaks Streamable HTTP:
 
 ```
-POST http://localhost:3000/mcp
+POST https://www.nebulaonchain.xyz/mcp
 Authorization: Bearer nbl_live_…
 ```
 

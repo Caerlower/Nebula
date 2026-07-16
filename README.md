@@ -19,7 +19,7 @@ flowchart TB
   end
 
   subgraph npm [MCP package]
-    STDIO["nebulamcp<br/>stdio → Hub HTTP"]
+    STDIO["nebulamcp-stdio<br/>stdio → Hub HTTP"]
   end
 
   subgraph hub [Nebula Hub — apps/nebula-hub]
@@ -60,7 +60,7 @@ flowchart TB
 | ---------------------------------------- | ----------------------------------------------------------------------------------- |
 | **Hub** (`apps/nebula-hub`)              | Next.js app: Privy auth + custody, dashboard, tool APIs, remote Streamable HTTP MCP |
 | **`nebulamcp-core`**                     | Shared Zod tool schemas + confirmation / policy matrix                              |
-| **`nebulamcp`**                          | Thin stdio MCP client → Hub (`npx nebulamcp` when published)                        |
+| **`nebulamcp-stdio`**               | Thin stdio MCP client → Hub (`npx nebulamcp-stdio`)                            |
 | **Landing** (`apps/landing`)             | Marketing site; built into Hub `public/landing` for deploy                          |
 | **Policy contract** (`contracts/policy`) | On-chain spend caps / treasury bands when `POLICY_CONTRACT_ID` is set               |
 
@@ -80,7 +80,7 @@ nebula/
 │   └── landing/             # Marketing site → hub public/landing
 ├── packages/
 │   ├── nebulamcp-core/      # nebulamcp-core
-│   └── nebulamcp/           # nebulamcp  (bin: nebulamcp)
+│   └── nebulamcp/           # nebulamcp-stdio  (bin: nebulamcp)
 ├── contracts/policy/        # Soroban policy
 └── docs/
 ```
@@ -125,7 +125,7 @@ Minimum for a working Hub: `DATABASE_URL`, `DIRECT_URL`, Privy (`NEXT_PUBLIC_PRI
   "mcpServers": {
     "nebula": {
       "command": "npx",
-      "args": ["-y", "nebulamcp"],
+      "args": ["-y", "nebulamcp-stdio"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
         "NEBULA_HUB": "https://www.nebulaonchain.xyz"
@@ -135,7 +135,7 @@ Minimum for a working Hub: `DATABASE_URL`, `DIRECT_URL`, Privy (`NEXT_PUBLIC_PRI
 }
 ```
 
-`args` is required — that's how the client launches `nebulamcp`. Prefer `www` for `NEBULA_HUB` so Bearer tokens survive redirects.
+`args` is required — that's how the client launches `nebulamcp-stdio`. Prefer `www` for `NEBULA_HUB` so Bearer tokens survive redirects.
 
 **Never put a Stellar secret key in MCP config** — only `NEBULA_TOKEN`.
 

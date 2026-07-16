@@ -44,7 +44,7 @@ node --version`,
   "mcpServers": {
     "nebula": {
       "command": "npx",
-      "args": ["-y", "nebulamcp"],
+      "args": ["-y", "nebulamcp-stdio"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
         "NEBULA_HUB": "${HUB}"
@@ -78,7 +78,7 @@ claude mcp list
 #   claude mcp add --transport http nebula ${MCP_URL} --scope user \\
 #     --header "Authorization: Bearer nbl_live_…"`,
     },
-    note: `Prefer HTTP for Claude Code — it hits ${MCP_URL} with your token. Stdio fallback (local npx bridge): claude mcp add nebula -e NEBULA_TOKEN=nbl_live_… -e NEBULA_HUB=${HUB} -- npx -y nebulamcp`,
+    note: `Prefer HTTP for Claude Code — it hits ${MCP_URL} with your token. Stdio fallback (local npx bridge): claude mcp add nebula -e NEBULA_TOKEN=nbl_live_… -e NEBULA_HUB=${HUB} -- npx -y nebulamcp-stdio`,
   },
   "custom-mcp": {
     install: {
@@ -124,7 +124,7 @@ console.log(balance);`,
       language: "bash",
       code: `pip install openai-agents
 # Mint a token above first (nbl_live_…)
-# Requires Node 20+ on PATH for npx nebulamcp`,
+# Requires Node 20+ on PATH for npx nebulamcp-stdio`,
     },
     config: {
       title: "agent.py",
@@ -137,7 +137,7 @@ nebula = MCPServerStdio(
     name="nebula",
     params={
         "command": "npx",
-        "args": ["-y", "nebulamcp"],
+        "args": ["-y", "nebulamcp-stdio"],
         "env": {
             **os.environ,
             "NEBULA_TOKEN": os.environ["NEBULA_TOKEN"],
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     import asyncio
     asyncio.run(main())`,
     },
-    note: `Stdio bridge: nebulamcp presents NEBULA_TOKEN to the Hub. Prefer async with MCPServerStdio so the subprocess cleans up. For remote HTTP instead, POST ${MCP_URL} with Bearer nbl_live_… (same as Custom MCP).`,
+    note: `Stdio bridge: nebulamcp-stdio presents NEBULA_TOKEN to the Hub. Prefer async with MCPServerStdio so the subprocess cleans up. For remote HTTP instead, POST ${MCP_URL} with Bearer nbl_live_… (same as Custom MCP).`,
   },
 };
 
@@ -343,7 +343,7 @@ export default function ConnectPage() {
           </li>
           <li>
             <span className="text-foreground">Claude Desktop / Cursor / OpenAI Agents</span>{" "}
-            — run <code className="text-[12px]">npx -y nebulamcp</code> over
+            — run <code className="text-[12px]">npx -y nebulamcp-stdio</code> over
             stdio; it forwards tools to the Hub with your token.
           </li>
           <li>

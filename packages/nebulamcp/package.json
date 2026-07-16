@@ -1,5 +1,5 @@
 {
-  "name": "nebulamcp",
+  "name": "nebulamcp-stdio",
   "version": "0.1.0",
   "description": "Nebula stdio MCP — presents NEBULA_TOKEN to the Hub. Never holds private keys.",
   "type": "module",
