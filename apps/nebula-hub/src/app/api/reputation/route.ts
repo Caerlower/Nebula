@@ -9,31 +9,61 @@ import { prisma } from "@/lib/db";
 import { privyConfigured } from "@/lib/auth";
 import { privySigner } from "@/lib/signing";
 
+/**
+ * Reputation is per-agent: each agent has its OWN wallet and its OWN Stellar8004
+ * identity. Pass `?agentId=<id>` (dashboard) to read that agent's reputation;
+ * agent-bound tokens (MCP) resolve their own agent automatically. The owner /
+ * login wallet is auth-only and is never used as a reputation source.
+ */
 async function uncachedGET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
 
-  const user = await prisma.user.findUnique({
-    where: { id: principal.userId },
-  });
-  if (!user) return unauthorized();
+  const agentIdParam = new URL(req.url).searchParams.get("agentId");
+  const targetAgentId = agentIdParam ?? principal.agentId ?? null;
 
-  const agent =
-    principal.agentId != null
-      ? await prisma.agent.findUnique({ where: { id: principal.agentId } })
-      : null;
+  const agent = targetAgentId
+    ? await prisma.agent.findFirst({
+        where: { id: targetAgentId, userId: principal.userId },
+      })
+    : null;
 
-  if (
-    user.stellarAddress &&
-    user.privyWalletId &&
+  if (targetAgentId && !agent) {
+    return Response.json(
+      { status: "error", reason: "not_found" },
+      { status: 404 },
+    );
+  }
+
+  // Dashboard sessions must scope to an agent — never fall back to the owner.
+  if (!agent) {
+    return Response.json({
+      score: 0,
+      scale: 100,
+      confidence: "unrated",
+      tier: "unrated",
+      registered: false,
+      stellar8004AgentId: null,
+      feedbackCount: 0,
+      averageScore: null,
+      totalScore: null,
+      uniqueClients: 0,
+      note: "select_or_create_agent",
+    });
+  }
+
+  const canReadLive =
+    Boolean(agent.stellarAddress) &&
+    Boolean(agent.privyWalletId) &&
     privyConfigured() &&
-    user.privyWalletId !== "dev-wallet"
-  ) {
+    agent.privyWalletId !== "dev-wallet";
+
+  if (canReadLive) {
     const live = await getMyReputation({
-      publicKey: user.stellarAddress,
-      signer: privySigner(user.privyWalletId, user.stellarAddress),
+      publicKey: agent.stellarAddress!,
+      signer: privySigner(agent.privyWalletId!, agent.stellarAddress!),
       network: hubNetwork(),
-      cachedAgentId: user.stellar8004AgentId,
+      cachedAgentId: agent.stellar8004AgentId,
     });
 
     if (live.ok) {
@@ -43,17 +73,10 @@ async function uncachedGET(req: NextRequest) {
         feedbackCount: live.feedbackCount,
       });
 
-      await prisma.user.update({
-        where: { id: user.id },
+      await prisma.agent.update({
+        where: { id: agent.id },
         data: {
           stellar8004AgentId: live.agentId,
-          reputationScore: mapped.score,
-          reputationTier: mapped.confidence,
-        },
-      });
-      await prisma.agent.updateMany({
-        where: { userId: user.id },
-        data: {
           reputationScore: mapped.score,
           reputationTier: mapped.confidence,
         },
@@ -72,9 +95,9 @@ async function uncachedGET(req: NextRequest) {
         uniqueClients: live.uniqueClients,
         source: live.source,
         explorerUrl: live.explorerUrl,
-        agentId: agent?.id,
-        agentName: agent?.name,
-        note: "Stellar8004 avgScore is 0–100 from on-chain feedback (not a Hub-invented 1000 scale).",
+        agentId: agent.id,
+        agentName: agent.name,
+        note: "Stellar8004 avgScore is 0–100 from on-chain feedback (per-agent identity).",
       });
     }
 
@@ -85,39 +108,36 @@ async function uncachedGET(req: NextRequest) {
         confidence: "unrated",
         tier: "unrated",
         registered: false,
-        stellar8004AgentId: user.stellar8004AgentId,
+        stellar8004AgentId: agent.stellar8004AgentId,
         feedbackCount: 0,
         averageScore: null,
         totalScore: null,
         uniqueClients: 0,
-        agentId: agent?.id,
-        agentName: agent?.name,
-        note: "No on-chain Stellar8004 identity yet. Call register_identity from MCP.",
+        agentId: agent.id,
+        agentName: agent.name,
+        note: "No on-chain Stellar8004 identity yet for this agent. Call register_identity from this agent's MCP.",
       });
     }
   }
 
-  // Prefer wallet-level mirror (source of truth); agent row may lag.
-  const score = user.reputationScore;
-  const confidence = user.reputationTier;
-  const registered = user.stellar8004AgentId != null;
-
+  // Cached mirror on the agent row (live read unavailable / non-custodial agent).
+  const registered = agent.stellar8004AgentId != null;
   return Response.json({
-    score: registered ? score : 0,
+    score: registered ? agent.reputationScore : 0,
     scale: 100,
-    confidence,
-    tier: confidence,
+    confidence: agent.reputationTier,
+    tier: agent.reputationTier,
     registered,
-    stellar8004AgentId: user.stellar8004AgentId,
+    stellar8004AgentId: agent.stellar8004AgentId,
     feedbackCount: null,
-    averageScore: registered ? score : null,
+    averageScore: registered ? agent.reputationScore : null,
     totalScore: null,
     uniqueClients: null,
-    agentId: agent?.id,
-    agentName: agent?.name,
+    agentId: agent.id,
+    agentName: agent.name,
     note: registered
-      ? "Cached Stellar8004 mirror (live read unavailable — may be stale)."
-      : "Call register_identity to mint on-chain Stellar8004 identity.",
+      ? "Cached Stellar8004 mirror for this agent (live read unavailable — may be stale)."
+      : "Call register_identity from this agent's MCP to mint its on-chain identity.",
     stale: registered,
   });
 }
@@ -125,5 +145,8 @@ async function uncachedGET(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
-  return cachedJsonResponse(`rep:${principal.userId}`, 60000, () => uncachedGET(req));
+  const agentId = new URL(req.url).searchParams.get("agentId") ?? principal.agentId ?? "owner";
+  return cachedJsonResponse(`rep:${principal.userId}:${agentId}`, 60000, () =>
+    uncachedGET(req),
+  );
 }

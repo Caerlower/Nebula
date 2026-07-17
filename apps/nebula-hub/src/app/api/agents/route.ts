@@ -16,15 +16,23 @@ const HUB_NETWORK =
   (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
   "testnet";
 
-/** Native XLM balance for an agent's own wallet (0 when unprovisioned). */
-async function agentNativeXlm(address: string | null): Promise<number> {
-  if (!address) return 0;
+/** XLM + USDC balances for an agent's own wallet (0 when unprovisioned). */
+async function agentBalances(
+  address: string | null,
+): Promise<{ xlm: number; usdc: number }> {
+  if (!address) return { xlm: 0, usdc: 0 };
   try {
     const balances = await fetchBalances(address, HUB_NETWORK);
     const xlm = balances.find((b) => b.asset === "XLM" || b.asset === "native");
-    return xlm ? Number(xlm.balance) : 0;
+    const usdc = balances.find(
+      (b) => b.asset === "USDC" || b.asset.startsWith("USDC:"),
+    );
+    return {
+      xlm: xlm ? Number(xlm.balance) : 0,
+      usdc: usdc ? Number(usdc.balance) : 0,
+    };
   } catch {
-    return 0;
+    return { xlm: 0, usdc: 0 };
   }
 }
 
@@ -75,6 +83,8 @@ const createSchema = z.object({
     "custom",
   ]),
   label: z.string().min(1).max(64).optional(),
+  description: z.string().max(280).optional(),
+  avatarColor: z.string().max(16).optional(),
 });
 
 async function uncachedGET(req: NextRequest) {
@@ -115,10 +125,10 @@ async function uncachedGET(req: NextRequest) {
 
   // Each agent has its own wallet — report its own balance, not the owner's.
   const withBalance = await Promise.all(
-    agents.map(async (a) => ({
-      ...a,
-      balanceXlm: await agentNativeXlm(a.stellarAddress),
-    })),
+    agents.map(async (a) => {
+      const { xlm, usdc } = await agentBalances(a.stellarAddress);
+      return { ...a, balanceXlm: xlm, balanceUsdc: usdc };
+    }),
   );
   return Response.json({ agents: withBalance });
 }
@@ -143,6 +153,8 @@ async function uncachedPOST(req: NextRequest) {
       userId: principal.userId,
       name: body.data.name,
       framework: body.data.framework,
+      description: body.data.description ?? null,
+      avatarColor: body.data.avatarColor ?? null,
       status: "active",
       reputationScore: 0,
       reputationTier: "unrated",
@@ -197,8 +209,8 @@ async function uncachedPOST(req: NextRequest) {
     },
     // One-click MCP config for this agent — only available now (token is
     // shown once). Paste into Cursor/Claude Code (streamable_http) or Claude
-    // Desktop (claude_desktop).
-    mcp: buildMcpConfig({ token: plaintext, serverName: agent.name }),
+    // Desktop (claude_desktop). Server name is always "nebula".
+    mcp: buildMcpConfig({ token: plaintext }),
   });
 }
 

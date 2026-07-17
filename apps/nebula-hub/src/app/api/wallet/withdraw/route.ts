@@ -26,19 +26,39 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!principal.stellarAddress || !principal.privyWalletId) {
-    return Response.json(
-      { status: "error", reason: "wallet_not_provisioned" },
-      { status: 400 },
-    );
-  }
-
   const body = (await req.json().catch(() => ({}))) as {
     asset?: string;
     destination?: string;
     amount?: number;
     memo?: string;
+    agentId?: string;
   };
+
+  // The dashboard is agent-scoped: withdraw from the selected agent's own wallet
+  // when an agentId is supplied, otherwise the owner's wallet.
+  let sourceAddress = principal.stellarAddress;
+  let walletId = principal.privyWalletId;
+  if (body.agentId) {
+    const agent = await prisma.agent.findFirst({
+      where: { id: body.agentId, userId: principal.userId },
+      select: { stellarAddress: true, privyWalletId: true },
+    });
+    if (!agent) {
+      return Response.json(
+        { status: "error", reason: "agent_not_found" },
+        { status: 404 },
+      );
+    }
+    sourceAddress = agent.stellarAddress;
+    walletId = agent.privyWalletId;
+  }
+
+  if (!sourceAddress || !walletId) {
+    return Response.json(
+      { status: "error", reason: "wallet_not_provisioned" },
+      { status: 400 },
+    );
+  }
 
   const asset = body.asset === "USDC" ? "USDC" : "XLM";
   const destination = body.destination?.trim() ?? "";
@@ -63,18 +83,18 @@ export async function POST(req: NextRequest) {
     "testnet";
 
   if (asset === "USDC") {
-    const ready = await hasUsdcTrustline(principal.stellarAddress, network);
+    const ready = await hasUsdcTrustline(sourceAddress, network);
     if (!ready) {
       return Response.json(
         {
           status: "error",
           reason:
-            "usdc_trustline_missing — open a Circle USDC trustline on Connect first",
+            "usdc_trustline_missing — open a Circle USDC trustline on the Dashboard first",
         },
         { status: 400 },
       );
     }
-    const bal = await fetchUsdcBalance(principal.stellarAddress, network);
+    const bal = await fetchUsdcBalance(sourceAddress, network);
     if (amount > bal + 1e-7) {
       return Response.json(
         {
@@ -86,11 +106,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!privyConfigured() && principal.privyWalletId === "dev-wallet") {
+  if (!privyConfigured() && walletId === "dev-wallet") {
     const fakeHash = `dev_${Date.now().toString(16)}`;
     await prisma.transaction.create({
       data: {
         userId: principal.userId,
+        agentId: body.agentId ?? null,
         type: "transfer",
         destination,
         amountXlm: amount,
@@ -111,7 +132,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { unsignedXdr, hashHex } = await buildPaymentXdr({
-      source: principal.stellarAddress,
+      source: sourceAddress,
       destination,
       amount,
       asset: asset === "USDC" ? "USDC" : "native",
@@ -122,14 +143,15 @@ export async function POST(req: NextRequest) {
     const txHash = await signAndSubmitWithPrivy({
       unsignedXdr,
       hashHex,
-      walletId: principal.privyWalletId,
-      sourceAddress: principal.stellarAddress,
+      walletId,
+      sourceAddress,
       network,
     });
 
     await prisma.transaction.create({
       data: {
         userId: principal.userId,
+        agentId: body.agentId ?? null,
         type: "transfer",
         destination,
         amountXlm: amount,

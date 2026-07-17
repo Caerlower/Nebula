@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { isDashboardAuth, resolveAuth, unauthorized } from "@/lib/auth";
 import { privyConfigured } from "@/lib/auth";
 import { privySigner } from "@/lib/signing";
+import { prisma } from "@/lib/db";
 import {
   ensureUsdcTrustline,
   explorerTxUrl,
@@ -14,6 +15,35 @@ const CIRCLE_USDC_ISSUER = {
   mainnet: "GA5ZSEJYB37JRC5RJRC75UPGWKOWTXQYPFJXXQE2RXYI763DGSJDFLVQ",
 } as const;
 
+/** Resolve the target wallet — an owned agent's wallet when `agentId` is given,
+ * otherwise the principal's own wallet. */
+async function resolveWallet(
+  principal: Awaited<ReturnType<typeof resolveAuth>>,
+  agentId: string | null,
+): Promise<
+  | { ok: true; address: string | null; privyWalletId: string | null }
+  | { ok: false; status: number; reason: string }
+> {
+  if (!principal) return { ok: false, status: 401, reason: "unauthorized" };
+  if (!agentId) {
+    return {
+      ok: true,
+      address: principal.stellarAddress,
+      privyWalletId: principal.privyWalletId,
+    };
+  }
+  const agent = await prisma.agent.findFirst({
+    where: { id: agentId, userId: principal.userId },
+    select: { stellarAddress: true, privyWalletId: true },
+  });
+  if (!agent) return { ok: false, status: 404, reason: "not_found" };
+  return {
+    ok: true,
+    address: agent.stellarAddress,
+    privyWalletId: agent.privyWalletId,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
@@ -22,7 +52,16 @@ export async function GET(req: NextRequest) {
     (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
     "testnet";
 
-  if (!principal.stellarAddress) {
+  const agentId = new URL(req.url).searchParams.get("agentId");
+  const resolved = await resolveWallet(principal, agentId);
+  if (!resolved.ok) {
+    return Response.json(
+      { status: "error", reason: resolved.reason },
+      { status: resolved.status },
+    );
+  }
+
+  if (!resolved.address) {
     return Response.json(
       {
         status: "error",
@@ -32,7 +71,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const ready = await hasUsdcTrustline(principal.stellarAddress, network);
+  const ready = await hasUsdcTrustline(resolved.address, network);
   return Response.json({
     status: "ok",
     ready,
@@ -57,14 +96,24 @@ export async function POST(req: NextRequest) {
     (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
     "testnet";
 
-  if (!principal.stellarAddress || !principal.privyWalletId) {
+  const body = (await req.json().catch(() => ({}))) as { agentId?: string };
+  const agentId = body.agentId ?? null;
+  const resolved = await resolveWallet(principal, agentId);
+  if (!resolved.ok) {
+    return Response.json(
+      { status: "error", reason: resolved.reason },
+      { status: resolved.status },
+    );
+  }
+
+  if (!resolved.address || !resolved.privyWalletId) {
     return Response.json(
       { status: "error", reason: "wallet_not_provisioned" },
       { status: 400 },
     );
   }
 
-  if (!privyConfigured() || principal.privyWalletId === "dev-wallet") {
+  if (!privyConfigured() || resolved.privyWalletId === "dev-wallet") {
     return Response.json(
       {
         status: "error",
@@ -77,8 +126,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await ensureUsdcTrustline({
-      address: principal.stellarAddress,
-      signer: privySigner(principal.privyWalletId, principal.stellarAddress),
+      address: resolved.address,
+      signer: privySigner(resolved.privyWalletId, resolved.address),
       network,
     });
     return Response.json({

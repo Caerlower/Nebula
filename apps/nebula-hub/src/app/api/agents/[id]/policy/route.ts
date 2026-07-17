@@ -1,9 +1,17 @@
 import { NextRequest } from "next/server";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { loadEffectiveCaps } from "@/lib/hub-tools/context";
+import { loadEffectiveCaps, loadTreasurySettings } from "@/lib/hub-tools/context";
+import {
+  ensurePolicyInitialized,
+  onchainSetCategoryLimits,
+  onchainSetLimits,
+  policyContractConfigured,
+  policyContractId,
+} from "@/lib/policy-onchain";
 import { bustRouteCache } from "@/lib/route-cache";
 
 /** Per-agent spend caps. Absent row = agent inherits owner cap values. */
@@ -96,7 +104,8 @@ export async function PUT(
     catMpp: body.data.catMpp ?? current.catMpp,
   };
   // Contract invariant: per-call cap never exceeds the daily cap.
-  if (merged.perTxCap > merged.dailyCap) {
+  const perTxClamped = merged.perTxCap > merged.dailyCap;
+  if (perTxClamped) {
     merged.perTxCap = merged.dailyCap;
   }
 
@@ -106,10 +115,143 @@ export async function PUT(
     update: merged,
   });
 
+  // Mirror the change onto the agent's own on-chain policy slot (the same slot
+  // check_spend reads at spend time), so limits are enforced by the contract —
+  // not just the Hub DB. Keyed to the AGENT's wallet, signed by its Privy key.
+  const agent = await prisma.agent.findFirst({
+    where: { id, userId: principal.userId },
+    select: { privyWalletId: true, stellarAddress: true },
+  });
+
+  const limitsTouched =
+    body.data.perTxCap !== undefined ||
+    body.data.dailyCap !== undefined ||
+    perTxClamped;
+  const catsTouched =
+    body.data.catTransfer !== undefined ||
+    body.data.catX402 !== undefined ||
+    body.data.catMpp !== undefined;
+
+  const network =
+    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
+    "testnet";
+
+  let txHash: string | null = null;
+  let onchain = "hub_only";
+
+  if (
+    (limitsTouched || catsTouched) &&
+    policyContractConfigured() &&
+    agent?.stellarAddress &&
+    agent.privyWalletId &&
+    agent.privyWalletId !== "dev-wallet"
+  ) {
+    const maxPerDayXlm = merged.dailyCap;
+    const maxPerCallXlm = Math.min(merged.perTxCap, maxPerDayXlm);
+    const categories = {
+      transfer: merged.catTransfer,
+      x402: merged.catX402,
+      mpp: merged.catMpp,
+    };
+    const t = await loadTreasurySettings(principal.userId);
+    const liquidLowXlm = Number(t.liquidThreshold);
+    const liquidHighXlm = Math.max(liquidLowXlm, Number(t.liquidHigh));
+
+    const init = await ensurePolicyInitialized({
+      walletId: agent.privyWalletId,
+      stellarAddress: agent.stellarAddress,
+      network,
+      maxPerCallXlm,
+      maxPerDayXlm,
+      categories,
+      liquidLowXlm,
+      liquidHighXlm,
+      autoYield: t.autoYield,
+    });
+    if (!init.ok) {
+      return Response.json(
+        { status: "error", reason: `onchain_initialize_failed:${init.error}` },
+        { status: 400 },
+      );
+    }
+
+    // A fresh initialize already writes the current limits + categories, so we
+    // only issue extra txs when the slot already existed.
+    const freshlyInitialized = Boolean(init.hash);
+    if (freshlyInitialized) {
+      txHash = init.hash ?? null;
+      onchain = "initialize_ok";
+    }
+    if (!freshlyInitialized && limitsTouched) {
+      const res = await onchainSetLimits({
+        walletId: agent.privyWalletId,
+        stellarAddress: agent.stellarAddress,
+        network,
+        maxPerCallXlm,
+        maxPerDayXlm,
+      });
+      if (!res.ok) {
+        return Response.json(
+          { status: "error", reason: `onchain_set_limits_failed:${res.error}` },
+          { status: 400 },
+        );
+      }
+      txHash = res.hash;
+      onchain = "set_limits_ok";
+    }
+    if (!freshlyInitialized && catsTouched) {
+      const res = await onchainSetCategoryLimits({
+        walletId: agent.privyWalletId,
+        stellarAddress: agent.stellarAddress,
+        network,
+        categories,
+      });
+      if (!res.ok) {
+        return Response.json(
+          {
+            status: "error",
+            reason: `onchain_set_category_limits_failed:${res.error}`,
+          },
+          { status: 400 },
+        );
+      }
+      txHash = res.hash;
+      onchain = "set_category_limits_ok";
+    }
+  } else if ((limitsTouched || catsTouched) && !policyContractConfigured()) {
+    onchain = "skipped_no_contract";
+  }
+
+  // Ledger entry so policy changes show up in the agent's transactions.
+  if (limitsTouched || catsTouched) {
+    const logHash =
+      txHash ??
+      `hub_policy_${Date.now().toString(16)}_${randomBytes(4).toString("hex")}`;
+    try {
+      await prisma.transaction.create({
+        data: {
+          userId: principal.userId,
+          agentId: id,
+          type: "policy_change",
+          destination:
+            txHash && policyContractConfigured() ? policyContractId() : "hub-policy",
+          amountXlm: 0,
+          reason: "user_requested; agent_policy_update",
+          txHash: logHash,
+          status: "confirmed",
+        },
+      });
+    } catch (error) {
+      console.warn("[agent-policy] transaction log skipped", error);
+    }
+  }
+
   bustRouteCache("agents:");
 
   return Response.json({
     status: "ok",
+    onchain,
+    tx_hash: txHash,
     policy: {
       microThreshold: Number(updated.microThreshold),
       perTxCap: Number(updated.perTxCap),

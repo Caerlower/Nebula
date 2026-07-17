@@ -12,9 +12,10 @@ async function uncachedGET(req: NextRequest) {
   const url = new URL(req.url);
   const take = Math.min(Number(url.searchParams.get("limit") ?? 50), 100);
   const cursor = url.searchParams.get("cursor") ?? undefined;
+  const agentId = url.searchParams.get("agentId") ?? undefined;
 
   const rows = await prisma.transaction.findMany({
-    where: { userId: principal.userId },
+    where: { userId: principal.userId, ...(agentId ? { agentId } : {}) },
     orderBy: { createdAt: "desc" },
     take,
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),

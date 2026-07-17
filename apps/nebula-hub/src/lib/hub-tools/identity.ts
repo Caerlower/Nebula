@@ -92,6 +92,19 @@ export async function mirrorReputationToDb(params: {
   score: number;
   tier: string;
 }): Promise<void> {
+  if (params.agentId) {
+    // Per-agent identity: each agent owns its own Stellar8004 registration.
+    await prisma.agent.updateMany({
+      where: { id: params.agentId, userId: params.userId },
+      data: {
+        stellar8004AgentId: params.stellar8004AgentId,
+        reputationScore: params.score,
+        reputationTier: params.tier,
+      },
+    });
+    return;
+  }
+  // Owner-level registration (no agent context) — mirror on the user only.
   await prisma.user.update({
     where: { id: params.userId },
     data: {
@@ -100,24 +113,6 @@ export async function mirrorReputationToDb(params: {
       reputationTier: params.tier,
     },
   });
-  if (params.agentId) {
-    await prisma.agent.updateMany({
-      where: { id: params.agentId, userId: params.userId },
-      data: {
-        reputationScore: params.score,
-        reputationTier: params.tier,
-      },
-    });
-  } else {
-    // Keep all agents on this wallet in sync with the shared on-chain identity.
-    await prisma.agent.updateMany({
-      where: { userId: params.userId },
-      data: {
-        reputationScore: params.score,
-        reputationTier: params.tier,
-      },
-    });
-  }
 }
 
 export async function executeRegisterIdentity(
