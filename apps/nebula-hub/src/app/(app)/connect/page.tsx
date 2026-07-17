@@ -1,168 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { usePrivy } from "@privy-io/react-auth";
-import { CheckCircle2, Loader2, PlugZap } from "lucide-react";
+import { CheckCircle2, ChevronDown, KeyRound, Loader2, PlugZap } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
-import { ApiKeysCard } from "@/components/shared/api-keys-card";
 import { CodeBlock } from "@/components/shared/code-block";
 import { FRAMEWORK_META } from "@/components/shared/status-badges";
+import { AgentAvatar } from "@/components/agent-scope/agent-avatar";
+import { useAgentScope } from "@/components/agent-scope/agent-scope";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import * as api from "@/lib/api";
+import { MCP_URL, getSnippet } from "@/lib/mcp-snippets";
+import { cn, truncMiddle } from "@/lib/utils";
 import type { Framework } from "@/types/domain";
-
-const HUB = "https://www.nebulaonchain.xyz";
-const MCP_URL = `${HUB}/mcp`;
-
-interface Snippet {
-  install: { code: string; language: "bash"; title: string };
-  config: {
-    code: string;
-    language: "bash" | "json" | "typescript" | "python";
-    title: string;
-  };
-  note: string;
-}
-
-const SNIPPETS: Record<Framework, Snippet> = {
-  "claude-desktop": {
-    install: {
-      title: "prerequisites",
-      language: "bash",
-      code: `# 1. Mint a token above (nbl_live_…)
-# 2. Node 20+ on the machine that runs Claude Desktop
-node --version`,
-    },
-    config: {
-      title: "claude_desktop_config.json",
-      language: "json",
-      code: `{
-  "mcpServers": {
-    "nebula": {
-      "command": "npx",
-      "args": ["-y", "nebulamcp-stdio"],
-      "env": {
-        "NEBULA_TOKEN": "nbl_live_…",
-        "NEBULA_HUB": "${HUB}"
-      }
-    }
-  }
-}`,
-    },
-    note: `macOS: ~/Library/Application Support/Claude/claude_desktop_config.json · Windows: %APPDATA%\\Claude\\claude_desktop_config.json. Restart Claude Desktop after saving. Same JSON works in Cursor (.cursor/mcp.json). Never put a Stellar secret key here — only NEBULA_TOKEN.`,
-  },
-  "claude-code": {
-    install: {
-      title: "prerequisites",
-      language: "bash",
-      code: `# Mint a token above first (nbl_live_…)
-claude --version`,
-    },
-    config: {
-      title: "add Nebula (recommended)",
-      language: "bash",
-      code: `# Remote Streamable HTTP — no npm install. Talks straight to the Hub.
-claude mcp add --transport http nebula ${MCP_URL} \\
-  --header "Authorization: Bearer nbl_live_…"
-
-# Confirm it registered
-claude mcp list
-
-# Optional: project-only vs user-wide
-#   claude mcp add --transport http nebula ${MCP_URL} --scope project \\
-#     --header "Authorization: Bearer nbl_live_…"
-#   claude mcp add --transport http nebula ${MCP_URL} --scope user \\
-#     --header "Authorization: Bearer nbl_live_…"`,
-    },
-    note: `Prefer HTTP for Claude Code — it hits ${MCP_URL} with your token. Stdio fallback (local npx bridge): claude mcp add nebula -e NEBULA_TOKEN=nbl_live_… -e NEBULA_HUB=${HUB} -- npx -y nebulamcp-stdio`,
-  },
-  "custom-mcp": {
-    install: {
-      title: "install",
-      language: "bash",
-      code: `npm install @modelcontextprotocol/sdk
-# Mint a token above first (nbl_live_…)`,
-    },
-    config: {
-      title: "remote Streamable HTTP",
-      language: "typescript",
-      code: `import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-
-const token = process.env.NEBULA_TOKEN!; // nbl_live_…
-
-const transport = new StreamableHTTPClientTransport(
-  new URL("${MCP_URL}"),
-  {
-    requestInit: {
-      headers: { Authorization: \`Bearer \${token}\` },
-    },
-  },
-);
-
-const client = new Client({ name: "my-agent", version: "1.0.0" });
-await client.connect(transport);
-
-const tools = await client.listTools();
-console.log(tools.tools.map((t) => t.name));
-
-const balance = await client.callTool({
-  name: "check_balance",
-  arguments: {},
-});
-console.log(balance);`,
-    },
-    note: `Endpoint: POST ${MCP_URL} with Authorization: Bearer nbl_live_…. Use the www host (apex redirects can drop the Bearer header). OAuth DCR for hosted connectors: /api/oauth/register → /authorize → /oauth/token.`,
-  },
-  "openai-sdk": {
-    install: {
-      title: "install",
-      language: "bash",
-      code: `pip install openai-agents
-# Mint a token above first (nbl_live_…)
-# Requires Node 20+ on PATH for npx nebulamcp-stdio`,
-    },
-    config: {
-      title: "agent.py",
-      language: "python",
-      code: `import os
-from agents import Agent, Runner
-from agents.mcp import MCPServerStdio
-
-nebula = MCPServerStdio(
-    name="nebula",
-    params={
-        "command": "npx",
-        "args": ["-y", "nebulamcp-stdio"],
-        "env": {
-            **os.environ,
-            "NEBULA_TOKEN": os.environ["NEBULA_TOKEN"],
-            "NEBULA_HUB": os.environ.get("NEBULA_HUB", "${HUB}"),
-        },
-    },
-)
-
-async def main() -> None:
-    async with nebula:
-        agent = Agent(
-            name="Treasurer",
-            instructions="Manage the wallet. Respect the spending policy.",
-            mcp_servers=[nebula],
-        )
-        result = await Runner.run(agent, "What's my balance?")
-        print(result.final_output)
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())`,
-    },
-    note: `Stdio bridge: nebulamcp-stdio presents NEBULA_TOKEN to the Hub. Prefer async with MCPServerStdio so the subprocess cleans up. For remote HTTP instead, POST ${MCP_URL} with Bearer nbl_live_… (same as Custom MCP).`,
-  },
-};
 
 function TestHubSession() {
   const [state, setState] = useState<"idle" | "testing" | "ok">("idle");
@@ -206,220 +59,181 @@ function TestHubSession() {
   );
 }
 
-function UsdcTrustlineCard() {
-  const { ready: privyReady, authenticated } = usePrivy();
-  const [ready, setReady] = useState<boolean | null>(null);
-  const [faucet, setFaucet] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!privyReady || !authenticated) return;
-    let cancelled = false;
-    void api
-      .getUsdcTrustlineStatus()
-      .then((s) => {
-        if (cancelled) return;
-        setReady(s.ready);
-        setFaucet(s.faucet);
-        setLoadError(null);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setReady(false);
-        setLoadError(
-          error instanceof Error ? error.message : "Could not check trustline",
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [privyReady, authenticated]);
-
-  const openTrustline = async () => {
-    setBusy(true);
-    setLoadError(null);
-    try {
-      const res = await api.ensureUsdcTrustline();
-      setReady(true);
-      if (res.faucet) setFaucet(res.faucet);
-      toast.success(res.message, {
-        description: res.txHash
-          ? `tx ${res.txHash.slice(0, 8)}…`
-          : undefined,
-        action: res.faucet
-          ? {
-              label: "Open faucet",
-              onClick: () => window.open(res.faucet!, "_blank", "noreferrer"),
-            }
-          : undefined,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "usdc_trustline_failed";
-      setLoadError(message);
-      toast.error("Couldn't open USDC trustline", {
-        description: message,
-        action: { label: "Retry", onClick: () => void openTrustline() },
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const waitingAuth = !privyReady || !authenticated;
-
+function StepHeading({ n, title }: { n: number; title: string }) {
   return (
-    <Card className="space-y-3 p-5">
-      <div>
-        <p className="text-[13px] font-medium text-muted-foreground">
-          USDC for x402 / MPP
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Privy signs a Circle USDC trustline on your Hub wallet — you can&apos;t
-          do this in Stellar Lab without the secret key.
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        {waitingAuth ? (
-          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-            Waiting for session…
-          </p>
-        ) : ready ? (
-          <p className="inline-flex items-center gap-2 text-sm text-success">
-            <CheckCircle2 className="size-4" aria-hidden />
-            Trustline open
-          </p>
-        ) : (
-          <Button
-            onClick={() => void openTrustline()}
-            disabled={busy || ready === null}
-          >
-            {busy ? (
-              <>
-                <Loader2 className="size-4 animate-spin" /> Opening…
-              </>
-            ) : (
-              "Open USDC trustline"
-            )}
-          </Button>
-        )}
-        {faucet ? (
-          <a
-            href={faucet}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            Fund via Circle faucet →
-          </a>
-        ) : null}
-      </div>
-      {loadError ? (
-        <p className="text-[13px] text-destructive">{loadError}</p>
-      ) : null}
-    </Card>
+    <div className="flex items-center gap-2.5">
+      <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border bg-elevated text-[11px] font-semibold text-muted-foreground">
+        {n}
+      </span>
+      <p className="text-sm font-medium">{title}</p>
+    </div>
   );
 }
 
 export default function ConnectPage() {
+  const { selectedAgent } = useAgentScope();
+  const [client, setClient] = useState<Framework>("claude-code");
+  const snippet = getSnippet(client);
+
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       <PageHeader
         eyebrow="setup"
         title="Connect"
-        subtitle="Mint a token, then wire your client to the Hub. Keys stay in Privy — agents only present nbl_live_…."
+        subtitle="Pick your client and paste in the ready-made config. Each config uses a token scoped to this agent only."
       />
 
-      <Card className="mb-6 space-y-2 p-5">
-        <p className="text-sm font-medium text-foreground">How MCP connects</p>
-        <ul className="list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed text-muted-foreground">
-          <li>
-            <span className="text-foreground">Claude Code / custom agents</span>{" "}
-            — call the Hub directly at{" "}
-            <code className="text-[12px]">{MCP_URL}</code> (Streamable HTTP +
-            Bearer token). No local package required.
-          </li>
-          <li>
-            <span className="text-foreground">Claude Desktop / Cursor / OpenAI Agents</span>{" "}
-            — run <code className="text-[12px]">npx -y nebulamcp-stdio</code> over
-            stdio; it forwards tools to the Hub with your token.
-          </li>
-          <li>
-            Always use the <code className="text-[12px]">www</code> Hub host.
-            Apex redirects can strip <code className="text-[12px]">Authorization</code>.
-          </li>
-        </ul>
+      {/* slim identity strip */}
+      {selectedAgent ? (
+        <div className="mb-8 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface/60 px-4 py-3">
+          <AgentAvatar
+            name={selectedAgent.name}
+            seed={selectedAgent.id}
+            color={selectedAgent.avatarColor}
+            size="sm"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Connecting {selectedAgent.name}</p>
+            {selectedAgent.address !== "—" ? (
+              <p className="font-mono text-xs text-muted-foreground">
+                {truncMiddle(selectedAgent.address, 6, 6)}
+              </p>
+            ) : null}
+          </div>
+          <span className="rounded-full border border-border bg-elevated/60 px-2.5 py-1 text-[11px] text-muted-foreground">
+            per-agent scoped
+          </span>
+        </div>
+      ) : null}
+
+      {/* choose client */}
+      <section className="mb-8">
+        <p className="stat-label mb-3">Choose your client</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {(Object.keys(FRAMEWORK_META) as Framework[]).map((framework) => {
+            const Icon = FRAMEWORK_META[framework].icon;
+            const active = framework === client;
+            return (
+              <button
+                key={framework}
+                type="button"
+                onClick={() => setClient(framework)}
+                aria-pressed={active}
+                className={cn(
+                  "pressable flex flex-col items-center gap-2 rounded-xl border p-3 text-center",
+                  active
+                    ? "border-primary/60 bg-elevated text-foreground shadow-[var(--card-shadow)]"
+                    : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
+                )}
+              >
+                <Icon className={cn("size-5", active && "text-primary")} aria-hidden />
+                <span className="text-[11px] font-medium leading-tight">
+                  {FRAMEWORK_META[framework].label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* sequential steps for the chosen client */}
+      <Card key={client} className="rise-in space-y-8 p-6">
+        <div className="space-y-3">
+          <StepHeading n={1} title="Prerequisites" />
+          <div className="pl-9">
+            <CodeBlock
+              code={snippet.install.code}
+              language={snippet.install.language}
+              title={snippet.install.title}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <StepHeading n={2} title="Get this agent's token" />
+          <div className="space-y-3 pl-9">
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              Paste an <code className="text-[12px]">nbl_live_</code> key scoped to{" "}
+              {selectedAgent ? selectedAgent.name : "this agent"} into the config below.
+              It authenticates as this agent only and operates only its wallet.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/api-keys">
+                <KeyRound className="size-4" aria-hidden />
+                Manage this agent&apos;s keys
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <StepHeading n={3} title="Configure" />
+          <div className="pl-9">
+            <CodeBlock
+              code={snippet.config.code}
+              language={snippet.config.language}
+              title={snippet.config.title}
+            />
+            <p className="mt-2.5 text-[13px] leading-relaxed text-muted-foreground">
+              {snippet.note}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <StepHeading n={4} title="Verify Hub session" />
+          <div className="space-y-2.5 pl-9">
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              Confirms you&apos;re signed into this Hub. MCP itself is verified in your
+              client (e.g. <code className="text-[12px]">claude mcp list</code> or a{" "}
+              <code className="text-[12px]">check_balance</code> call).
+            </p>
+            <TestHubSession />
+          </div>
+        </div>
       </Card>
 
-      <div className="mb-6">
-        <ApiKeysCard />
-      </div>
-
-      <Tabs defaultValue="claude-code">
-        <TabsList aria-label="Framework">
-          {(Object.keys(SNIPPETS) as Framework[]).map((framework) => (
-            <TabsTrigger key={framework} value={framework}>
-              {FRAMEWORK_META[framework].label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {(Object.keys(SNIPPETS) as Framework[]).map((framework) => {
-          const snippet = SNIPPETS[framework];
-          return (
-            <TabsContent
-              key={framework}
-              value={framework}
-              className="mt-5 data-[state=inactive]:hidden"
-              forceMount
-            >
-              <Card className="space-y-5 p-5">
-                <div>
-                  <p className="mb-2 text-[13px] font-medium text-muted-foreground">
-                    1 · Prerequisites
-                  </p>
-                  <CodeBlock
-                    code={snippet.install.code}
-                    language={snippet.install.language}
-                    title={snippet.install.title}
-                  />
-                </div>
-                <div>
-                  <p className="mb-2 text-[13px] font-medium text-muted-foreground">
-                    2 · Configure
-                  </p>
-                  <CodeBlock
-                    code={snippet.config.code}
-                    language={snippet.config.language}
-                    title={snippet.config.title}
-                  />
-                  <p className="mt-2.5 text-[13px] leading-relaxed text-muted-foreground">
-                    {snippet.note}
-                  </p>
-                </div>
-                <div>
-                  <p className="mb-2 text-[13px] font-medium text-muted-foreground">
-                    3 · Verify Hub session
-                  </p>
-                  <p className="mb-2.5 text-[13px] text-muted-foreground">
-                    Confirms you&apos;re signed into this Hub. MCP itself is
-                    verified in your client (e.g.{" "}
-                    <code className="text-[12px]">claude mcp list</code> or a{" "}
-                    <code className="text-[12px]">check_balance</code> call).
-                  </p>
-                  <TestHubSession />
-                </div>
-              </Card>
-            </TabsContent>
-          );
-        })}
-      </Tabs>
-
-      <div className="mt-6">
-        <UsdcTrustlineCard />
-      </div>
+      {/* advanced / details — collapsed by default so it never competes with the flow */}
+      <details className="group mt-6 rounded-xl border border-border bg-surface/40">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-medium">
+          Details &amp; advanced
+          <ChevronDown
+            className="size-4 text-muted-foreground transition-transform group-open:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        <div className="space-y-6 border-t border-border p-5">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">How MCP connects</p>
+            <ul className="list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed text-muted-foreground">
+              <li>
+                <span className="text-foreground">Claude Code / custom agents</span> —
+                call the Hub directly at <code className="text-[12px]">{MCP_URL}</code>{" "}
+                (Streamable HTTP + Bearer token).
+              </li>
+              <li>
+                <span className="text-foreground">Claude Desktop / Cursor / OpenAI</span>{" "}
+                — run <code className="text-[12px]">npx -y nebulamcp-stdio</code> over
+                stdio.
+              </li>
+              <li>
+                Always use the <code className="text-[12px]">www</code> host — apex
+                redirects can strip <code className="text-[12px]">Authorization</code>.
+              </li>
+              <li>
+                Agents transact in USDC — open the agent&apos;s USDC trustline from its{" "}
+                <Link
+                  href="/dashboard"
+                  className="text-foreground underline-offset-4 hover:underline"
+                >
+                  Dashboard
+                </Link>
+                .
+              </li>
+            </ul>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

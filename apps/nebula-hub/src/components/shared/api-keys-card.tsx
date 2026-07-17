@@ -30,6 +30,7 @@ import {
 import * as api from "@/lib/api";
 import { fmtDate, timeAgo } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
+import { useAgentScope } from "@/components/agent-scope/agent-scope";
 import type { ApiKey } from "@/types/domain";
 
 const EXPIRATIONS = [
@@ -167,7 +168,11 @@ function CreateKeyDialog({
 }
 
 export function ApiKeysCard() {
-  const { data: keys, loading, setData } = useLoad(() => api.getApiKeys(), []);
+  const { selectedAgent, selectedAgentId } = useAgentScope();
+  const { data: keys, loading, setData } = useLoad(
+    () => api.getApiKeys(),
+    [selectedAgentId],
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
 
@@ -188,8 +193,12 @@ export function ApiKeysCard() {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <p className="text-[13px] font-medium text-muted-foreground">API keys</p>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
+        <p className="min-w-0 truncate text-[13px] text-muted-foreground">
+          {selectedAgent
+            ? `Keys for ${selectedAgent.name} — each operates only this agent's wallet`
+            : "Select an agent to manage its keys"}
+        </p>
+        <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!selectedAgentId}>
           Create key
         </Button>
       </div>
@@ -197,8 +206,12 @@ export function ApiKeysCard() {
         <TableSkeleton rows={3} cols={4} className="p-5" />
       ) : keys.length === 0 ? (
         <EmptyState
-          title="No API keys"
-          subtitle="Create a key to connect your first agent over MCP."
+          title="Create this agent's first key"
+          subtitle={
+            selectedAgent
+              ? `Mint an nbl_live_ token for ${selectedAgent.name}. It authenticates as this agent only and operates only its wallet.`
+              : "Select an agent to mint its first key."
+          }
           actionLabel="Create key"
           onAction={() => setCreateOpen(true)}
         />

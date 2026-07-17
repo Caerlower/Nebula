@@ -2,21 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
-import { Loader2, MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { CopyButton } from "@/components/shared/copy-button";
 import {
   AgentStatusBadge,
-  FRAMEWORK_META,
   FrameworkLabel,
 } from "@/components/shared/status-badges";
-import { TableSkeleton } from "@/components/shared/skeletons";
+import { AgentAvatar } from "@/components/agent-scope/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -25,138 +22,152 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import * as api from "@/lib/api";
-import { fmtXLM, timeAgo } from "@/lib/utils";
+import { cn, fmtXLM, timeAgo, truncMiddle } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
-import type { Agent, Framework } from "@/types/domain";
-import { useUIStore } from "@/stores/ui";
+import { useAgentScope } from "@/components/agent-scope/agent-scope";
+import type { Agent } from "@/types/domain";
 
-const createSchema = z.object({
-  name: z.string().min(1, "Give your agent a name").max(40, "Keep it under 40 characters"),
-  framework: z.enum(["claude-desktop", "claude-code", "custom-mcp", "openai-sdk"]),
-});
-
-type CreateValues = z.infer<typeof createSchema>;
-
-function CreateAgentSheet({
-  open,
-  onOpenChange,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreated: (agent: Agent) => void;
-}) {
-  const form = useForm<CreateValues>({
-    resolver: zodResolver(createSchema as never),
-    defaultValues: { name: "", framework: "claude-desktop" },
+const fmtUsdc = (n: number) =>
+  n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 
-  const submit = async (values: CreateValues) => {
-    try {
-      const agent = await api.createAgent(values);
-      onCreated(agent);
-      onOpenChange(false);
-      form.reset();
-      toast.success(`${agent.name} created`, {
-        description: "Grab an API key from Connect to bring it online.",
-      });
-    } catch {
-      toast.error("Couldn't create the agent", { description: "Please try again." });
-    }
-  };
-
+function AgentCard({
+  agent,
+  onEnter,
+  onTogglePause,
+  onDelete,
+}: {
+  agent: Agent;
+  onEnter: () => void;
+  onTogglePause: () => void;
+  onDelete: () => void;
+}) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Create agent</SheetTitle>
-          <SheetDescription>A new identity with its own keys, limits, and history.</SheetDescription>
-        </SheetHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(submit)} className="mt-6 space-y-6">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Atlas" autoFocus {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="framework"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Framework</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      className="grid gap-2"
-                    >
-                      {(Object.keys(FRAMEWORK_META) as Framework[]).map((key) => (
-                        <label
-                          key={key}
-                          className="flex cursor-pointer items-center gap-3 rounded-lg border border-border p-3 text-sm transition-colors has-[[data-state=checked]]:border-primary/60 has-[[data-state=checked]]:bg-elevated"
-                        >
-                          <RadioGroupItem value={key} aria-label={FRAMEWORK_META[key].label} />
-                          <FrameworkLabel framework={key} />
-                        </label>
-                      ))}
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-              Create agent
-            </Button>
-          </form>
-        </Form>
-      </SheetContent>
-    </Sheet>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onEnter}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEnter();
+        }
+      }}
+      aria-label={`Open ${agent.name} workspace`}
+      className="pressable group flex cursor-pointer flex-col gap-4 rounded-2xl border border-border bg-card p-5 text-left shadow-[var(--card-shadow)] transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <div className="flex items-start gap-3">
+        <AgentAvatar name={agent.name} seed={agent.id} color={agent.avatarColor} size="lg" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{agent.name}</p>
+          <div className="mt-1">
+            <FrameworkLabel framework={agent.framework} />
+          </div>
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground"
+                aria-label={`Actions for ${agent.name}`}
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={onEnter}>Open workspace</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onTogglePause}>
+                {agent.status === "paused" ? "Resume" : "Pause"}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive" onSelect={onDelete}>
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <p
+        className={cn(
+          "line-clamp-2 min-h-[2.75rem] text-[13px] leading-relaxed",
+          agent.description ? "text-muted-foreground" : "text-subtle",
+        )}
+      >
+        {agent.description || "No description"}
+      </p>
+
+      {/* footer block — anchored to the bottom so stats align across all cards */}
+      <div className="mt-auto flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-2">
+          <AgentStatusBadge status={agent.status} />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-0.5 font-mono text-xs text-muted-foreground"
+          >
+            {agent.address !== "—" ? (
+              <>
+                {truncMiddle(agent.address, 4, 4)}
+                <CopyButton value={agent.address} label="Copy agent address" />
+              </>
+            ) : (
+              <span>provisioning…</span>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
+          <div>
+            <p className="stat-label text-[11px]">Balance</p>
+            <p className="mt-1 flex items-baseline gap-1">
+              <span className="hero-number-sm tabular">
+                {fmtUsdc(agent.balanceUSDC)}
+              </span>
+              <span className="text-xs text-muted-foreground">USDC</span>
+            </p>
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              {fmtXLM(agent.balanceXLM)} XLM
+            </p>
+          </div>
+          <div>
+            <p className="stat-label text-[11px]">Txs today</p>
+            <p className="mt-1 hero-number-sm tabular">{agent.txToday}</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Active {timeAgo(agent.lastActive)}
+        </p>
+      </div>
+    </div>
   );
 }
 
 export default function AgentsPage() {
   const router = useRouter();
   const { data: agents, loading, setData } = useLoad(() => api.getAgents(), []);
-  const createOpen = useUIStore((s) => s.createAgentOpen);
-  const setCreateOpen = useUIStore((s) => s.setCreateAgentOpen);
+  const { reloadAgents, setSelectedAgentId } = useAgentScope();
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
+  const [query, setQuery] = useState("");
+
+  const newAgent = () => router.push("/agents/new");
+
+  const filtered = (agents ?? []).filter((a) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      a.name.toLowerCase().includes(q) || a.address.toLowerCase().includes(q)
+    );
+  });
+
+  const enterWorkspace = (agent: Agent) => {
+    setSelectedAgentId(agent.id);
+    router.push("/dashboard");
+  };
 
   const togglePause = async (agent: Agent) => {
     const nextStatus = agent.status === "paused" ? "active" : "paused";
@@ -176,131 +187,84 @@ export default function AgentsPage() {
   const remove = async (agent: Agent) => {
     await api.deleteAgent(agent.id);
     setData((agents ?? []).filter((a) => a.id !== agent.id));
+    reloadAgents();
     toast.success(`${agent.name} deleted`);
   };
 
   return (
     <div>
       <PageHeader
-        eyebrow="agents"
+        eyebrow="account home"
         title="Agents"
-        subtitle="Who can spend from this wallet, and what they've been up to."
+        subtitle="Pick an agent to open its workspace, or spin up a new one. Each agent has its own wallet, treasury, caps, and reputation."
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={newAgent}>
             <Plus className="size-4" /> Create agent
           </Button>
         }
       />
 
-      <Card className="overflow-hidden">
-        {loading || !agents ? (
-          <TableSkeleton rows={4} cols={6} className="p-5" />
-        ) : agents.length === 0 ? (
+      {agents && agents.length > 0 ? (
+        <div className="mb-5 max-w-sm">
+          <div className="flex h-9 items-center gap-2 rounded-full border border-border bg-surface/70 px-3.5 text-sm shadow-[var(--card-shadow)] backdrop-blur focus-within:border-border-strong">
+            <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search agents by name or address…"
+              aria-label="Search agents"
+              className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {loading || !agents ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-44 animate-pulse rounded-2xl border border-border bg-elevated/40"
+            />
+          ))}
+        </div>
+      ) : agents.length === 0 ? (
+        <Card className="overflow-hidden">
           <EmptyState
             title="No agents yet"
-            subtitle="Create your first agent and plug it into Claude, or any MCP client."
+            subtitle="Create your first agent — it gets its own Stellar wallet, balance, treasury, caps, and reputation. Plug it into Claude or any MCP client."
             actionLabel="Create agent"
-            onAction={() => setCreateOpen(true)}
+            onAction={newAgent}
           />
-        ) : (
-          <>
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Framework</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                    <TableHead className="text-right">Txs today</TableHead>
-                    <TableHead>Last active</TableHead>
-                    <TableHead className="w-12" aria-label="Actions" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {agents.map((agent) => (
-                    <TableRow
-                      key={agent.id}
-                      className="cursor-pointer"
-                      onClick={() => router.push(`/agents/${agent.id}`)}
-                    >
-                      <TableCell className="font-medium">{agent.name}</TableCell>
-                      <TableCell>
-                        <FrameworkLabel framework={agent.framework} />
-                      </TableCell>
-                      <TableCell>
-                        <AgentStatusBadge status={agent.status} />
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular">
-                        {fmtXLM(agent.balanceXLM)} XLM
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular">{agent.txToday}</TableCell>
-                      <TableCell className="text-muted-foreground">{timeAgo(agent.lastActive)}</TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-7 text-muted-foreground"
-                              aria-label={`Actions for ${agent.name}`}
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => router.push(`/agents/${agent.id}`)}>
-                              Open
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => void togglePause(agent)}>
-                              {agent.status === "paused" ? "Resume" : "Pause"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onSelect={() => setDeleteTarget(agent)}
-                            >
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <ul className="divide-y divide-border md:hidden">
-              {agents.map((agent) => (
-                <li key={agent.id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 px-5 py-4 text-left"
-                    onClick={() => router.push(`/agents/${agent.id}`)}
-                    aria-label={`Open ${agent.name}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">{agent.name}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {FRAMEWORK_META[agent.framework].label} · {timeAgo(agent.lastActive)}
-                      </p>
-                      <p className="mt-1 font-mono text-[13px] tabular text-muted-foreground">
-                        {fmtXLM(agent.balanceXLM)} XLM
-                      </p>
-                    </div>
-                    <AgentStatusBadge status={agent.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </Card>
-
-      <CreateAgentSheet
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={(agent) => setData([agent, ...(agents ?? [])])}
-      />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              onEnter={() => enterWorkspace(agent)}
+              onTogglePause={() => void togglePause(agent)}
+              onDelete={() => setDeleteTarget(agent)}
+            />
+          ))}
+          {query.trim() && filtered.length === 0 ? (
+            <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+              No agents match “{query.trim()}”.
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={newAgent}
+            className="pressable flex min-h-[11rem] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          >
+            <span className="flex size-10 items-center justify-center rounded-full border border-dashed border-border">
+              <Plus className="size-5" aria-hidden />
+            </span>
+            <span className="text-sm font-medium">New agent</span>
+          </button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={deleteTarget != null}

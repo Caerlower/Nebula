@@ -2,7 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, ExternalLink, Loader2, Pencil, Trash2, X } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Check,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Pencil,
+  Radio,
+  ShieldCheck,
+  Trash2,
+  Wallet,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { CopyButton } from "@/components/shared/copy-button";
@@ -28,22 +41,26 @@ import {
 import * as api from "@/lib/api";
 import { fmtDate, fmtUSD, truncMiddle } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
+import { useAgentScope } from "@/components/agent-scope/agent-scope";
 import { cn } from "@/lib/utils";
 import type { PolicyCategory } from "@/types/domain";
 
 function PendingOnChain() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-warning">
-      <StatusDot tone="warning" pulse />
-      Pending on-chain…
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Loader2 className="size-3 animate-spin" aria-hidden />
+      Saving…
     </span>
   );
 }
 
 function policyToast(message: string, txHash: string) {
+  const onChain = Boolean(txHash) && !txHash.startsWith("hub");
   toast.success(message, {
     id: `policy-${txHash}`,
-    description: `tx ${truncMiddle(txHash, 6, 6)}`,
+    description: onChain
+      ? `On-chain · tx ${truncMiddle(txHash, 6, 6)}`
+      : "Enforced before this agent signs anything.",
   });
 }
 
@@ -52,10 +69,14 @@ function InlineEditUSD({
   label,
   value,
   onSave,
+  icon: Icon,
+  iconClassName,
 }: {
   label: string;
   value: number;
   onSave: (next: number) => Promise<void>;
+  icon?: LucideIcon;
+  iconClassName?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
@@ -87,7 +108,19 @@ function InlineEditUSD({
 
   return (
     <div>
-      <p className="text-[13px] text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-2">
+        {Icon ? (
+          <span
+            className={cn(
+              "flex size-6 items-center justify-center rounded-md border border-border bg-elevated/50 text-primary",
+              iconClassName,
+            )}
+          >
+            <Icon className="size-3.5" aria-hidden />
+          </span>
+        ) : null}
+        <p className="stat-label">{label}</p>
+      </div>
       {editing ? (
         <form
           className="mt-1 flex items-center gap-1"
@@ -124,37 +157,61 @@ function InlineEditUSD({
           </Button>
         </form>
       ) : (
-        <div className="mt-1 flex items-center gap-1.5">
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 rounded font-mono text-xl tabular hover:text-primary disabled:opacity-60"
-            onClick={() => {
-              setDraft(String(display));
-              setEditing(true);
-            }}
-            disabled={pending}
-            aria-label={`Edit ${label.toLowerCase()} — currently ${fmtUSD(display)}`}
-          >
-            {fmtUSD(display)}
-            {!pending ? (
-              <Pencil className="size-3 text-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
-            ) : null}
-          </button>
-          {pending ? <PendingOnChain /> : null}
-        </div>
+        <button
+          type="button"
+          className="group mt-1.5 flex w-full items-center gap-2 rounded-lg text-left hover:text-primary disabled:opacity-60"
+          onClick={() => {
+            setDraft(String(display));
+            setEditing(true);
+          }}
+          disabled={pending}
+          aria-label={`Edit ${label.toLowerCase()} — currently ${fmtUSD(display)}`}
+        >
+          <span className="hero-number-sm tabular">{fmtUSD(display)}</span>
+          {pending ? (
+            <PendingOnChain />
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-elevated/60 px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors group-hover:border-primary/40 group-hover:text-primary">
+              <Pencil className="size-3" aria-hidden />
+              Edit
+            </span>
+          )}
+        </button>
       )}
     </div>
   );
 }
 
-const CATEGORY_META: Record<PolicyCategory, { label: string; blurb: string }> = {
-  x402: { label: "x402 payments", blurb: "One-shot HTTP 402 payments for API calls and content." },
-  mpp: { label: "MPP payments", blurb: "Streaming micropayment channels, settled on close." },
-  transfer: { label: "Transfers", blurb: "Native XLM sends — counted in USDC via live XLM/USD rate." },
+const CATEGORY_META: Record<
+  PolicyCategory,
+  { label: string; blurb: string; icon: LucideIcon; tone: string }
+> = {
+  x402: {
+    label: "x402 payments",
+    blurb: "One-shot HTTP 402 payments for API calls and content.",
+    icon: Globe,
+    tone: "border-primary/30 bg-primary/10 text-primary",
+  },
+  mpp: {
+    label: "MPP payments",
+    blurb: "Streaming micropayment channels, settled on close.",
+    icon: Radio,
+    tone: "border-[color-mix(in_srgb,var(--accent-teal)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent-teal)_14%,transparent)] text-teal",
+  },
+  transfer: {
+    label: "Transfers",
+    blurb: "Native XLM sends — counted in USDC via live XLM/USD rate.",
+    icon: ArrowRightLeft,
+    tone: "border-[color-mix(in_srgb,var(--accent-warm)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent-warm)_14%,transparent)] text-warm",
+  },
 };
 
 export default function PolicyPage() {
-  const { data: policy, setData: setPolicy, loading } = useLoad(() => api.getPolicy(), []);
+  const { selectedAgentId } = useAgentScope();
+  const { data: policy, setData: setPolicy, loading } = useLoad(
+    () => api.getPolicy(),
+    [selectedAgentId],
+  );
 
   const [entryAddress, setEntryAddress] = useState("");
   const [entryLabel, setEntryLabel] = useState("");
@@ -216,7 +273,13 @@ export default function PolicyPage() {
             }
           : updated,
       );
-      policyToast("Limits updated", txHash);
+      if (updated.perCallCapXLM < next) {
+        toast.info("Per-tx cap can't exceed the daily cap", {
+          description: `Set to ${fmtUSD(updated.perCallCapXLM)} to match the daily cap. Raise the daily cap first to go higher.`,
+        });
+      } else {
+        policyToast("Limits updated", txHash);
+      }
     } catch (error) {
       toast.error("Policy update failed", {
         description: error instanceof Error ? error.message : undefined,
@@ -310,12 +373,15 @@ export default function PolicyPage() {
     }
   };
 
+  const onchain = Boolean(policy?.contractId?.startsWith("C"));
+
   return (
     <div>
       <PageHeader
         eyebrow="wallet"
         title="Spending policy"
         subtitle="Hard limits, enforced before anything signs. Your agent can't spend around them."
+        accent="primary"
       />
 
       {loading || !policy ? (
@@ -323,52 +389,129 @@ export default function PolicyPage() {
           <TableSkeleton rows={4} cols={3} />
         </Card>
       ) : (
-        <div className="space-y-6">
-          {/* contract id */}
-          <Card className="flex flex-wrap items-center gap-2 p-4">
-            <span className="text-[13px] text-muted-foreground">Contract</span>
-            <code className="min-w-0 truncate font-mono text-sm" title={policy.contractId}>
-              {truncMiddle(policy.contractId, 8, 8)}
-            </code>
-            <CopyButton value={policy.contractId} label="Copy contract ID" />
-            {policy.contractId.startsWith("C") ? (
+        <div className="space-y-8">
+          {/* on-chain policy contract */}
+          <Card className="flex flex-wrap items-center gap-3 p-5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-elevated/50 text-primary">
+              <ShieldCheck className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">On-chain policy contract</p>
+                {onchain ? (
+                  <Badge variant="success" className="gap-1">
+                    <StatusDot tone="success" /> On-chain
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="font-normal">
+                    Hub-enforced
+                  </Badge>
+                )}
+              </div>
+              {onchain ? (
+                <div className="mt-1 flex items-center gap-1.5">
+                  <code
+                    className="min-w-0 truncate font-mono text-[13px] text-muted-foreground"
+                    title={policy.contractId}
+                  >
+                    {truncMiddle(policy.contractId, 8, 8)}
+                  </code>
+                  <CopyButton value={policy.contractId} label="Copy contract ID" />
+                </div>
+              ) : (
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  Caps enforced by the Hub before signing. Set POLICY_CONTRACT_ID to
+                  also bind these limits to Soroban.
+                </p>
+              )}
+            </div>
+            {onchain ? (
               <a
                 href={`https://stellar.expert/explorer/testnet/contract/${policy.contractId}`}
                 target="_blank"
                 rel="noreferrer"
                 className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               >
-                View on Stellar Expert <ExternalLink className="size-3.5" aria-hidden />
+                Stellar Expert <ExternalLink className="size-3.5" aria-hidden />
               </a>
-            ) : (
-              <span className="ml-auto text-[13px] text-muted-foreground">
-                Set POLICY_CONTRACT_ID to bind this UI to Soroban
-              </span>
-            )}
+            ) : null}
           </Card>
 
-          {/* current limits */}
-          <Card className="p-5">
-            <p className="text-[13px] font-medium text-muted-foreground">Current limits</p>
-            <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              <InlineEditUSD
-                label="Per-tx cap (USDC)"
-                value={policy.perCallCapXLM}
-                onSave={savePerCallCap}
-              />
-              <InlineEditUSD
-                label="Daily cap (USDC)"
-                value={policy.dailyCapUSD}
-                onSave={saveDailyCap}
-              />
-              <div>
-                <p className="text-[13px] text-muted-foreground">Weekly (USDC)</p>
-                <p className="mt-1 font-mono text-xl tabular">{fmtUSD(policy.weeklyCapUSD)}</p>
+          {/* wallet limits — editable caps up top, projections as a footer strip */}
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+              <div className="flex items-center gap-2">
+                <Wallet className="size-4 text-primary" aria-hidden />
+                <p className="text-sm font-medium">Wallet limits</p>
               </div>
-              <div>
-                <p className="text-[13px] text-muted-foreground">Monthly (USDC)</p>
-                <p className="mt-1 font-mono text-xl tabular">{fmtUSD(policy.monthlyCapUSD)}</p>
+              <span className="rounded-full border border-border bg-elevated/50 px-2 py-0.5 text-[11px] text-muted-foreground">
+                USDC
+              </span>
+            </div>
+            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+              <div className="bg-[linear-gradient(165deg,color-mix(in_srgb,var(--primary)_7%,transparent),transparent_62%)] p-5">
+                <InlineEditUSD
+                  label="Per-tx cap"
+                  value={policy.perCallCapXLM}
+                  onSave={savePerCallCap}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">Max value of any single payment.</p>
               </div>
+              <div className="bg-[linear-gradient(165deg,color-mix(in_srgb,var(--primary)_7%,transparent),transparent_62%)] p-5">
+                <InlineEditUSD
+                  label="Daily cap"
+                  value={policy.dailyCapUSD}
+                  onSave={saveDailyCap}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">Resets every 24h.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border bg-elevated/30 px-5 py-3.5">
+              <span className="stat-label">Projected</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground">Weekly</span>
+                <span className="font-mono text-base font-semibold tabular">
+                  {fmtUSD(policy.weeklyCapUSD)}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground">Monthly</span>
+                <span className="font-mono text-base font-semibold tabular">
+                  {fmtUSD(policy.monthlyCapUSD)}
+                </span>
+              </div>
+              <span className="ml-auto text-[11px] text-subtle">
+                Derived from your daily cap
+              </span>
+            </div>
+          </Card>
+
+          {/* category limits — color-accented per rail, before allow/deny */}
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="size-4 text-primary" aria-hidden />
+                <p className="text-sm font-medium">Per-category daily limits</p>
+              </div>
+              <span className="rounded-full border border-border bg-elevated/50 px-2 py-0.5 text-[11px] text-muted-foreground">
+                USDC
+              </span>
+            </div>
+            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-y-0 sm:[&>*:nth-child(n+2)]:border-l">
+              {(Object.keys(CATEGORY_META) as PolicyCategory[]).map((category) => (
+                <div key={category} className="p-5">
+                  <InlineEditUSD
+                    label={CATEGORY_META[category].label}
+                    value={policy.categories[category]}
+                    onSave={(v) => saveCategory(category, v)}
+                    icon={CATEGORY_META[category].icon}
+                    iconClassName={CATEGORY_META[category].tone}
+                  />
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    {CATEGORY_META[category].blurb}
+                  </p>
+                </div>
+              ))}
             </div>
           </Card>
 
@@ -423,7 +566,7 @@ export default function PolicyPage() {
               </div>
               <Button type="submit" disabled={addingEntry}>
                 {addingEntry ? <Loader2 className="size-4 animate-spin" /> : null}
-                {addingEntry ? "Pending on-chain" : "Add address"}
+                {addingEntry ? "Adding…" : "Add address"}
               </Button>
             </form>
             {policy.entries.length === 0 ? (
@@ -523,25 +666,6 @@ export default function PolicyPage() {
               </>
             )}
           </Card>
-
-          {/* category limits */}
-          <div>
-            <p className="mb-3 text-[13px] font-medium text-muted-foreground">Category limits per day (USDC)</p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {(Object.keys(CATEGORY_META) as PolicyCategory[]).map((category) => (
-                <Card key={category} className="p-4">
-                  <InlineEditUSD
-                    label={CATEGORY_META[category].label}
-                    value={policy.categories[category]}
-                    onSave={(v) => saveCategory(category, v)}
-                  />
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    {CATEGORY_META[category].blurb}
-                  </p>
-                </Card>
-              ))}
-            </div>
-          </div>
 
           {/* emergency controls */}
           <Card className="border-destructive/40 p-5">

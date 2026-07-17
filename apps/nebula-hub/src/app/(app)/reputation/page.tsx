@@ -1,15 +1,18 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, MessageSquare, Sigma, Star, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { AnimatedNumber } from "@/components/shared/animated-number";
 import { ScoreRing } from "@/components/shared/score-ring";
 import { ListSkeleton, StatCardSkeleton } from "@/components/shared/skeletons";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import * as api from "@/lib/api";
 import { fmtInt, timeAgo } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
+import { useAgentScope } from "@/components/agent-scope/agent-scope";
 import { cn } from "@/lib/utils";
 
 const CONFIDENCE_BLURB: Record<string, string> = {
@@ -21,8 +24,50 @@ const CONFIDENCE_BLURB: Record<string, string> = {
   Emerging: "Fewer than 5 feedback events — treat the average cautiously.",
 };
 
+function SignalTile({
+  icon: Icon,
+  label,
+  value,
+  suffix,
+  explainer,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: number | null;
+  suffix?: string;
+  explainer: string;
+}) {
+  return (
+    <div className="p-5">
+      <div className="flex items-center gap-2">
+        <span className="flex size-7 items-center justify-center rounded-md border border-border bg-elevated/50 text-warm">
+          <Icon className="size-3.5" aria-hidden />
+        </span>
+        <p className="stat-label">{label}</p>
+      </div>
+      <p className="mt-3 hero-number-sm tabular">
+        {value == null ? (
+          "—"
+        ) : (
+          <>
+            <AnimatedNumber value={value} format={fmtInt} />
+            {suffix ? (
+              <span className="text-sm text-muted-foreground">{suffix}</span>
+            ) : null}
+          </>
+        )}
+      </p>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{explainer}</p>
+    </div>
+  );
+}
+
 export default function ReputationPage() {
-  const { data: reputation, loading } = useLoad(() => api.getReputation(), []);
+  const { selectedAgentId } = useAgentScope();
+  const { data: reputation, loading } = useLoad(
+    () => api.getReputation(),
+    [selectedAgentId],
+  );
 
   return (
     <div>
@@ -49,27 +94,37 @@ export default function ReputationPage() {
           <StatCardSkeleton className="lg:col-span-2" />
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Card className="flex flex-col items-center justify-center gap-4 p-6">
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
+            <Card
+              className={cn(
+                "flex flex-col items-center justify-center gap-4 p-6",
+                "border-[color-mix(in_srgb,var(--accent-warm)_28%,var(--border))] bg-[linear-gradient(165deg,color-mix(in_srgb,var(--accent-warm)_10%,var(--card))_0%,var(--card)_60%)]",
+              )}
+            >
               <ScoreRing
                 score={reputation.score}
                 max={reputation.scoreMax}
                 label={`of ${reputation.scoreMax}`}
               />
               <div className="text-center">
-                <p className="text-lg font-medium capitalize">{reputation.confidence}</p>
-                <p className="mt-2 max-w-60 text-[13px] text-muted-foreground">
+                <Badge
+                  variant={reputation.registered ? "success" : "outline"}
+                  className="capitalize"
+                >
+                  {reputation.confidence}
+                </Badge>
+                <p className="mx-auto mt-3 max-w-60 text-[13px] leading-relaxed text-muted-foreground">
                   {CONFIDENCE_BLURB[reputation.confidence] ??
                     CONFIDENCE_BLURB.unrated}
                 </p>
                 {reputation.stellar8004AgentId != null ? (
                   <p className="mt-3 font-mono text-[13px] text-muted-foreground">
-                    Agent #{reputation.stellar8004AgentId}
+                    Stellar8004 agent #{reputation.stellar8004AgentId}
                   </p>
                 ) : (
                   <p className="mt-3 text-[13px] text-muted-foreground">
-                    Not registered on-chain
+                    Not registered on-chain yet
                   </p>
                 )}
                 {reputation.explorerUrl ? (
@@ -85,80 +140,46 @@ export default function ReputationPage() {
               </div>
             </Card>
 
-            <Card className="p-5 lg:col-span-2">
-              <p className="text-[13px] font-medium text-muted-foreground">
-                Stellar8004 signals
-              </p>
-              <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div>
-                  <dt className="text-xs text-muted-foreground">avgScore</dt>
-                  <dd className="mt-1 font-mono text-xl tabular">
-                    <AnimatedNumber value={reputation.score} format={fmtInt} />
-                    <span className="text-sm text-muted-foreground">/100</span>
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">feedbackCount</dt>
-                  <dd className="mt-1 font-mono text-xl tabular">
-                    <AnimatedNumber value={reputation.feedbackCount} format={fmtInt} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">uniqueClients</dt>
-                  <dd className="mt-1 font-mono text-xl tabular">
-                    <AnimatedNumber value={reputation.uniqueClients} format={fmtInt} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">totalScore</dt>
-                  <dd className="mt-1 font-mono text-xl tabular">
-                    {reputation.totalScore == null ? (
-                      "—"
-                    ) : (
-                      <AnimatedNumber value={reputation.totalScore} format={fmtInt} />
-                    )}
-                  </dd>
-                </div>
-              </dl>
-              <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
-                Read straight from on-chain feedback — Nebula mirrors the chain, it never
-                invents a score.
+            <div className="lg:col-span-2">
+              <p className="stat-label mb-3">Stellar8004 signals</p>
+              <Card className="grid grid-cols-1 divide-y divide-border overflow-hidden sm:grid-cols-2 sm:divide-y-0 sm:[&>*:nth-child(n+3)]:border-t sm:[&>*:nth-child(2n)]:border-l">
+                <SignalTile
+                  icon={Star}
+                  label="Average score"
+                  value={reputation.score}
+                  suffix="/100"
+                  explainer="Mean of on-chain feedback, normalized to 0–100."
+                />
+                <SignalTile
+                  icon={MessageSquare}
+                  label="Feedback count"
+                  value={reputation.feedbackCount}
+                  explainer="Non-revoked feedback records left for this agent."
+                />
+                <SignalTile
+                  icon={Users}
+                  label="Unique clients"
+                  value={reputation.uniqueClients}
+                  explainer="Distinct addresses that left feedback (sybil-relevant)."
+                />
+                <SignalTile
+                  icon={Sigma}
+                  label="Total score"
+                  value={reputation.totalScore}
+                  explainer="Explorer aggregate totalScore when indexed; else 0."
+                />
+              </Card>
+              <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
+                Read straight from on-chain feedback — Nebula mirrors the chain, it
+                never invents a score.
                 {reputation.source ? ` Source: ${reputation.source}.` : ""}
               </p>
-            </Card>
-          </div>
-
-          <div>
-            <p className="mb-3 text-[13px] font-medium text-muted-foreground">Breakdown</p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {reputation.components.map((component) => (
-                <Card key={component.key} className="p-4">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-sm">{component.label}</p>
-                    <p className="font-mono text-sm tabular text-muted-foreground">
-                      <AnimatedNumber value={component.score} format={fmtInt} />
-                      {component.key === "average" ? "/100" : ""}
-                    </p>
-                  </div>
-                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-elevated">
-                    <div
-                      className="h-full rounded-full bg-chart-4 transition-all duration-700"
-                      style={{
-                        width: `${Math.min(100, (component.score / Math.max(component.max, 1)) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-                    {component.explainer}
-                  </p>
-                </Card>
-              ))}
             </div>
           </div>
 
           <Card className="overflow-hidden">
             <div className="border-b border-border px-5 py-4">
-              <p className="text-[13px] font-medium text-muted-foreground">Status</p>
+              <p className="stat-label">Status</p>
             </div>
             {reputation.events.length === 0 ? (
               <ListSkeleton rows={2} className="p-5" />

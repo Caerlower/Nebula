@@ -3,6 +3,15 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import {
+  Bell,
+  Braces,
+  CreditCard,
+  TriangleAlert,
+  UserRound,
+  Users,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { AccountSection } from "@/components/settings/account-section";
@@ -13,13 +22,28 @@ import { NotificationsSection } from "@/components/settings/notifications-sectio
 import { TeamSection } from "@/components/settings/team-section";
 import { cn } from "@/lib/utils";
 
-const SECTIONS: { key: string; label: string; component: React.ComponentType }[] = [
-  { key: "account", label: "Account", component: AccountSection },
-  { key: "team", label: "Team", component: TeamSection },
-  { key: "billing", label: "Billing", component: BillingSection },
-  { key: "notifications", label: "Notifications", component: NotificationsSection },
-  { key: "api", label: "API", component: ApiSection },
-  { key: "danger", label: "Danger zone", component: DangerSection },
+const SECTIONS: {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  component: React.ComponentType;
+}[] = [
+  { key: "account", label: "Account", icon: UserRound, component: AccountSection },
+  { key: "team", label: "Team", icon: Users, component: TeamSection },
+  { key: "billing", label: "Billing", icon: CreditCard, component: BillingSection },
+  {
+    key: "notifications",
+    label: "Notifications",
+    icon: Bell,
+    component: NotificationsSection,
+  },
+  { key: "api", label: "API", icon: Braces, component: ApiSection },
+  {
+    key: "danger",
+    label: "Danger zone",
+    icon: TriangleAlert,
+    component: DangerSection,
+  },
 ];
 
 export default function SettingsSectionPage() {
@@ -43,26 +67,45 @@ export default function SettingsSectionPage() {
         subtitle="Your account, your team, and the big red buttons."
       />
       <div className="flex flex-col gap-8 md:flex-row">
-        <nav aria-label="Settings sections" className="md:w-50 md:shrink-0">
+        <nav
+          aria-label="Settings sections"
+          className="md:w-56 md:shrink-0 md:self-start"
+        >
           <ul className="flex gap-1 overflow-x-auto md:flex-col">
-            {SECTIONS.map((item) => (
-              <li key={item.key}>
-                <Link
-                  href={`/settings/${item.key}`}
-                  aria-current={item.key === section.key ? "page" : undefined}
-                  className={cn(
-                    "block whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors",
-                    item.key === section.key
-                      ? "bg-elevated text-foreground"
-                      : "text-muted-foreground hover:bg-elevated/60 hover:text-foreground",
-                    item.key === "danger" && "text-destructive/80 hover:text-destructive",
-                    item.key === "danger" && item.key === section.key && "text-destructive",
-                  )}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
+            {SECTIONS.map((item) => {
+              const active = item.key === section.key;
+              const isDanger = item.key === "danger";
+              return (
+                <li key={item.key}>
+                  {isDanger ? (
+                    <div className="my-2 hidden h-px bg-border md:block" />
+                  ) : null}
+                  <Link
+                    href={`/settings/${item.key}`}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors",
+                      active
+                        ? "bg-elevated font-medium text-foreground shadow-[inset_2px_0_0_var(--primary)]"
+                        : "text-muted-foreground hover:bg-elevated/60 hover:text-foreground",
+                      isDanger &&
+                        !active &&
+                        "text-destructive/80 hover:text-destructive",
+                      isDanger && active && "text-destructive",
+                    )}
+                  >
+                    <item.icon
+                      className={cn(
+                        "size-4 shrink-0",
+                        active && !isDanger && "text-primary",
+                      )}
+                      aria-hidden
+                    />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </nav>
         <div className="min-w-0 flex-1">

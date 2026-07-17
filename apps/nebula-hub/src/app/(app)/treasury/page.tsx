@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ExternalLink, Loader2, MoreHorizontal } from "lucide-react";
+import {
+  Coins,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
+  Percent,
+  PiggyBank,
+  Wallet,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { AnimatedNumber } from "@/components/shared/animated-number";
@@ -45,6 +53,7 @@ import {
 import * as api from "@/lib/api";
 import { fmtAmount, fmtDate, fmtUSD, fmtXLM, truncMiddle } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
+import { useAgentScope } from "@/components/agent-scope/agent-scope";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 import type { BlendPosition, WalletSummary } from "@/types/domain";
@@ -132,8 +141,8 @@ function DepositDialog({
               ) : null}
             </div>
             <p className="text-[12px] leading-relaxed text-muted-foreground">
-              USDC requires a Circle trustline — open one on Connect if you
-              haven&apos;t already.
+              USDC requires a Circle trustline — open one from the agent&apos;s
+              Dashboard if you haven&apos;t already.
             </p>
           </div>
         </div>
@@ -335,7 +344,11 @@ function AutoYieldCard({
 }: {
   onUnwindComplete?: () => void;
 }) {
-  const { data, loading, setData } = useLoad(() => api.getTreasurySettings(), []);
+  const { selectedAgentId } = useAgentScope();
+  const { data, loading, setData } = useLoad(
+    () => api.getTreasurySettings(),
+    [selectedAgentId],
+  );
   const [draftLow, setDraftLow] = useState<string | null>(null);
   const [draftHigh, setDraftHigh] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -453,7 +466,7 @@ function AutoYieldCard({
 
   return (
     <Card className="p-5">
-      <p className="text-[13px] font-medium text-muted-foreground">Auto-yield settings</p>
+      <p className="stat-label">Auto-yield settings</p>
       {loading || !data ? (
         <TableSkeleton rows={2} cols={2} className="mt-4" />
       ) : (
@@ -557,7 +570,11 @@ function AutoYieldCard({
 }
 
 function YieldChartCard() {
-  const { data, loading } = useLoad(() => api.getBalanceHistory("90d"), []);
+  const { selectedAgentId } = useAgentScope();
+  const { data, loading } = useLoad(
+    () => api.getBalanceHistory("90d"),
+    [selectedAgentId],
+  );
   const YieldTooltip = makeTooltip(
     (v) => fmtAmount(v, "XLM"),
     (label) => (typeof label === "string" ? fmtDate(label) : ""),
@@ -565,7 +582,7 @@ function YieldChartCard() {
 
   return (
     <Card className="p-5">
-      <p className="text-[13px] font-medium text-muted-foreground">Cumulative yield earned (90d)</p>
+      <p className="stat-label">Cumulative yield earned (90d)</p>
       {loading || !data ? (
         <ChartSkeleton height={220} className="mt-4" />
       ) : (
@@ -604,9 +621,13 @@ function YieldChartCard() {
 }
 
 export default function TreasuryPage() {
-  const { data: wallet, reload: reloadWallet } = useLoad(() => api.getWallet(), []);
+  const { selectedAgentId } = useAgentScope();
+  const { data: wallet, reload: reloadWallet } = useLoad(
+    () => api.getWallet(),
+    [selectedAgentId],
+  );
   const { data: positions, loading: positionsLoading, setData: setPositions, reload: reloadPositions } =
-    useLoad(() => api.getBlendPositions(), []);
+    useLoad(() => api.getBlendPositions(), [selectedAgentId]);
 
   const depositOpen = useUIStore((s) => s.depositOpen);
   const setDepositOpen = useUIStore((s) => s.setDepositOpen);
@@ -652,50 +673,59 @@ export default function TreasuryPage() {
         }
       />
 
+      <div className="space-y-8">
+      <div>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
         {wallet ? (
           <>
             <StatCard
-              label="Liquid"
+              label="USDC balance"
               tone="primary"
-              footer={
-                wallet.liquidityFloorXLM != null
-                  ? `Spendable · band from ${fmtUSD(wallet.liquidityFloorXLM)} USDC`
-                  : "Spendable for agent payments"
-              }
+              icon={Coins}
+              footer="Spendable by this agent for x402 / MPP / transfers"
             >
-              <div>
+              <div className="flex items-end gap-1.5">
                 <AnimatedNumber
-                  value={wallet.liquidXLM}
-                  format={fmtXLM}
-                  className="bg-[image:var(--gradient-primary)] bg-clip-text text-4xl font-semibold text-transparent"
+                  value={wallet.usdcBalance ?? 0}
+                  format={(v) =>
+                    v.toLocaleString("en-US", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  }
+                  className="hero-number hero-gradient"
                 />
-                <span className="ml-1.5 font-mono text-sm text-muted-foreground">
-                  XLM
+                <span className="mb-1 font-mono text-sm text-muted-foreground">
+                  USDC
                 </span>
               </div>
-              {wallet.usdPerXlm != null ? (
-                <p className="mt-1 font-mono text-sm tabular text-muted-foreground">
-                  ≈ {fmtUSD(wallet.liquidXLM * wallet.usdPerXlm)} USDC
-                </p>
-              ) : null}
+              <p className="mt-1 inline-flex items-center gap-1.5 font-mono text-sm tabular text-muted-foreground">
+                <Wallet className="size-3.5" aria-hidden />
+                {fmtXLM(wallet.liquidXLM)} XLM liquid
+                {wallet.usdPerXlm != null ? (
+                  <span className="text-subtle">
+                    (≈ {fmtUSD(wallet.liquidXLM * wallet.usdPerXlm)})
+                  </span>
+                ) : null}
+              </p>
             </StatCard>
             <StatCard
               label="In Blend"
               tone="warm"
+              icon={PiggyBank}
               footer={
                 wallet.blendXLM > 0
                   ? `Earning on ${wallet.poolName ?? "Blend"}`
                   : "Nothing deposited yet"
               }
             >
-              <div>
+              <div className="flex items-end gap-1.5">
                 <AnimatedNumber
                   value={wallet.blendXLM}
                   format={fmtXLM}
-                  className="text-4xl font-semibold text-warm"
+                  className="hero-number text-warm"
                 />
-                <span className="ml-1.5 font-mono text-sm text-muted-foreground">
+                <span className="mb-1 font-mono text-sm text-muted-foreground">
                   XLM
                 </span>
               </div>
@@ -708,20 +738,21 @@ export default function TreasuryPage() {
             <StatCard
               label="Supply APY"
               tone="teal"
+              icon={Percent}
               footer={
                 wallet.blendXLM > 0
                   ? "Live Blend XLM rate on your position"
                   : "Live Blend XLM market rate"
               }
             >
-              <AnimatedNumber
-                value={wallet.apyPct}
-                format={(v) => v.toFixed(2)}
-                className="text-4xl font-semibold text-teal"
-              />
-              <span className="ml-1 font-mono text-sm text-muted-foreground">
-                %
-              </span>
+              <div className="flex items-end gap-1">
+                <AnimatedNumber
+                  value={wallet.apyPct}
+                  format={(v) => v.toFixed(2)}
+                  className="hero-number text-teal"
+                />
+                <span className="mb-1 font-mono text-sm text-muted-foreground">%</span>
+              </div>
             </StatCard>
           </>
         ) : (
@@ -734,7 +765,7 @@ export default function TreasuryPage() {
       </div>
 
       {wallet ? (
-        <p className="mt-3 text-[13px] text-muted-foreground">
+        <p className="mt-4 text-[13px] text-muted-foreground">
           Total{" "}
           <span className="font-mono tabular text-foreground">
             {fmtXLM(wallet.balanceXLM)}
@@ -754,10 +785,11 @@ export default function TreasuryPage() {
           </span>
         </p>
       ) : null}
+      </div>
 
-      <Card className="mt-6 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="border-b border-border px-5 py-4">
-          <p className="text-[13px] font-medium text-muted-foreground">Blend positions</p>
+          <p className="stat-label">Blend positions</p>
         </div>
         {positionsLoading || !positions ? (
           <TableSkeleton rows={3} cols={5} className="p-5" />
@@ -850,7 +882,7 @@ export default function TreasuryPage() {
         )}
       </Card>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <AutoYieldCard
           onUnwindComplete={() => {
             void reloadWallet();
@@ -858,6 +890,7 @@ export default function TreasuryPage() {
           }}
         />
         <YieldChartCard />
+      </div>
       </div>
 
       <DepositDialog
