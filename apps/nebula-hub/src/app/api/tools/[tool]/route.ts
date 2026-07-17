@@ -29,7 +29,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     body = {};
   }
 
-  const result = await runHubTool(tool, body, principal);
+  // Accept both a bare-arguments body and the { tool, arguments } envelope that
+  // partner gateways (Tael) forward, so the same sample body works whether it
+  // lands here (tool in the path) or at the generic /api/tools route.
+  const record = (body ?? {}) as Record<string, unknown>;
+  const args =
+    record.arguments && typeof record.arguments === "object"
+      ? (record.arguments as Record<string, unknown>)
+      : record;
+
+  const result = await runHubTool(tool, args, principal);
   const status =
     result.status === "rejected"
       ? 403
