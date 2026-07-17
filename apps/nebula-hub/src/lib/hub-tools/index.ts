@@ -5,6 +5,7 @@ import {
 } from "nebulamcp-core";
 
 import type { AuthPrincipal } from "../auth";
+import { partnerSignerConfigFromEnv } from "../signing";
 import {
   fetchBlendSupplyRates,
   getTreasuryBalances,
@@ -30,6 +31,7 @@ import {
   APP_URL,
   formatAmt,
   ledgerAsset,
+  loadEffectiveCaps,
   loadPolicySnapshot,
   loadTreasurySettings,
   buildToolContext,
@@ -54,6 +56,45 @@ import {
 
 export { SPEND_TX_TYPES, loadPolicySnapshot, buildToolContext } from "./context";
 
+/**
+ * Treasury / Blend tools that only make sense for a Nebula-custodied (Privy)
+ * wallet — the yield position itself is custodied. Blocked for every
+ * non-custodial account (partner_callback and client_side).
+ */
+const REQUIRES_CUSTODY = new Set<string>([
+  "optimize_treasury",
+  "blend_deposit",
+  "blend_withdraw",
+  "set_liquidity_threshold",
+]);
+
+/**
+ * Tools whose signing happens autonomously on the server across one or more
+ * transactions. Privy (custodial) and partner_callback (Tael signs its card)
+ * can do these; client_side (EOA/Freighter) cannot, because the Hub can't drive
+ * the multi-step flow with the user's key.
+ */
+const REQUIRES_SERVER_SIGNING = new Set<string>([
+  "swap",
+  "mpp_open_session",
+  "mpp_pay",
+  "mpp_fetch",
+  "mpp_close_session",
+  "register_identity",
+]);
+
+/** Spend tools that need a resolvable signer before doing any work. */
+const SPEND_TOOLS = new Set<string>([
+  "transfer",
+  "swap",
+  "x402_fetch",
+  "x402_pay",
+  "mpp_open_session",
+  "mpp_fetch",
+  "mpp_close_session",
+  "register_identity",
+]);
+
 export async function runHubTool(
   toolName: string,
   rawInput: unknown,
@@ -67,6 +108,40 @@ export async function runHubTool(
     return {
       status: "rejected",
       reason: "mcp_tokens_cannot_mutate_policy",
+    };
+  }
+
+  // Treasury / Blend stays custodial (Privy) only.
+  if (principal.signerStrategy !== "privy" && REQUIRES_CUSTODY.has(toolName)) {
+    return {
+      status: "rejected",
+      reason: "tool_requires_custodial_wallet",
+    };
+  }
+
+  // EOA (client_side) users can't drive server-side autonomous signing flows.
+  if (
+    principal.signerStrategy === "client_side" &&
+    REQUIRES_SERVER_SIGNING.has(toolName)
+  ) {
+    return {
+      status: "rejected",
+      reason:
+        "tool_requires_server_side_signing: use a managed (Privy) or partner-signed agent for this action",
+    };
+  }
+
+  // Partner (Tael) spends need the partner sign endpoint configured; otherwise
+  // reads and Privy agents keep working, but partner spends fail clearly.
+  if (
+    principal.signerStrategy === "partner_callback" &&
+    SPEND_TOOLS.has(toolName) &&
+    !partnerSignerConfigFromEnv()
+  ) {
+    return {
+      status: "rejected",
+      reason:
+        "partner_signer_not_configured: set TAEL_PARTNER_SIGN_URL and TAEL_HMAC_SECRET to enable partner spends",
     };
   }
 
@@ -169,7 +244,7 @@ export async function runHubTool(
       memo?: string;
       reason: string;
     };
-    const policy = await loadPolicySnapshot(principal.userId);
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
     let amountUsdc: number;
     try {
       amountUsdc = await xlmToUsdc(input.amount_xlm);
@@ -465,7 +540,7 @@ export async function runHubTool(
       amount_usdc?: number;
       facilitator?: string;
     };
-    const policy = await loadPolicySnapshot(principal.userId);
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
     return executeX402Tool({
       toolName,
       input,
@@ -477,7 +552,7 @@ export async function runHubTool(
 
   if (toolName === "mpp_open_session") {
     const input = parsed.data as { budget_usdc: number; recipient?: string };
-    const policy = await loadPolicySnapshot(principal.userId);
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
     return executeMppOpenSession({ input, principal, ctx, policy });
   }
 
@@ -487,13 +562,13 @@ export async function runHubTool(
       amount_xlm: number;
       streaming?: boolean;
     };
-    const policy = await loadPolicySnapshot(principal.userId);
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
     return executeMppPay({ input, principal, ctx, policy });
   }
 
   if (toolName === "mpp_fetch") {
     const input = parsed.data as { url: string };
-    const policy = await loadPolicySnapshot(principal.userId);
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
     return executeMppFetch({ input, principal, ctx, policy });
   }
 
@@ -612,6 +687,8 @@ async function executePolicyReadTools(
     const rows = await prisma.transaction.findMany({
       where: {
         userId: principal.userId,
+        // Agent tokens see only their own agent's activity.
+        ...(principal.agentId ? { agentId: principal.agentId } : {}),
         status: "confirmed",
         createdAt: { gte: since },
       },
@@ -706,17 +783,18 @@ async function executePolicyReadTools(
 
   // get_policy_status — caps / band / lists only (all spend caps in USDC)
   const settings = await loadTreasurySettings(principal.userId);
-  const policy = await loadPolicySnapshot(principal.userId);
+  const caps = await loadEffectiveCaps(principal.userId, principal.agentId);
+  const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
   const [spend, whitelistCount, denylistCount] = await Promise.all([
-    sumSpendUsdcSince(principal.userId, since),
+    sumSpendUsdcSince(principal.userId, since, { agentId: principal.agentId }),
     prisma.whitelistEntry.count({ where: { userId: principal.userId } }),
     prisma.denylistEntry.count({ where: { userId: principal.userId } }),
   ]);
 
   const catCaps = {
-    transfer: Number(settings.catTransfer),
-    x402: Number(settings.catX402),
-    mpp: Number(settings.catMpp),
+    transfer: caps.catTransfer,
+    x402: caps.catX402,
+    mpp: caps.catMpp,
   };
   const catSpent = {
     transfer: spend.byType.transfer ?? 0,
@@ -823,6 +901,8 @@ export async function executeApprovedConfirmation(
     email: conf.user.email,
     stellarAddress: conf.user.stellarAddress,
     privyWalletId: conf.user.privyWalletId,
+    accountType: "custodial",
+    signerStrategy: "privy",
   };
   const ctx = buildToolContext(principal);
   if (!ctx) {
