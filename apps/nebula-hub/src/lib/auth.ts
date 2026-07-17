@@ -4,6 +4,7 @@ import { PrivyClient, type User } from "@privy-io/node";
 import { NextRequest } from "next/server";
 
 import { hashNebulaToken, prisma } from "./db";
+import { SESSION_COOKIE, readWalletSession } from "./wallet-auth";
 
 /**
  * Per-token principal cache. Without it every API request pays token
@@ -50,18 +51,34 @@ export type AuthPrincipal = {
   userId: string;
   agentId: string | null;
   tokenId: string | null;
-  source: "nebula_token" | "privy_session" | "dev_mint";
+  source: "nebula_token" | "privy_session" | "dev_mint" | "wallet_session";
   email: string | null;
   stellarAddress: string | null;
   privyWalletId: string | null;
+  /** How this account holds funds: Nebula-custodied vs. self-custody / partner. */
+  accountType: "custodial" | "external";
+  /** Where signatures come from for this account's spends. */
+  signerStrategy: "privy" | "partner_callback" | "client_side";
 };
+
+function normalizeSignerStrategy(
+  value: string | null | undefined,
+): AuthPrincipal["signerStrategy"] {
+  return value === "client_side"
+    ? "client_side"
+    : value === "partner_callback"
+      ? "partner_callback"
+      : "privy";
+}
 
 async function principalFromUser(
   user: {
     id: string;
-    email: string;
+    email: string | null;
     stellarAddress: string | null;
     privyWalletId: string | null;
+    accountType?: string | null;
+    signerStrategy?: string | null;
   },
   source: AuthPrincipal["source"],
   extra?: { agentId?: string | null; tokenId?: string | null },
@@ -74,6 +91,10 @@ async function principalFromUser(
     email: user.email,
     stellarAddress: user.stellarAddress,
     privyWalletId: user.privyWalletId,
+    // Persisted on the account: Privy users are custodial/privy; wallet-native
+    // (Freighter/EOA) accounts are external/client_side.
+    accountType: user.accountType === "external" ? "external" : "custodial",
+    signerStrategy: normalizeSignerStrategy(user.signerStrategy),
   };
 }
 
@@ -91,7 +112,18 @@ export async function resolveAuth(
   req: NextRequest,
 ): Promise<AuthPrincipal | null> {
   const token = bearerToken(req);
-  const cacheKey = token ? tokenCacheKey(token) : null;
+  // Partner (Tael) attribution: a company token + this header identifies which
+  // card is calling. It changes the resolved principal, so it must key the cache.
+  const taelAgent = req.headers.get("x-tael-agent")?.trim() || null;
+  // Wallet-native (Freighter/EOA) sessions carry an httpOnly cookie, not a Bearer.
+  const sessionToken = token
+    ? null
+    : (req.cookies.get(SESSION_COOKIE)?.value ?? null);
+  const cacheKey = token
+    ? tokenCacheKey(taelAgent ? `${token}::${taelAgent}` : token)
+    : sessionToken
+      ? tokenCacheKey(sessionToken)
+      : null;
   if (cacheKey) {
     const cached = getCachedPrincipal(cacheKey);
     if (cached) return cached;
@@ -101,7 +133,7 @@ export async function resolveAuth(
     const tokenHash = hashNebulaToken(token);
     const row = await prisma.nebulaToken.findUnique({
       where: { tokenHash },
-      include: { user: true },
+      include: { user: true, agent: true },
     });
     if (!row || row.revokedAt) {
       return null;
@@ -117,6 +149,33 @@ export async function resolveAuth(
       agentId: row.agentId,
       tokenId: row.id,
     });
+    // A token bound to an agent operates the AGENT's own wallet + signer, not
+    // the owner's. Legacy agents without a provisioned wallet fall back to the
+    // owner wallet (backward compatible). Tael cards surface here as
+    // partner_callback agents whose address is the external card.
+    if (row.agent?.stellarAddress) {
+      principal.stellarAddress = row.agent.stellarAddress;
+      principal.privyWalletId = row.agent.privyWalletId;
+      principal.accountType =
+        row.agent.accountType === "external" ? "external" : "custodial";
+      principal.signerStrategy = normalizeSignerStrategy(
+        row.agent.signerStrategy,
+      );
+    } else if (taelAgent) {
+      // Company (agent-less) token + x-tael-agent header → resolve the card
+      // agent owned by this company account and operate that card's wallet.
+      const card = await prisma.agent.findFirst({
+        where: { userId: row.userId, stellarAddress: taelAgent },
+      });
+      if (card) {
+        principal.agentId = card.id;
+        principal.stellarAddress = card.stellarAddress;
+        principal.privyWalletId = card.privyWalletId;
+        principal.accountType =
+          card.accountType === "external" ? "external" : "custodial";
+        principal.signerStrategy = normalizeSignerStrategy(card.signerStrategy);
+      }
+    }
     if (cacheKey) cachePrincipal(cacheKey, principal);
     return principal;
   }
@@ -167,6 +226,19 @@ export async function resolveAuth(
     }
   }
 
+  // Wallet-native sign-in (Freighter / EOA): httpOnly session cookie.
+  if (sessionToken) {
+    const claims = readWalletSession(sessionToken);
+    if (claims) {
+      const user = await prisma.user.findUnique({ where: { id: claims.sub } });
+      if (user) {
+        const principal = await principalFromUser(user, "wallet_session");
+        if (cacheKey) cachePrincipal(cacheKey, principal);
+        return principal;
+      }
+    }
+  }
+
   // Local demo only — never honor in production / on Vercel.
   const devSecret = req.headers.get("x-nebula-dev-mint");
   if (
@@ -211,7 +283,9 @@ export function forbidden(reason: string): Response {
 
 export function isDashboardAuth(principal: AuthPrincipal): boolean {
   return (
-    principal.source === "privy_session" || principal.source === "dev_mint"
+    principal.source === "privy_session" ||
+    principal.source === "dev_mint" ||
+    principal.source === "wallet_session"
   );
 }
 

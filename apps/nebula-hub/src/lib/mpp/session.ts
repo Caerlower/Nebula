@@ -16,6 +16,7 @@ import { prisma } from "@/lib/db";
 export type HubMppSession = {
   id: string;
   userId: string;
+  agentId: string | null;
   channel: string;
   recipient: string;
   budgetUsdc: number;
@@ -43,6 +44,7 @@ export function generateCommitmentKeypair(): {
 function rowToSession(row: {
   id: string;
   userId: string;
+  agentId: string | null;
   channel: string;
   recipient: string;
   budgetUsdc: { toString(): string } | number;
@@ -57,6 +59,7 @@ function rowToSession(row: {
   return {
     id: row.id,
     userId: row.userId,
+    agentId: row.agentId,
     channel: row.channel,
     recipient: row.recipient,
     budgetUsdc: Number(row.budgetUsdc),
@@ -72,9 +75,11 @@ function rowToSession(row: {
 
 export async function getOpenMppSession(
   userId: string,
+  agentId?: string | null,
 ): Promise<HubMppSession | null> {
   const row = await prisma.mppSession.findFirst({
-    where: { userId, status: "open" },
+    // Scope to the agent (null = owner-level) so each agent has its own channel.
+    where: { userId, agentId: agentId ?? null, status: "open" },
     orderBy: { openedAt: "desc" },
   });
   return row ? rowToSession(row) : null;
@@ -82,10 +87,11 @@ export async function getOpenMppSession(
 
 export async function requireOpenMppSession(
   userId: string,
+  agentId?: string | null,
 ): Promise<
   { ok: true; session: HubMppSession } | { ok: false; error: string }
 > {
-  const session = await getOpenMppSession(userId);
+  const session = await getOpenMppSession(userId, agentId);
   if (!session) {
     return {
       ok: false,
@@ -98,6 +104,7 @@ export async function requireOpenMppSession(
 
 export async function createMppSession(data: {
   userId: string;
+  agentId?: string | null;
   channel: string;
   recipient: string;
   budgetUsdc: number;
@@ -107,7 +114,7 @@ export async function createMppSession(data: {
   networkId: string;
   deployWasmHash?: string;
 }): Promise<HubMppSession> {
-  const existing = await getOpenMppSession(data.userId);
+  const existing = await getOpenMppSession(data.userId, data.agentId);
   if (existing) {
     throw new Error(
       "An MPP session is already open. Call mpp_close_session before opening another.",
@@ -117,6 +124,7 @@ export async function createMppSession(data: {
   const row = await prisma.mppSession.create({
     data: {
       userId: data.userId,
+      agentId: data.agentId ?? null,
       channel: data.channel,
       recipient: data.recipient,
       budgetUsdc: data.budgetUsdc,

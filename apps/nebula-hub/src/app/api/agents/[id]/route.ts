@@ -5,6 +5,22 @@ import { z } from "zod";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { fetchBalances } from "@/lib/stellar";
+
+const HUB_NETWORK =
+  (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
+  "testnet";
+
+async function agentNativeXlm(address: string | null): Promise<number> {
+  if (!address) return 0;
+  try {
+    const balances = await fetchBalances(address, HUB_NETWORK);
+    const xlm = balances.find((b) => b.asset === "XLM" || b.asset === "native");
+    return xlm ? Number(xlm.balance) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 const patchSchema = z.object({
   name: z.string().min(1).max(64).optional(),
@@ -50,7 +66,9 @@ export async function GET(
   if (!agent) {
     return Response.json({ status: "error", reason: "not_found" }, { status: 404 });
   }
-  return Response.json({ agent });
+  return Response.json({
+    agent: { ...agent, balanceXlm: await agentNativeXlm(agent.stellarAddress) },
+  });
 }
 
 async function uncachedPATCH(

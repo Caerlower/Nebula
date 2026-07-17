@@ -153,6 +153,10 @@ export type HubAgent = {
   framework: string;
   status: string;
   createdAt: string;
+  /** Agent's own wallet address (null until provisioned). */
+  stellarAddress?: string | null;
+  /** Native XLM in the agent's own wallet (set by the agents API). */
+  balanceXlm?: number;
   tokens?: {
     id: string;
     label: string;
@@ -313,16 +317,19 @@ export function mapTransaction(row: HubTx, walletAddress: string): Transaction {
 
 export function mapAgent(
   row: HubAgent,
+  // Owner wallet fallback — used only for legacy agents with no wallet of
+  // their own (those actually spend from the owner wallet).
   opts: { address: string; balanceXLM: number; txToday: number },
 ): Agent {
   const lastToken = row.tokens?.[0];
+  const hasOwnWallet = Boolean(row.stellarAddress);
   return {
     id: row.id,
     name: row.name,
     framework: FRAMEWORK_FROM_API[row.framework] ?? "custom-mcp",
     status: mapAgentStatus(row.status),
-    address: opts.address,
-    balanceXLM: opts.balanceXLM,
+    address: hasOwnWallet ? row.stellarAddress! : opts.address,
+    balanceXLM: hasOwnWallet ? (row.balanceXlm ?? 0) : opts.balanceXLM,
     txToday: opts.txToday,
     lastActive: lastToken?.lastUsedAt ?? row.createdAt,
     createdAt:
