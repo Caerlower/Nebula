@@ -10,25 +10,25 @@ datasource db {
 }
 
 model User {
-  id             String   @id @default(cuid())
+  id                 String   @id @default(cuid())
   /// Null for wallet-native (Freighter / EOA) accounts — dapp sign-in has no Privy user.
-  privyUserId    String?  @unique
+  privyUserId        String?  @unique
   /// Optional: dapp accounts identify by wallet address, not email.
-  email          String?  @unique
-  name           String?
-  privyWalletId  String?  @unique
-  stellarAddress String?  @unique
+  email              String?  @unique
+  name               String?
+  privyWalletId      String?  @unique
+  stellarAddress     String?  @unique
   /// How this account holds funds: "custodial" (Privy) or "external" (self-custody EOA).
-  accountType    String   @default("custodial")
+  accountType        String   @default("custodial")
   /// Where signatures come from: "privy" | "partner_callback" | "client_side".
-  signerStrategy String   @default("privy")
+  signerStrategy     String   @default("privy")
   /// On-chain Stellar8004 agent id for this wallet (null until register_identity).
   stellar8004AgentId Int?
   /// Cached Stellar8004 avgScore (0–100).
-  reputationScore Int     @default(0)
+  reputationScore    Int      @default(0)
   /// Cached confidence: unrated | low | medium | high
-  reputationTier  String  @default("unrated")
-  createdAt      DateTime @default(now())
+  reputationTier     String   @default("unrated")
+  createdAt          DateTime @default(now())
 
   tokens           NebulaToken[]
   agents           Agent[]
@@ -57,25 +57,32 @@ model NebulaToken {
 }
 
 model Agent {
-  id              String   @id @default(cuid())
-  userId          String
-  name            String
-  framework       String
-  status          String   @default("active")
+  id                 String   @id @default(cuid())
+  userId             String
+  name               String
+  framework          String
+  status             String   @default("active")
+  /// What this agent is for — free-text purpose set at creation.
+  description        String?
+  /// Optional avatar hue (0–359) chosen at creation; null = deterministic from name.
+  avatarColor        String?
   /// Agent's own managed wallet (Privy) id. Null for legacy agents (fall back to
   /// owner wallet) and for partner_callback agents whose key lives off-Hub.
-  privyWalletId   String?  @unique
+  privyWalletId      String?  @unique
   /// Agent's own Stellar address. For partner_callback (e.g. Tael) this is the
   /// external card address the partner signs for.
-  stellarAddress  String?  @unique
+  stellarAddress     String?  @unique
   /// How this agent's wallet holds funds: "custodial" (Nebula/Privy) or "external".
-  accountType     String   @default("custodial")
+  accountType        String   @default("custodial")
   /// Where this agent's spend signatures come from: "privy" | "partner_callback" | "client_side".
-  signerStrategy  String   @default("privy")
-  /// Cached Stellar8004 avgScore (0–100); wallet shares one on-chain identity.
-  reputationScore Int      @default(0)
-  reputationTier  String   @default("unrated")
-  createdAt       DateTime @default(now())
+  signerStrategy     String   @default("privy")
+  /// This agent's OWN on-chain Stellar8004 agent id (null until register_identity
+  /// runs for this agent's wallet). Each agent is an independent identity.
+  stellar8004AgentId Int?
+  /// Cached Stellar8004 avgScore (0–100) for this agent's own identity.
+  reputationScore    Int      @default(0)
+  reputationTier     String   @default("unrated")
+  createdAt          DateTime @default(now())
 
   user   User          @relation(fields: [userId], references: [id])
   tokens NebulaToken[]
@@ -164,18 +171,18 @@ model PolicySettings {
 /// PolicySettings cap *values* (but keeps its own, isolated spend counter).
 /// Whitelist/denylist and the treasury band stay owner-level.
 model AgentPolicy {
-  agentId        String  @id
+  agentId        String   @id
   /// Confirmation micro threshold (USDC).
-  microThreshold Decimal @default(0.1) @db.Decimal(18, 7)
+  microThreshold Decimal  @default(0.1) @db.Decimal(18, 7)
   /// Per-transaction spend cap (USDC).
-  perTxCap       Decimal @default(5) @db.Decimal(18, 7)
+  perTxCap       Decimal  @default(5) @db.Decimal(18, 7)
   /// Agent daily spend cap (USDC).
-  dailyCap       Decimal @default(20) @db.Decimal(18, 7)
-  paused         Boolean @default(false)
+  dailyCap       Decimal  @default(20) @db.Decimal(18, 7)
+  paused         Boolean  @default(false)
   /// Per-category daily caps (USDC).
-  catTransfer    Decimal @default(20) @db.Decimal(18, 7)
-  catX402        Decimal @default(5) @db.Decimal(18, 7)
-  catMpp         Decimal @default(5) @db.Decimal(18, 7)
+  catTransfer    Decimal  @default(20) @db.Decimal(18, 7)
+  catX402        Decimal  @default(5) @db.Decimal(18, 7)
+  catMpp         Decimal  @default(5) @db.Decimal(18, 7)
   updatedAt      DateTime @updatedAt
 
   agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -184,23 +191,23 @@ model AgentPolicy {
 /// Active MPP payment-channel session (one open session per agent; owner-level
 /// sessions use a null agentId).
 model MppSession {
-  id                   String    @id @default(cuid())
-  userId               String
+  id                  String    @id @default(cuid())
+  userId              String
   /// Which agent owns this channel. Null = owner/dashboard-level session.
-  agentId              String?
-  channel              String
-  recipient            String
-  budgetUsdc           Decimal   @db.Decimal(18, 7)
-  budgetStroops        String
-  cumulativeStroops    String    @default("0")
-  commitmentSecretHex  String
-  commitmentPubkeyHex  String
-  networkId            String
-  status               String    @default("open")
-  openedAt             DateTime  @default(now())
-  closedAt             DateTime?
-  closeTxHash          String?
-  deployWasmHash       String?
+  agentId             String?
+  channel             String
+  recipient           String
+  budgetUsdc          Decimal   @db.Decimal(18, 7)
+  budgetStroops       String
+  cumulativeStroops   String    @default("0")
+  commitmentSecretHex String
+  commitmentPubkeyHex String
+  networkId           String
+  status              String    @default("open")
+  openedAt            DateTime  @default(now())
+  closedAt            DateTime?
+  closeTxHash         String?
+  deployWasmHash      String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
