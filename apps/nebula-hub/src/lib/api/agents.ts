@@ -5,29 +5,27 @@ import type {
   Framework,
 } from "@/types/domain";
 
+import { getSelectedAgentId } from "@/stores/agent";
+
 import {
   ApiError,
   FRAMEWORK_TO_API,
   hubJson,
-  loadWalletAndTxs,
+  loadAllTxs,
   mapAgent,
   mapTxStatus,
-  nativeBalance,
   startOfToday,
   type HubAgent,
   type HubToken,
-  type HubWallet,
 } from "./client";
 
 /* ------------------------------- agents ------------------------------- */
 
 export async function getAgents(): Promise<Agent[]> {
-  const [{ agents }, { wallet, txs }] = await Promise.all([
+  const [{ agents }, txs] = await Promise.all([
     hubJson<{ agents: HubAgent[] }>("/api/agents"),
-    loadWalletAndTxs(100),
+    loadAllTxs(100),
   ]);
-  const address = wallet.address ?? "—";
-  const balanceXLM = nativeBalance(wallet);
   const today = startOfToday().getTime();
   return (agents ?? []).map((a) => {
     const txToday = txs.filter(
@@ -36,15 +34,15 @@ export async function getAgents(): Promise<Agent[]> {
         mapTxStatus(t.status) === "confirmed" &&
         new Date(t.createdAt).getTime() >= today,
     ).length;
-    return mapAgent(a, { address, balanceXLM, txToday });
+    return mapAgent(a, txToday);
   });
 }
 
 export async function getAgent(id: string): Promise<Agent | null> {
   try {
-    const [{ agent }, { wallet, txs }] = await Promise.all([
+    const [{ agent }, txs] = await Promise.all([
       hubJson<{ agent: HubAgent }>(`/api/agents/${id}`),
-      loadWalletAndTxs(100),
+      loadAllTxs(100),
     ]);
     const today = startOfToday().getTime();
     const txToday = txs.filter(
@@ -53,36 +51,79 @@ export async function getAgent(id: string): Promise<Agent | null> {
         mapTxStatus(t.status) === "confirmed" &&
         new Date(t.createdAt).getTime() >= today,
     ).length;
-    return mapAgent(agent, {
-      address: wallet.address ?? "—",
-      balanceXLM: nativeBalance(wallet),
-      txToday,
-    });
+    return mapAgent(agent, txToday);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;
   }
 }
 
+export interface AgentMcpConfig {
+  hub: string;
+  mcp_url: string;
+  server_name: string;
+  streamable_http: Record<string, unknown>;
+  claude_desktop: Record<string, unknown>;
+  claude_code_command: string;
+}
+
 export interface CreateAgentInput {
   name: string;
   framework: Framework;
+  description?: string;
+  /** Avatar hue (0–359) as string; omitted = deterministic from name. */
+  avatarColor?: string;
+  /** Optional starting spend caps (USD). Applied via the per-agent policy. */
+  perTxCapUSD?: number | null;
+  dailyCapUSD?: number | null;
 }
 
-export async function createAgent(input: CreateAgentInput): Promise<Agent> {
-  const res = await hubJson<{ agent: HubAgent }>("/api/agents", {
+export interface CreatedAgent {
+  agent: Agent;
+  /** Plaintext nbl_live_ token — shown once, scoped to THIS agent only. */
+  token: string;
+  mcp: AgentMcpConfig;
+  /** The agent's own provisioned wallet address (null if still provisioning). */
+  walletAddress: string | null;
+}
+
+export async function createAgent(input: CreateAgentInput): Promise<CreatedAgent> {
+  const res = await hubJson<{
+    agent: HubAgent;
+    wallet?: { address: string | null };
+    token: { token: string };
+    mcp: AgentMcpConfig;
+  }>("/api/agents", {
     method: "POST",
     body: JSON.stringify({
       name: input.name,
       framework: FRAMEWORK_TO_API[input.framework],
+      description: input.description?.trim() || undefined,
+      avatarColor: input.avatarColor || undefined,
     }),
   });
-  const wallet = await hubJson<HubWallet>("/api/wallet");
-  return mapAgent(res.agent, {
-    address: wallet.address ?? "—",
-    balanceXLM: nativeBalance(wallet),
-    txToday: 0,
-  });
+
+  // Optional starting caps → per-agent policy row (reuses the existing endpoint).
+  const caps: Record<string, number> = {};
+  if (typeof input.perTxCapUSD === "number" && input.perTxCapUSD > 0) {
+    caps.perTxCap = input.perTxCapUSD;
+  }
+  if (typeof input.dailyCapUSD === "number" && input.dailyCapUSD > 0) {
+    caps.dailyCap = input.dailyCapUSD;
+  }
+  if (Object.keys(caps).length > 0) {
+    await hubJson(`/api/agents/${encodeURIComponent(res.agent.id)}/policy`, {
+      method: "PUT",
+      body: JSON.stringify(caps),
+    }).catch(() => null);
+  }
+
+  return {
+    agent: mapAgent(res.agent),
+    token: res.token.token,
+    mcp: res.mcp,
+    walletAddress: res.wallet?.address ?? res.agent.stellarAddress ?? null,
+  };
 }
 
 export async function updateAgent(
@@ -93,12 +134,7 @@ export async function updateAgent(
     method: "PATCH",
     body: JSON.stringify(patch),
   });
-  const wallet = await hubJson<HubWallet>("/api/wallet");
-  return mapAgent(res.agent, {
-    address: wallet.address ?? "—",
-    balanceXLM: nativeBalance(wallet),
-    txToday: 0,
-  });
+  return mapAgent(res.agent);
 }
 
 export async function deleteAgent(id: string): Promise<void> {
@@ -153,25 +189,39 @@ export async function updateAgentPolicyOverride(
 
 /* ------------------------------ api keys ------------------------------ */
 
+/**
+ * Tokens are per-agent: each nbl_live_ key authenticates as exactly one agent
+ * and operates only that agent's wallet (enforced in resolveAuth). The Connect
+ * page is agent-scoped, so we only list the CURRENT agent's keys. With no agent
+ * selected there is nothing to show.
+ */
 export async function getApiKeys(): Promise<ApiKey[]> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) return [];
   const { tokens } = await hubJson<{
     tokens: Array<HubToken & { expiresAt?: string | null }>;
   }>("/api/tokens");
-  return (tokens ?? []).map((t) => ({
-    id: t.id,
-    name: t.label,
-    prefix: "nbl_live_••••",
-    createdAt: t.createdAt,
-    lastUsed: t.lastUsedAt,
-    expiresAt: t.expiresAt ?? null,
-    agentId: t.agentId,
-  }));
+  return (tokens ?? [])
+    .filter((t) => t.agentId === agentId)
+    .map((t) => ({
+      id: t.id,
+      name: t.label,
+      prefix: "nbl_live_••••",
+      createdAt: t.createdAt,
+      lastUsed: t.lastUsedAt,
+      expiresAt: t.expiresAt ?? null,
+      agentId: t.agentId,
+    }));
 }
 
 export async function createApiKey(input: {
   name: string;
   expiresInDays: number | null;
 }): Promise<{ key: ApiKey; secret: string }> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) {
+    throw new Error("Select an agent before creating a key — keys are per-agent.");
+  }
   const minted = await hubJson<{
     id: string;
     label: string;
@@ -182,6 +232,7 @@ export async function createApiKey(input: {
     body: JSON.stringify({
       label: input.name,
       expiresInDays: input.expiresInDays,
+      agentId,
     }),
   });
   const key: ApiKey = {
@@ -191,7 +242,7 @@ export async function createApiKey(input: {
     createdAt: new Date().toISOString(),
     lastUsed: null,
     expiresAt: minted.expiresAt ?? null,
-    agentId: null,
+    agentId,
   };
   return { key, secret: minted.token };
 }

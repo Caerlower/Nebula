@@ -9,7 +9,8 @@ import type {
 
 import {
   hubJson,
-  loadWalletAndTxs,
+  loadAgentWalletAndTxs,
+  loadAllTxs,
   mapTransaction,
   mapTxStatus,
   nativeBalance,
@@ -17,43 +18,34 @@ import {
   startOfToday,
   buildHistory,
   usdcBalance,
-  type HubWallet,
-  type HubTx,
 } from "./client";
+import { getSelectedAgentId } from "@/stores/agent";
 
 /* ------------------------------ onboarding ----------------------------- */
 
 export async function generateFundingAddress(): Promise<string> {
-  const wallet = await hubJson<HubWallet>("/api/wallet");
+  const { wallet } = await loadAgentWalletAndTxs(1);
   if (!wallet.address) {
-    throw new Error("Wallet not provisioned yet — finish Privy sign-in first.");
+    throw new Error("Select an agent first — funding goes to the agent's wallet.");
   }
   return wallet.address;
 }
 
 /* ------------------------------- wallet ------------------------------- */
 
+/**
+ * Balance summary for the SELECTED AGENT's own wallet (XLM + USDC). Treasury /
+ * Blend numbers are intentionally 0 here — per-agent treasury lands in its own
+ * stage; this read never touches the owner wallet or a shared treasury.
+ */
 export async function getWallet(): Promise<WalletSummary> {
-  const [{ wallet, txs }, treasury] = await Promise.all([
-    loadWalletAndTxs(100),
-    hubJson<{
-      liquid: number | null;
-      blendDeposited: number | null;
-      supplyApy: number | null;
-      liquidThreshold: number;
-      poolName: string | null;
-      rawNativeXlm: number | null;
-    }>("/api/treasury").catch(() => null),
-  ]);
+  const { wallet, txs } = await loadAgentWalletAndTxs(100);
 
   const nativeXLM = nativeBalance(wallet);
-  const liquidXLM = treasury?.liquid ?? nativeXLM;
-  const blendXLM = treasury?.blendDeposited ?? 0;
-  const balanceXLM = liquidXLM + blendXLM;
-  const apyPct =
-    treasury?.supplyApy != null && Number.isFinite(treasury.supplyApy)
-      ? treasury.supplyApy * 100
-      : 0;
+  const liquidXLM = nativeXLM;
+  const blendXLM = 0;
+  const balanceXLM = nativeXLM;
+  const apyPct = 0;
 
   const today = startOfToday().getTime();
   const fx = await hubJson<{ usd_per_xlm?: number }>("/api/fx/xlm-usd").catch(
@@ -91,20 +83,24 @@ export async function getWallet(): Promise<WalletSummary> {
     yield30dXLM: 0,
     spendTodayUSD: spendToday,
     usdPerXlm,
-    liquidityFloorXLM: treasury?.liquidThreshold,
-    poolName: treasury?.poolName ?? null,
+    liquidityFloorXLM: undefined,
+    poolName: null,
     network: wallet.network === "mainnet" ? "mainnet" : "testnet",
     usdcBalance: usdcBalance(wallet),
   };
 }
 
-/** Open Circle USDC trustline on the Hub wallet (Privy-signed). */
+/** Open Circle USDC trustline on the SELECTED AGENT's wallet (Privy-signed). */
 export async function ensureUsdcTrustline(): Promise<{
   alreadyHad: boolean;
   txHash: string | null;
   faucet: string | null;
   message: string;
 }> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) {
+    throw new Error("Select an agent before opening its USDC trustline.");
+  }
   const res = await hubJson<{
     status: string;
     already_had?: boolean;
@@ -112,7 +108,10 @@ export async function ensureUsdcTrustline(): Promise<{
     faucet?: string | null;
     message?: string;
     reason?: string;
-  }>("/api/wallet/usdc-trustline", { method: "POST" });
+  }>("/api/wallet/usdc-trustline", {
+    method: "POST",
+    body: JSON.stringify({ agentId }),
+  });
   if (res.status !== "ok") {
     throw new Error(res.reason ?? "usdc_trustline_failed");
   }
@@ -129,13 +128,18 @@ export async function getUsdcTrustlineStatus(): Promise<{
   faucet: string | null;
   issuer: string;
 }> {
+  const agentId = getSelectedAgentId();
   const res = await hubJson<{
     status: string;
     ready?: boolean;
     faucet?: string | null;
     issuer?: string;
     reason?: string;
-  }>("/api/wallet/usdc-trustline");
+  }>(
+    agentId
+      ? `/api/wallet/usdc-trustline?agentId=${encodeURIComponent(agentId)}`
+      : "/api/wallet/usdc-trustline",
+  );
   if (res.status !== "ok") {
     throw new Error(res.reason ?? "usdc_trustline_status_failed");
   }
@@ -149,7 +153,7 @@ export async function getUsdcTrustlineStatus(): Promise<{
 export async function getBalanceHistory(
   range: TimeRange,
 ): Promise<BalancePoint[]> {
-  const { wallet, txs } = await loadWalletAndTxs(100);
+  const { wallet, txs } = await loadAgentWalletAndTxs(100);
   return buildHistory(range, nativeBalance(wallet), txs);
 }
 
@@ -167,7 +171,7 @@ export interface TxFilter {
 export async function getTransactions(
   filter?: TxFilter,
 ): Promise<Transaction[]> {
-  const { wallet, txs } = await loadWalletAndTxs(100);
+  const { wallet, txs } = await loadAgentWalletAndTxs(100);
   const address = wallet.address ?? "";
   let rows = txs.map((t) => mapTransaction(t, address));
   if (filter) {
@@ -202,5 +206,9 @@ export async function getRecentTransactions(
 export async function getAgentTransactions(
   agentId: string,
 ): Promise<Transaction[]> {
-  return getTransactions({ agentIds: [agentId] });
+  // Resolve a specific agent's history regardless of the current selection.
+  const txs = await loadAllTxs(100);
+  return txs
+    .filter((t) => t.agentId === agentId)
+    .map((t) => mapTransaction(t, ""));
 }

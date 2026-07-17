@@ -39,8 +39,11 @@ export interface Agent {
   name: string;
   framework: Framework;
   status: AgentStatus;
+  description?: string | null;
+  avatarColor?: string | null;
   address: string;
   balanceXLM: number;
+  balanceUSDC: number;
   txToday: number;
   lastActive: string;
   createdAt: string;

@@ -3,6 +3,8 @@
  */
 
 import { hubFetch } from "@/lib/hub-session";
+import { getSelectedAgentId } from "@/stores/agent";
+import { useAuthStore } from "@/stores/auth";
 import type {
   Agent,
   BalancePoint,
@@ -39,6 +41,26 @@ export class ApiError extends Error {
   }
 }
 
+let redirectingToLogin = false;
+
+/**
+ * A 401 means the server no longer recognizes the session (expired cookie /
+ * revoked Privy token) while the client still thinks it's signed in. Clear the
+ * local session and bounce to /login so the user can re-authenticate instead of
+ * silently hitting "unauthorized" on every action.
+ */
+function handleDeadSession(): void {
+  if (typeof window === "undefined" || redirectingToLogin) return;
+  if (window.location.pathname.startsWith("/login")) return;
+  redirectingToLogin = true;
+  try {
+    useAuthStore.getState().signOut();
+  } catch {
+    /* ignore */
+  }
+  window.location.href = "/login";
+}
+
 export async function hubJsonUncached<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await hubFetch(input, init);
   if (!res.ok) {
@@ -46,6 +68,9 @@ export async function hubJsonUncached<T>(input: string, init?: RequestInit): Pro
       reason?: string;
       status?: string;
     };
+    if (res.status === 401) {
+      handleDeadSession();
+    }
     throw new ApiError(
       body.reason ?? body.status ?? `request_failed_${res.status}`,
       res.status,
@@ -111,15 +136,14 @@ export async function hubJson<T>(input: string, init?: RequestInit): Promise<T> 
  * instead of staring at a skeleton while a cold route compiles + queries.
  */
 export function warmHubCaches(): void {
+  // Per-agent data (wallet/treasury/reputation) is warmed lazily once an agent
+  // is selected — warming owner-scoped endpoints here would only ever return
+  // empty for dashboard sessions.
   const endpoints = [
-    "/api/wallet",
+    "/api/agents",
     "/api/wallet/transactions?limit=100",
-    "/api/policy",
     "/api/policy/whitelist",
     "/api/policy/denylist",
-    "/api/agents",
-    "/api/treasury",
-    "/api/reputation",
     "/api/fx/xlm-usd",
   ];
   for (const endpoint of endpoints) {
@@ -153,10 +177,14 @@ export type HubAgent = {
   framework: string;
   status: string;
   createdAt: string;
+  description?: string | null;
+  avatarColor?: string | null;
   /** Agent's own wallet address (null until provisioned). */
   stellarAddress?: string | null;
   /** Native XLM in the agent's own wallet (set by the agents API). */
   balanceXlm?: number;
+  /** USDC in the agent's own wallet (set by the agents API). */
+  balanceUsdc?: number;
   tokens?: {
     id: string;
     label: string;
@@ -261,8 +289,16 @@ export function mapTxType(type: string): TxType {
   return "transfer";
 }
 
-/** x402 / MPP amounts are USDC (stored in amountXlm column); native + Blend are XLM. */
-export function mapTxAsset(type: string): "XLM" | "USDC" {
+/**
+ * Resolve the asset for a transaction. Transfers/withdraws encode the asset in
+ * the reason string (`asset=USDC|XLM`); x402 / MPP are always USDC; everything
+ * else (native transfers, Blend) is XLM.
+ */
+export function mapTxAsset(row: HubTx): "XLM" | "USDC" {
+  const tagged = /asset=(USDC|XLM)/i.exec(row.reason ?? "");
+  if (tagged) return tagged[1]!.toUpperCase() as "XLM" | "USDC";
+
+  const type = row.type;
   if (
     type === "x402" ||
     type === "mpp" ||
@@ -307,7 +343,7 @@ export function mapTransaction(row: HubTx, walletAddress: string): Transaction {
     from: walletAddress,
     to: row.destination,
     amount: parseXlm(row.amountXlm),
-    asset: mapTxAsset(row.type),
+    asset: mapTxAsset(row),
     status: mapTxStatus(row.status),
     fee: 0,
     memo: row.memo,
@@ -315,22 +351,20 @@ export function mapTransaction(row: HubTx, walletAddress: string): Transaction {
   };
 }
 
-export function mapAgent(
-  row: HubAgent,
-  // Owner wallet fallback — used only for legacy agents with no wallet of
-  // their own (those actually spend from the owner wallet).
-  opts: { address: string; balanceXLM: number; txToday: number },
-): Agent {
+export function mapAgent(row: HubAgent, txToday = 0): Agent {
   const lastToken = row.tokens?.[0];
-  const hasOwnWallet = Boolean(row.stellarAddress);
   return {
     id: row.id,
     name: row.name,
     framework: FRAMEWORK_FROM_API[row.framework] ?? "custom-mcp",
     status: mapAgentStatus(row.status),
-    address: hasOwnWallet ? row.stellarAddress! : opts.address,
-    balanceXLM: hasOwnWallet ? (row.balanceXlm ?? 0) : opts.balanceXLM,
-    txToday: opts.txToday,
+    description: row.description ?? null,
+    avatarColor: row.avatarColor ?? null,
+    // Agent's OWN wallet only — never fall back to the owner/login wallet.
+    address: row.stellarAddress ?? "—",
+    balanceXLM: row.balanceXlm ?? 0,
+    balanceUSDC: row.balanceUsdc ?? 0,
+    txToday,
     lastActive: lastToken?.lastUsedAt ?? row.createdAt,
     createdAt:
       typeof row.createdAt === "string"
@@ -397,30 +431,80 @@ export function buildHistory(
   return points;
 }
 
-export async function loadWalletAndTxs(limit = 100): Promise<{
+export const EMPTY_WALLET: HubWallet = {
+  address: null,
+  network: "testnet",
+  balances: [],
+};
+
+/**
+ * Wallet + transactions for the CURRENTLY SELECTED AGENT. Returns empty data
+ * (never the owner wallet) when no agent is selected, so data pages show a
+ * clean zero/empty state instead of leaking login-wallet balances.
+ */
+export async function loadAgentWalletAndTxs(limit = 100): Promise<{
   wallet: HubWallet;
   txs: HubTx[];
 }> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) return { wallet: EMPTY_WALLET, txs: [] };
+  const scope = encodeURIComponent(agentId);
   const [wallet, txRes] = await Promise.all([
-    hubJson<HubWallet>("/api/wallet"),
+    hubJson<HubWallet>(`/api/wallet?agentId=${scope}`),
     hubJson<{ transactions: HubTx[] }>(
-      `/api/wallet/transactions?limit=${limit}`,
+      `/api/wallet/transactions?agentId=${scope}&limit=${limit}`,
     ),
   ]);
   return { wallet, txs: txRes.transactions ?? [] };
 }
 
+/** All of the user's transactions across every agent (for per-agent counts). */
+export async function loadAllTxs(limit = 100): Promise<HubTx[]> {
+  const txRes = await hubJson<{ transactions: HubTx[] }>(
+    `/api/wallet/transactions?limit=${limit}`,
+  );
+  return txRes.transactions ?? [];
+}
+
+export type HubAgentCaps = {
+  microThreshold: number;
+  perTxCap: number;
+  dailyCap: number;
+  paused: boolean;
+  catTransfer: number;
+  catX402: number;
+  catMpp: number;
+};
+
+const EMPTY_CAPS: HubAgentCaps = {
+  microThreshold: 0,
+  perTxCap: 0,
+  dailyCap: 0,
+  paused: false,
+  catTransfer: 0,
+  catX402: 0,
+  catMpp: 0,
+};
+
+/**
+ * Policy for the SELECTED AGENT. Spend caps are per-agent (via
+ * /api/agents/[id]/policy); allow/deny lists remain account-level for now.
+ */
 export async function composePolicy(): Promise<Policy> {
-  const [snap, wl, dl] = await Promise.all([
-    hubJson<{
-      policy: HubPolicySnapshot;
-      onchainConfigured?: boolean;
-      contractId?: string | null;
-    }>("/api/policy"),
+  const agentId = getSelectedAgentId();
+  const [capsRes, wl, dl, chain] = await Promise.all([
+    agentId
+      ? hubJson<{ policy: HubAgentCaps; custom: boolean }>(
+          `/api/agents/${encodeURIComponent(agentId)}/policy`,
+        ).catch(() => null)
+      : Promise.resolve(null),
     hubJson<{ whitelist: HubWhitelist[] }>("/api/policy/whitelist"),
     hubJson<{ denylist: HubDenylist[] }>("/api/policy/denylist"),
+    hubJson<{ contractId: string | null; onchainConfigured: boolean }>(
+      "/api/policy",
+    ).catch(() => null),
   ]);
-  const p = snap.policy;
+  const p = capsRes?.policy ?? EMPTY_CAPS;
   const entries: PolicyEntry[] = [
     ...(wl.whitelist ?? []).map((e) => ({
       id: e.id,
@@ -440,8 +524,12 @@ export async function composePolicy(): Promise<Policy> {
 
   const daily = p.dailyCap;
   const perTx = p.perTxCap;
+  const onchainContractId =
+    chain?.contractId && chain.contractId.startsWith("C")
+      ? chain.contractId
+      : "hub-policy";
   return {
-    contractId: snap.contractId?.trim() || "hub-policy",
+    contractId: onchainContractId,
     perCallCapXLM: perTx,
     dailyCapUSD: daily,
     weeklyCapUSD: daily * 7,

@@ -13,33 +13,36 @@ import {
   hubJson,
   withPolicyWriteLock,
   type HubDenylist,
-  type HubPolicyPatchResponse,
   type HubWhitelist,
 } from "./client";
+import { getSelectedAgentId } from "@/stores/agent";
+
+/** Write per-agent spend caps. Mirrors limits/categories onto the agent's own
+ * on-chain policy slot when POLICY_CONTRACT_ID is set; returns the real tx hash
+ * when the contract was invoked. */
+async function putAgentCaps(
+  body: Record<string, number | boolean>,
+): Promise<{ txHash: string | null; onchain: string }> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) {
+    throw new Error("Select an agent before changing its spend caps.");
+  }
+  const res = await hubJson<{ tx_hash?: string | null; onchain?: string }>(
+    `/api/agents/${encodeURIComponent(agentId)}/policy`,
+    {
+      method: "PUT",
+      body: JSON.stringify(body),
+    },
+  );
+  return { txHash: res.tx_hash ?? null, onchain: res.onchain ?? "hub_only" };
+}
 
 /* ------------------------------ treasury ------------------------------ */
 
 export async function getBlendPositions(): Promise<BlendPosition[]> {
-  const data = await hubJson<{
-    blendDeposited: number | null;
-    supplyApy: number | null;
-    poolId: string | null;
-    poolName: string | null;
-  }>("/api/treasury");
-
-  const deposited = data.blendDeposited ?? 0;
-  if (deposited <= 0) return [];
-
-  return [
-    {
-      id: data.poolId ?? "testnet-v2",
-      pool: data.poolName ?? "TestnetV2",
-      asset: "XLM",
-      deposited,
-      apyPct: data.supplyApy != null ? data.supplyApy * 100 : 0,
-      earned: 0,
-    },
-  ];
+  // Per-agent Blend/treasury is delivered in its own (money-moving) stage. Until
+  // then this returns nothing rather than leaking the owner wallet's positions.
+  return [];
 }
 
 export async function getTreasurySettings(): Promise<TreasurySettings> {
@@ -166,6 +169,7 @@ export async function withdrawFunds(input: {
       destination: input.destination.trim(),
       amount: input.amount,
       memo: input.memo?.trim() || undefined,
+      agentId: getSelectedAgentId() ?? undefined,
     }),
   });
   if (res.status !== "ok" || !res.tx_hash) {
@@ -249,25 +253,14 @@ async function patchPolicyLimitsOnce(
   if (Object.keys(body).length === 0) {
     throw new Error("No policy limits to update");
   }
-  const res = await hubJson<HubPolicyPatchResponse>("/api/policy", {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-  const txHash = res.tx_hash?.trim() || `hub_${Date.now().toString(16)}`;
+  const written = await putAgentCaps(body);
+  const txHash = written.txHash ?? `hub_${Date.now().toString(16)}`;
 
   try {
     return { policy: await composePolicy(), txHash };
   } catch {
-    const daily =
-      patch.dailyCapUSD ??
-      (typeof res.policy?.dailyCap === "number"
-        ? res.policy.dailyCap
-        : Number(res.policy?.dailyCap ?? 0));
-    const perCall =
-      patch.perCallCapXLM ??
-      (typeof res.policy?.perTxCap === "number"
-        ? res.policy.perTxCap
-        : Number(res.policy?.perTxCap ?? 0));
+    const daily = patch.dailyCapUSD ?? 0;
+    const perCall = patch.perCallCapXLM ?? 0;
     return {
       txHash,
       policy: {
@@ -341,11 +334,8 @@ async function patchCategoriesOnce(
   if (Object.keys(body).length === 0) {
     throw new Error("No category limits to update");
   }
-  const res = await hubJson<HubPolicyPatchResponse>("/api/policy", {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-  const txHash = res.tx_hash?.trim() || `hub_${Date.now().toString(16)}`;
+  const written = await putAgentCaps(body);
+  const txHash = written.txHash ?? `hub_${Date.now().toString(16)}`;
   try {
     return { policy: await composePolicy(), txHash };
   } catch {
@@ -470,11 +460,8 @@ export async function setPolicyPaused(
   paused: boolean,
 ): Promise<{ txHash: string }> {
   return withPolicyWriteLock(async () => {
-    await hubJson("/api/policy", {
-      method: "PATCH",
-      body: JSON.stringify({ paused }),
-    });
-    return { txHash: `hub_${Date.now().toString(16)}` };
+    const written = await putAgentCaps({ paused });
+    return { txHash: written.txHash ?? `hub_${Date.now().toString(16)}` };
   });
 }
 
@@ -491,6 +478,10 @@ export async function revokeAgentAccess(): Promise<{ txHash: string }> {
 /* ----------------------------- reputation ----------------------------- */
 
 export async function getReputation(): Promise<Reputation> {
+  const agentId = getSelectedAgentId();
+  const path = agentId
+    ? `/api/reputation?agentId=${encodeURIComponent(agentId)}`
+    : "/api/reputation";
   const data = await hubJson<{
     score: number | null;
     scale?: number;
@@ -507,7 +498,7 @@ export async function getReputation(): Promise<Reputation> {
     uniqueClients?: number | null;
     source?: string | null;
     explorerUrl?: string | null;
-  }>("/api/reputation");
+  }>(path);
 
   const scoreMax = data.scale === 1000 ? 100 : (data.scale ?? 100);
   // Migrate any leftover Hub 0–1000 mirrors down to 0–100.
