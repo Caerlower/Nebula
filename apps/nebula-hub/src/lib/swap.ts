@@ -1,10 +1,11 @@
 import { Asset, Horizon, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 
+import type { HashSigner } from "./signing";
 import {
   circleUsdcAsset,
   ensureUsdcTrustline,
   explorerTxUrl,
-  signAndSubmitWithPrivy,
+  signAndSubmit,
 } from "./stellar";
 
 export type SwapAsset = "XLM" | "USDC";
@@ -91,12 +92,13 @@ export async function quoteStrictSendSwap(params: {
 }
 
 /**
- * Build + Privy-sign a pathPaymentStrictSend for XLM ↔ Circle USDC.
- * Opens USDC trustline first when receiving USDC.
+ * Build + sign a pathPaymentStrictSend for XLM ↔ Circle USDC using any
+ * {@link HashSigner} (Privy or partner). Opens USDC trustline first when
+ * receiving USDC.
  */
 export async function executeStrictSendSwap(params: {
   sourceAddress: string;
-  walletId: string;
+  signer: HashSigner;
   fromAsset: SwapAsset;
   toAsset: SwapAsset;
   sendAmount: number;
@@ -115,7 +117,7 @@ export async function executeStrictSendSwap(params: {
   if (params.toAsset === "USDC") {
     await ensureUsdcTrustline({
       address: params.sourceAddress,
-      walletId: params.walletId,
+      signer: params.signer,
       network: params.network,
     });
   }
@@ -177,10 +179,10 @@ export async function executeStrictSendSwap(params: {
 
   const tx = builder.setTimeout(180).build();
   const hashHex = tx.hash().toString("hex");
-  const hash = await signAndSubmitWithPrivy({
+  const hash = await signAndSubmit({
     unsignedXdr: tx.toXDR(),
     hashHex,
-    walletId: params.walletId,
+    signer: params.signer,
     sourceAddress: params.sourceAddress,
     network: params.network,
   });

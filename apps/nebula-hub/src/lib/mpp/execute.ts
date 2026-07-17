@@ -11,7 +11,9 @@ import type { AuthPrincipal } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { onchainCheckSpend } from "@/lib/policy-onchain";
 import { privyConfigured } from "@/lib/auth";
+import { resolveSigner } from "@/lib/signing";
 import { explorerTxUrl } from "@/lib/stellar";
+import { loadOnchainPolicyInit } from "@/lib/hub-tools/context";
 import { scheduleParkExcessAfterActivity } from "@/lib/hub-tools/treasury";
 import { fetchUsdcBalance } from "@/lib/x402/fetch";
 
@@ -35,13 +37,6 @@ import {
 const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL ?? "https://nebulaonchain.xyz"
 ).replace(/\/$/, "");
-
-async function loadPolicySettings(userId: string) {
-  return (
-    (await prisma.policySettings.findUnique({ where: { userId } })) ??
-    (await prisma.policySettings.create({ data: { userId } }))
-  );
-}
 
 /** Hub confirmation / pause only — does not record on-chain spend. */
 async function gateMppConfirmation(params: {
@@ -94,31 +89,42 @@ async function gateMppConfirmation(params: {
   return null;
 }
 
+/** Reject MPP for accounts that cannot sign a channel deploy server-side. */
+function assertMppSignable(principal: AuthPrincipal): ToolResult | null {
+  if (principal.signerStrategy === "privy") {
+    if (!privyConfigured() || principal.privyWalletId === "dev-wallet") {
+      return { status: "error", reason: "mpp_requires_privy_custody" };
+    }
+    return null;
+  }
+  if (principal.signerStrategy === "client_side") {
+    // EOA users can't autonomously sign the multi-tx deploy/close in one call.
+    return { status: "error", reason: "mpp_requires_server_side_signing" };
+  }
+  return null;
+}
+
 /** Record category spend on-chain (after Hub confirmation / before signing). */
 async function gateMppOnchainSpend(params: {
   principal: AuthPrincipal;
   ctx: ToolContext;
   amountUsdc: number;
 }): Promise<ToolResult | null> {
-  const settings = await loadPolicySettings(params.principal.userId);
+  // Nebula's on-chain policy contract is a custodial (Privy) feature. Partner
+  // accounts enforce caps on their side at signing time.
+  if (params.principal.signerStrategy !== "privy") {
+    return null;
+  }
   const chain = await onchainCheckSpend({
     walletId: params.ctx.privyWalletId,
     stellarAddress: params.ctx.stellarAddress,
     network: params.ctx.network,
     category: "mpp",
     amountXlm: params.amountUsdc,
-    init: {
-      maxPerCallXlm: Number(settings.perTxCap),
-      maxPerDayXlm: Number(settings.dailyCap),
-      categories: {
-        transfer: Number(settings.catTransfer),
-        x402: Number(settings.catX402),
-        mpp: Number(settings.catMpp),
-      },
-      liquidLowXlm: Number(settings.liquidThreshold),
-      liquidHighXlm: Number(settings.liquidHigh),
-      autoYield: settings.autoYield,
-    },
+    init: await loadOnchainPolicyInit(
+      params.principal.userId,
+      params.principal.agentId,
+    ),
   });
   if (!chain.ok) {
     return { status: "rejected", reason: `onchain_policy:${chain.error}` };
@@ -136,14 +142,10 @@ export async function executeMppOpenSession(params: {
 }): Promise<ToolResult> {
   const { principal, ctx, policy, input } = params;
 
-  if (!privyConfigured() || principal.privyWalletId === "dev-wallet") {
-    return {
-      status: "error",
-      reason: "mpp_requires_privy_custody",
-    };
-  }
+  const signable = assertMppSignable(principal);
+  if (signable) return signable;
 
-  const existing = await getOpenMppSession(principal.userId);
+  const existing = await getOpenMppSession(principal.userId, principal.agentId);
   if (existing) {
     return {
       status: "error",
@@ -191,7 +193,7 @@ export async function executeMppOpenSession(params: {
   const networkId = getMppNetworkId(ctx.network);
 
   const deployed = await deployPaymentChannel({
-    walletId: ctx.privyWalletId,
+    signer: resolveSigner(principal),
     stellarAddress: ctx.stellarAddress,
     network: ctx.network,
     networkId,
@@ -205,6 +207,7 @@ export async function executeMppOpenSession(params: {
 
   const session = await createMppSession({
     userId: principal.userId,
+    agentId: principal.agentId,
     channel: deployed.contractId,
     recipient,
     budgetUsdc: input.budget_usdc,
@@ -229,7 +232,10 @@ export async function executeMppOpenSession(params: {
     },
   });
 
-  scheduleParkExcessAfterActivity(principal, ctx, "after_mpp_open");
+  // Auto-park excess into Blend is a custodial (Privy) treasury feature.
+  if (principal.signerStrategy === "privy") {
+    scheduleParkExcessAfterActivity(principal, ctx, "after_mpp_open");
+  }
 
   return {
     status: "ok",
@@ -285,7 +291,10 @@ export async function executeMppFetch(params: {
     return { status: "rejected", reason: "policy_paused" };
   }
 
-  const sessionState = await requireOpenMppSession(params.principal.userId);
+  const sessionState = await requireOpenMppSession(
+    params.principal.userId,
+    params.principal.agentId,
+  );
   if (!sessionState.ok) {
     return { status: "error", reason: sessionState.error };
   }
@@ -432,7 +441,10 @@ export async function executeMppFetch(params: {
 export async function executeMppStatus(params: {
   principal: AuthPrincipal;
 }): Promise<ToolResult> {
-  const session = await getOpenMppSession(params.principal.userId);
+  const session = await getOpenMppSession(
+    params.principal.userId,
+    params.principal.agentId,
+  );
   if (!session) {
     return {
       status: "ok",
@@ -469,20 +481,22 @@ export async function executeMppCloseSession(params: {
   principal: AuthPrincipal;
   ctx: ToolContext;
 }): Promise<ToolResult> {
-  const sessionState = await requireOpenMppSession(params.principal.userId);
+  const sessionState = await requireOpenMppSession(
+    params.principal.userId,
+    params.principal.agentId,
+  );
   if (!sessionState.ok) {
     return { status: "error", reason: sessionState.error };
   }
   const { session } = sessionState;
 
-  if (!privyConfigured() || params.principal.privyWalletId === "dev-wallet") {
-    return { status: "error", reason: "mpp_requires_privy_custody" };
-  }
+  const signable = assertMppSignable(params.principal);
+  if (signable) return signable;
 
   const closed = await closeMppChannel({
     channel: session.channel,
     commitmentSecretHex: session.commitmentSecretHex,
-    walletId: params.ctx.privyWalletId,
+    signer: resolveSigner(params.principal),
     stellarAddress: params.ctx.stellarAddress,
     network: params.ctx.network,
     networkId: session.networkId as NetworkId,
@@ -513,11 +527,13 @@ export async function executeMppCloseSession(params: {
     },
   });
 
-  scheduleParkExcessAfterActivity(
-    params.principal,
-    params.ctx,
-    "after_mpp_close",
-  );
+  if (params.principal.signerStrategy === "privy") {
+    scheduleParkExcessAfterActivity(
+      params.principal,
+      params.ctx,
+      "after_mpp_close",
+    );
+  }
 
   return {
     status: "ok",

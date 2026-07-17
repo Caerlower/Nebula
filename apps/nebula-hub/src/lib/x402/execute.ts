@@ -5,7 +5,12 @@ import type { AuthPrincipal } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { onchainCheckSpend } from "@/lib/policy-onchain";
 import { privyConfigured } from "@/lib/auth";
+import { resolveSigner } from "@/lib/signing";
 import { explorerTxUrl } from "@/lib/stellar";
+import {
+  loadEffectiveCaps,
+  loadOnchainPolicyInit,
+} from "@/lib/hub-tools/context";
 import { scheduleParkExcessAfterActivity } from "@/lib/hub-tools/treasury";
 
 import { fetchUsdcBalance, payX402Challenge, probeX402Url } from "./fetch";
@@ -13,13 +18,6 @@ import { fetchUsdcBalance, payX402Challenge, probeX402Url } from "./fetch";
 const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL ?? "https://nebulaonchain.xyz"
 ).replace(/\/$/, "");
-
-async function loadPolicySettings(userId: string) {
-  return (
-    (await prisma.policySettings.findUnique({ where: { userId } })) ??
-    (await prisma.policySettings.create({ data: { userId } }))
-  );
-}
 
 export type X402ToolInput = {
   url: string;
@@ -79,11 +77,8 @@ export async function executeX402Tool(params: {
 
   const amountUsdc = probe.amountUsdc;
   const payTo = probe.payTo;
-  const settings = await loadPolicySettings(principal.userId);
-  const policyMax = Math.min(
-    Number(settings.perTxCap),
-    Number(settings.catX402),
-  );
+  const caps = await loadEffectiveCaps(principal.userId, principal.agentId);
+  const policyMax = Math.min(caps.perTxCap, caps.catX402);
 
   if (toolName === "x402_pay" && amountUsdcExpected !== undefined) {
     if (Math.abs(amountUsdc - amountUsdcExpected) > 1e-7) {
@@ -107,6 +102,7 @@ export async function executeX402Tool(params: {
   const catSpentAgg = await prisma.transaction.aggregate({
     where: {
       userId: principal.userId,
+      ...(principal.agentId ? { agentId: principal.agentId } : {}),
       type: "x402",
       status: "confirmed",
       createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
@@ -114,7 +110,7 @@ export async function executeX402Tool(params: {
     _sum: { amountXlm: true },
   });
   const catSpent = Number(catSpentAgg._sum.amountXlm ?? 0);
-  const catRemaining = Math.max(Number(settings.catX402) - catSpent, 0);
+  const catRemaining = Math.max(caps.catX402 - catSpent, 0);
   // Soft Hub gate before paying (on-chain check_spend only after success).
   if (policy.dailySpentUsdc + amountUsdc > policy.dailyCap + 1e-9) {
     return {
@@ -122,10 +118,10 @@ export async function executeX402Tool(params: {
       reason: `exceeds_daily_cap: need ${amountUsdc}, daily remaining ${Math.max(policy.dailyCap - policy.dailySpentUsdc, 0)}`,
     };
   }
-  if (amountUsdc > Number(settings.perTxCap) + 1e-9) {
+  if (amountUsdc > caps.perTxCap + 1e-9) {
     return {
       status: "rejected",
-      reason: `exceeds_per_tx_cap: ${amountUsdc} > ${settings.perTxCap}`,
+      reason: `exceeds_per_tx_cap: ${amountUsdc} > ${caps.perTxCap}`,
     };
   }
   if (amountUsdc > catRemaining + 1e-9) {
@@ -192,8 +188,7 @@ export async function executeX402Tool(params: {
 
   const paid = await payX402Challenge({
     url: input.url,
-    walletId: ctx.privyWalletId,
-    stellarAddress: ctx.stellarAddress,
+    signer: resolveSigner(principal),
     network: ctx.network,
     paymentRequired: probe.paymentRequired,
   });
@@ -214,31 +209,23 @@ export async function executeX402Tool(params: {
     };
   }
 
-  // Record on-chain spend only after a successful payment.
-  const chain = await onchainCheckSpend({
-    walletId: ctx.privyWalletId,
-    stellarAddress: ctx.stellarAddress,
-    network: ctx.network,
-    category: "x402",
-    amountXlm: paid.amountUsdc,
-    init: {
-      maxPerCallXlm: Number(settings.perTxCap),
-      maxPerDayXlm: Number(settings.dailyCap),
-      categories: {
-        transfer: Number(settings.catTransfer),
-        x402: Number(settings.catX402),
-        mpp: Number(settings.catMpp),
-      },
-      liquidLowXlm: Number(settings.liquidThreshold),
-      liquidHighXlm: Number(settings.liquidHigh),
-      autoYield: settings.autoYield,
-    },
-  });
-  if (!chain.ok) {
-    console.error(
-      "[x402] payment succeeded but onchain check_spend failed",
-      chain.error,
-    );
+  // Record on-chain spend only after a successful payment. Custodial (Privy)
+  // accounts only — partner cards enforce caps on their side.
+  if (principal.signerStrategy === "privy") {
+    const chain = await onchainCheckSpend({
+      walletId: ctx.privyWalletId,
+      stellarAddress: ctx.stellarAddress,
+      network: ctx.network,
+      category: "x402",
+      amountXlm: paid.amountUsdc,
+      init: await loadOnchainPolicyInit(principal.userId, principal.agentId),
+    });
+    if (!chain.ok) {
+      console.error(
+        "[x402] payment succeeded but onchain check_spend failed",
+        chain.error,
+      );
+    }
   }
 
   const txHash = paid.settlementTx ?? `x402_${Date.now().toString(16)}`;

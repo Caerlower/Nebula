@@ -6,14 +6,15 @@ import { blendWithdrawAndPay } from "../blend";
 import { prisma } from "../db";
 import { xlmToUsdc } from "../fx";
 import { onchainCheckSpend } from "../policy-onchain";
+import { resolveSigner } from "../signing";
 import {
   buildPaymentXdr,
   explorerTxUrl,
-  signAndSubmitWithPrivy,
+  signAndSubmit,
 } from "../stellar";
 import {
   formatAmt,
-  loadTreasurySettings,
+  loadOnchainPolicyInit,
   MIN_AUTO_REBALANCE,
   MIN_TREASURY_MOVE,
   requireNotPaused,
@@ -61,7 +62,6 @@ export async function executeTransfer(
   }
 
   // On-chain policy gate — amounts are USDC stroops (same 7-decimal scaler).
-  const settings = await loadTreasurySettings(principal.userId);
   let amountUsdc: number;
   try {
     amountUsdc = await xlmToUsdc(input.amount_xlm);
@@ -74,25 +74,23 @@ export async function executeTransfer(
           : "xlm_usd_price_unavailable",
     };
   }
-  const chain = await onchainCheckSpend({
-    walletId: ctx.privyWalletId,
-    stellarAddress: ctx.stellarAddress,
-    network: ctx.network,
-    category: "transfer",
-    amountXlm: amountUsdc,
-    init: {
-      maxPerCallXlm: Number(settings.perTxCap),
-      maxPerDayXlm: Number(settings.dailyCap),
-      categories: {
-        transfer: Number(settings.catTransfer),
-        x402: Number(settings.catX402),
-        mpp: Number(settings.catMpp),
-      },
-      liquidLowXlm: Number(settings.liquidThreshold),
-      liquidHighXlm: Number(settings.liquidHigh),
-      autoYield: settings.autoYield,
-    },
-  });
+  // Nebula's on-chain policy contract is a custodial (Privy) feature. Partner
+  // accounts (e.g. Tael cards) enforce caps on their side at signing time, so
+  // we rely on Nebula's soft DB caps + the partner's hard check instead.
+  const chain =
+    principal.signerStrategy === "privy"
+      ? await onchainCheckSpend({
+          walletId: ctx.privyWalletId,
+          stellarAddress: ctx.stellarAddress,
+          network: ctx.network,
+          category: "transfer",
+          amountXlm: amountUsdc,
+          init: await loadOnchainPolicyInit(
+            principal.userId,
+            principal.agentId,
+          ),
+        })
+      : ({ ok: true } as const);
   if (!chain.ok) {
     await prisma.transaction.create({
       data: {
@@ -119,7 +117,7 @@ export async function executeTransfer(
 
   // Prefer one on-chain tx: Blend withdraw + classic payment (no memo — Soroban rule).
   if (topUp.withdrawAmount >= MIN_TREASURY_MOVE && !input.memo) {
-    const paused = await requireNotPaused(principal.userId);
+    const paused = await requireNotPaused(principal.userId, principal.agentId);
     if (paused) return paused;
 
     const bundled = await blendWithdrawAndPay({
@@ -195,10 +193,10 @@ export async function executeTransfer(
     network: ctx.network,
   });
 
-  const txHash = await signAndSubmitWithPrivy({
+  const txHash = await signAndSubmit({
     unsignedXdr,
     hashHex,
-    walletId: ctx.privyWalletId,
+    signer: resolveSigner(principal),
     sourceAddress: ctx.stellarAddress,
     network: ctx.network,
   });

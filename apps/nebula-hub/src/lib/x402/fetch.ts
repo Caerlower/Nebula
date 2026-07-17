@@ -7,9 +7,11 @@ import type { PaymentPayload, PaymentRequired, PaymentRequirements } from "@x402
 import { Horizon, Transaction, TransactionBuilder } from "@stellar/stellar-sdk";
 import { getNetworkPassphrase } from "@x402/stellar";
 
+import type { HashSigner } from "@/lib/signing";
+
 import {
   circleUsdcIssuer,
-  createHubX402Client,
+  createHubX402ClientWithSigner,
   getX402Network,
   payToAddress,
   paymentRequirementsToUsdc,
@@ -244,8 +246,7 @@ export async function probeX402Url(
 /** Sign the challenge and retry the GET with payment headers. */
 export async function payX402Challenge(params: {
   url: string;
-  walletId: string;
-  stellarAddress: string;
+  signer: HashSigner;
   network: "testnet" | "mainnet";
   /** Fresh challenge preferred; if omitted, re-probes the URL. */
   paymentRequired?: PaymentRequired;
@@ -258,9 +259,8 @@ export async function payX402Challenge(params: {
     paymentRequired = probe.paymentRequired;
   }
 
-  const client = createHubX402Client({
-    walletId: params.walletId,
-    stellarAddress: params.stellarAddress,
+  const client = createHubX402ClientWithSigner({
+    signer: params.signer,
     network: params.network,
   });
   const httpClient = new x402HTTPClient(client);

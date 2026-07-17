@@ -17,8 +17,8 @@ import type { NetworkId } from "@stellar/mpp";
 import { stellar } from "@stellar/mpp/channel/client";
 import { Mppx } from "mppx/client";
 
-import { privyRawSignHash } from "@/lib/auth";
-import { signAndSubmitSorobanWithPrivy } from "@/lib/stellar";
+import type { HashSigner } from "@/lib/signing";
+import { signAndSubmitSoroban } from "@/lib/stellar";
 
 import type { HubMppSession } from "./session";
 import {
@@ -172,13 +172,14 @@ export async function mppFetchUrl(params: {
 }
 
 /**
- * Settle channel via contract `close(amount, signature)`, signed by Privy.
- * Commitment key (session) signs prepare_commitment bytes; Hub wallet pays fees.
+ * Settle channel via contract `close(amount, signature)`, signed by any
+ * {@link HashSigner} (Privy or partner). Commitment key (session) signs
+ * prepare_commitment bytes; the channel owner wallet pays fees.
  */
 export async function closeMppChannel(params: {
   channel: string;
   commitmentSecretHex: string;
-  walletId: string;
+  signer: HashSigner;
   stellarAddress: string;
   network: "testnet" | "mainnet";
   networkId: NetworkId;
@@ -245,9 +246,9 @@ export async function closeMppChannel(params: {
       .build();
 
     const prepared = await server.prepareTransaction(closeTx);
-    const txHash = await signAndSubmitSorobanWithPrivy({
+    const txHash = await signAndSubmitSoroban({
       preparedTx: prepared,
-      walletId: params.walletId,
+      signer: params.signer,
       sourceAddress: params.stellarAddress,
       network: params.network,
     });
@@ -276,8 +277,8 @@ function channelWasmPath(): string {
   return join(here, "../../../contracts/channel.wasm");
 }
 
-function createPrivySignTransaction(params: {
-  walletId: string;
+function createSignerSignTransaction(params: {
+  signer: HashSigner;
   stellarAddress: string;
   networkPassphrase: string;
 }) {
@@ -287,9 +288,9 @@ function createPrivySignTransaction(params: {
   ): Promise<{ signedTxXdr: string; signerAddress?: string }> => {
     const passphrase = opts?.networkPassphrase || params.networkPassphrase;
     const tx = TransactionBuilder.fromXDR(xdr, passphrase);
-    const signatureHex = await privyRawSignHash(
-      params.walletId,
+    const signatureHex = await params.signer.signHash(
       tx.hash().toString("hex"),
+      { unsignedXdr: tx.toXDR(), network: passphrase },
     );
     const sigBytes = Buffer.from(
       signatureHex.startsWith("0x") ? signatureHex.slice(2) : signatureHex,
@@ -308,7 +309,7 @@ function createPrivySignTransaction(params: {
 }
 
 export async function deployPaymentChannel(params: {
-  walletId: string;
+  signer: HashSigner;
   stellarAddress: string;
   network: "testnet" | "mainnet";
   networkId: NetworkId;
@@ -347,9 +348,9 @@ export async function deployPaymentChannel(params: {
       .build();
 
     const preparedUpload = await server.prepareTransaction(uploadTx);
-    await signAndSubmitSorobanWithPrivy({
+    await signAndSubmitSoroban({
       preparedTx: preparedUpload,
-      walletId: params.walletId,
+      signer: params.signer,
       sourceAddress: params.stellarAddress,
       network: params.network,
     });
@@ -363,8 +364,8 @@ export async function deployPaymentChannel(params: {
   }
 
   try {
-    const signTransaction = createPrivySignTransaction({
-      walletId: params.walletId,
+    const signTransaction = createSignerSignTransaction({
+      signer: params.signer,
       stellarAddress: params.stellarAddress,
       networkPassphrase,
     });

@@ -5,6 +5,7 @@ import { privyConfigured } from "../auth";
 import { getLiquidXlm } from "../blend";
 import { prisma } from "../db";
 import { xlmToUsdc } from "../fx";
+import { resolveSigner } from "../signing";
 import { fetchBalances } from "../stellar";
 import {
   destMinAfterSlippage,
@@ -104,7 +105,7 @@ export async function executeSwap(
   ctx: ToolContext,
   confirmationId?: string,
 ): Promise<ToolResult> {
-  const paused = await requireNotPaused(principal.userId);
+  const paused = await requireNotPaused(principal.userId, principal.agentId);
   if (paused) return paused;
 
   if (input.from_asset === input.to_asset) {
@@ -163,7 +164,7 @@ export async function executeSwap(
     const destMin = destMinAfterSlippage(quote.receiveAmount, slippageBps);
     const result = await executeStrictSendSwap({
       sourceAddress: ctx.stellarAddress,
-      walletId: ctx.privyWalletId,
+      signer: resolveSigner(principal),
       fromAsset: input.from_asset,
       toAsset: input.to_asset,
       sendAmount: input.amount,
@@ -188,7 +189,10 @@ export async function executeSwap(
       },
     });
 
-    scheduleParkExcessAfterActivity(principal, ctx, "after_swap");
+    // Auto-park excess into Blend is a custodial (Privy) treasury feature.
+    if (principal.signerStrategy === "privy") {
+      scheduleParkExcessAfterActivity(principal, ctx, "after_swap");
+    }
 
     return {
       status: "ok",
@@ -239,7 +243,7 @@ export async function decideSwapConfirmation(
   | { action: "reject"; reason: string }
   | { action: "confirm"; amountUsdc: number; reason: string }
 > {
-  const policy = await loadPolicySnapshot(principal.userId);
+  const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
   if (policy.paused) {
     return { action: "reject", reason: "policy_paused" };
   }

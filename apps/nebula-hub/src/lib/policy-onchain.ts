@@ -20,7 +20,8 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 
-import { signAndSubmitSorobanWithPrivy } from "./stellar";
+import { type HashSigner, privySigner } from "./signing";
+import { signAndSubmitSoroban } from "./stellar";
 
 export type SpendCategory = "transfer" | "x402" | "mpp";
 
@@ -90,7 +91,7 @@ function categoryLimitsScVal(limits: CategoryLimitsXlm): xdr.ScVal {
 }
 
 async function invokePolicy(params: {
-  walletId: string;
+  signer: HashSigner;
   sourceAddress: string;
   network: "testnet" | "mainnet";
   method: string;
@@ -109,9 +110,9 @@ async function invokePolicy(params: {
     .build();
 
   const prepared = await server.prepareTransaction(tx);
-  return signAndSubmitSorobanWithPrivy({
+  return signAndSubmitSoroban({
     preparedTx: prepared,
-    walletId: params.walletId,
+    signer: params.signer,
     sourceAddress: params.sourceAddress,
     network: params.network,
   });
@@ -138,7 +139,7 @@ export async function ensurePolicyInitialized(params: {
   }
   try {
     const hash = await invokePolicy({
-      walletId: params.walletId,
+      signer: privySigner(params.walletId, params.stellarAddress),
       sourceAddress: params.stellarAddress,
       network: params.network,
       method: "initialize",
@@ -177,7 +178,7 @@ export async function onchainSetLimits(params: {
   }
   try {
     const hash = await invokePolicy({
-      walletId: params.walletId,
+      signer: privySigner(params.walletId, params.stellarAddress),
       sourceAddress: params.stellarAddress,
       network: params.network,
       method: "set_limits",
@@ -207,7 +208,7 @@ export async function onchainSetCategoryLimits(params: {
   }
   try {
     const hash = await invokePolicy({
-      walletId: params.walletId,
+      signer: privySigner(params.walletId, params.stellarAddress),
       sourceAddress: params.stellarAddress,
       network: params.network,
       method: "set_category_limits",
@@ -238,7 +239,7 @@ export async function onchainSetTreasuryBand(params: {
   }
   try {
     const hash = await invokePolicy({
-      walletId: params.walletId,
+      signer: privySigner(params.walletId, params.stellarAddress),
       sourceAddress: params.stellarAddress,
       network: params.network,
       method: "set_treasury_band",
@@ -299,7 +300,7 @@ export async function onchainCheckSpend(params: {
     });
 
     const hash = await invokePolicy({
-      walletId: params.walletId,
+      signer: privySigner(params.walletId, params.stellarAddress),
       sourceAddress: params.stellarAddress,
       network: params.network,
       method: "check_spend",

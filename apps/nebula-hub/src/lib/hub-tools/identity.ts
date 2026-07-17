@@ -2,6 +2,7 @@ import type { ToolResult } from "nebulamcp-core";
 
 import type { AuthPrincipal } from "../auth";
 import { privyConfigured } from "../auth";
+import { resolveSigner, type HashSigner } from "../signing";
 import {
   formatRegisterIdentityResult,
   registerAgentIdentity,
@@ -21,7 +22,7 @@ export async function resolve8004Wallet(
       ok: true;
       wallet: {
         publicKey: string;
-        walletId: string;
+        signer: HashSigner;
         network: "testnet" | "mainnet";
         cachedAgentId: number | null;
       };
@@ -39,7 +40,13 @@ export async function resolve8004Wallet(
       },
     };
   }
-  if (!privyConfigured() || ctx.privyWalletId === "dev-wallet") {
+  // Custodial (Privy) accounts need a real, non-dev Hub wallet. Partner accounts
+  // sign the registration via their callback; EOA (client_side) can't sign the
+  // multi-step registration server-side and is rejected upstream.
+  if (
+    principal.signerStrategy === "privy" &&
+    (!privyConfigured() || ctx.privyWalletId === "dev-wallet")
+  ) {
     return {
       ok: false,
       result: {
@@ -49,6 +56,20 @@ export async function resolve8004Wallet(
       },
     };
   }
+
+  let signer: HashSigner;
+  try {
+    signer = resolveSigner(principal);
+  } catch (error) {
+    return {
+      ok: false,
+      result: {
+        status: "error",
+        reason: `signer_unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      },
+    };
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: principal.userId },
     select: { stellar8004AgentId: true },
@@ -57,7 +78,7 @@ export async function resolve8004Wallet(
     ok: true,
     wallet: {
       publicKey: ctx.stellarAddress,
-      walletId: ctx.privyWalletId,
+      signer,
       network: ctx.network,
       cachedAgentId: user?.stellar8004AgentId ?? null,
     },

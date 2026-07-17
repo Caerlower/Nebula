@@ -11,7 +11,7 @@ import {
   type FeeBumpTransaction,
 } from "@stellar/stellar-sdk";
 
-import { privyRawSignHash } from "./auth";
+import { type HashSigner, privySigner } from "./signing";
 
 /** Circle classic USDC issuers (SEP-41 / Horizon credit). */
 const CIRCLE_USDC_ISSUER = {
@@ -141,7 +141,7 @@ export async function buildPaymentXdr(params: {
   return { unsignedXdr: tx.toXDR(), hashHex };
 }
 
-function attachPrivySignature(
+function attachSignature(
   tx: Transaction | FeeBumpTransaction,
   signatureHex: string,
   sourceAddress: string,
@@ -158,6 +158,32 @@ function attachPrivySignature(
   tx.signatures.push(decorated);
 }
 
+/**
+ * Sign a classic transaction with any {@link HashSigner} and submit to Horizon.
+ * Custodial or non-custodial depending on the signer's strategy.
+ */
+export async function signAndSubmit(params: {
+  unsignedXdr: string;
+  hashHex: string;
+  signer: HashSigner;
+  sourceAddress: string;
+  network: "testnet" | "mainnet";
+}): Promise<string> {
+  const signatureHex = await params.signer.signHash(params.hashHex, {
+    unsignedXdr: params.unsignedXdr,
+    network: params.network,
+  });
+  const tx = TransactionBuilder.fromXDR(
+    params.unsignedXdr,
+    networkPassphrase(params.network),
+  );
+  attachSignature(tx, signatureHex, params.sourceAddress);
+
+  const server = new Horizon.Server(horizonUrl(params.network));
+  const result = await server.submitTransaction(tx);
+  return result.hash;
+}
+
 export async function signAndSubmitWithPrivy(params: {
   unsignedXdr: string;
   hashHex: string;
@@ -165,30 +191,31 @@ export async function signAndSubmitWithPrivy(params: {
   sourceAddress: string;
   network: "testnet" | "mainnet";
 }): Promise<string> {
-  const signatureHex = await privyRawSignHash(params.walletId, params.hashHex);
-  const tx = TransactionBuilder.fromXDR(
-    params.unsignedXdr,
-    networkPassphrase(params.network),
-  );
-  attachPrivySignature(tx, signatureHex, params.sourceAddress);
-
-  const server = new Horizon.Server(horizonUrl(params.network));
-  const result = await server.submitTransaction(tx);
-  return result.hash;
+  return signAndSubmit({
+    unsignedXdr: params.unsignedXdr,
+    hashHex: params.hashHex,
+    signer: privySigner(params.walletId, params.sourceAddress),
+    sourceAddress: params.sourceAddress,
+    network: params.network,
+  });
 }
 
 /**
- * Sign a prepared Soroban transaction via Privy raw_sign and submit over RPC.
+ * Sign a prepared Soroban transaction with any {@link HashSigner} and submit
+ * over RPC, polling until confirmation.
  */
-export async function signAndSubmitSorobanWithPrivy(params: {
+export async function signAndSubmitSoroban(params: {
   preparedTx: Transaction;
-  walletId: string;
+  signer: HashSigner;
   sourceAddress: string;
   network: "testnet" | "mainnet";
 }): Promise<string> {
   const hashHex = params.preparedTx.hash().toString("hex");
-  const signatureHex = await privyRawSignHash(params.walletId, hashHex);
-  attachPrivySignature(params.preparedTx, signatureHex, params.sourceAddress);
+  const signatureHex = await params.signer.signHash(hashHex, {
+    unsignedXdr: params.preparedTx.toXDR(),
+    network: params.network,
+  });
+  attachSignature(params.preparedTx, signatureHex, params.sourceAddress);
 
   const server = new rpc.Server(rpcUrl(params.network));
   const sendResponse = await server.sendTransaction(params.preparedTx);
@@ -211,6 +238,20 @@ export async function signAndSubmitSorobanWithPrivy(params: {
   }
 
   throw new Error("Timed out waiting for Soroban transaction confirmation.");
+}
+
+export async function signAndSubmitSorobanWithPrivy(params: {
+  preparedTx: Transaction;
+  walletId: string;
+  sourceAddress: string;
+  network: "testnet" | "mainnet";
+}): Promise<string> {
+  return signAndSubmitSoroban({
+    preparedTx: params.preparedTx,
+    signer: privySigner(params.walletId, params.sourceAddress),
+    sourceAddress: params.sourceAddress,
+    network: params.network,
+  });
 }
 
 export function explorerTxUrl(
@@ -254,12 +295,12 @@ export async function hasUsdcTrustline(
 }
 
 /**
- * Open (or no-op) a classic Circle USDC trustline, signed by Privy.
- * Required before x402 / USDC payments.
+ * Open (or no-op) a classic Circle USDC trustline, signed by any
+ * {@link HashSigner} (Privy or partner). Required before x402 / USDC payments.
  */
 export async function ensureUsdcTrustline(params: {
   address: string;
-  walletId: string;
+  signer: HashSigner;
   network: "testnet" | "mainnet";
 }): Promise<{ alreadyHad: boolean; txHash: string | null }> {
   if (await hasUsdcTrustline(params.address, params.network)) {
@@ -282,10 +323,10 @@ export async function ensureUsdcTrustline(params: {
     .setTimeout(180)
     .build();
 
-  const txHash = await signAndSubmitWithPrivy({
+  const txHash = await signAndSubmit({
     unsignedXdr: tx.toXDR(),
     hashHex: tx.hash().toString("hex"),
-    walletId: params.walletId,
+    signer: params.signer,
     sourceAddress: params.address,
     network: params.network,
   });

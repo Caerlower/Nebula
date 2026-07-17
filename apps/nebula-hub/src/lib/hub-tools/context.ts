@@ -31,27 +31,89 @@ export function ledgerAsset(type: string): "USDC" | "XLM" {
   return "XLM";
 }
 
+/** Effective spend caps for a scope. Agent-scoped when the agent has its own
+ * AgentPolicy row; otherwise inherits the owner's PolicySettings cap values. */
+export type EffectiveCaps = {
+  microThreshold: number;
+  perTxCap: number;
+  dailyCap: number;
+  paused: boolean;
+  catTransfer: number;
+  catX402: number;
+  catMpp: number;
+};
+
+export async function loadEffectiveCaps(
+  userId: string,
+  agentId?: string | null,
+): Promise<EffectiveCaps> {
+  if (agentId) {
+    const ap = await prisma.agentPolicy.findUnique({ where: { agentId } });
+    if (ap) {
+      return {
+        microThreshold: Number(ap.microThreshold),
+        perTxCap: Number(ap.perTxCap),
+        dailyCap: Number(ap.dailyCap),
+        paused: ap.paused,
+        catTransfer: Number(ap.catTransfer),
+        catX402: Number(ap.catX402),
+        catMpp: Number(ap.catMpp),
+      };
+    }
+  }
+  const s = await loadTreasurySettings(userId);
+  return {
+    microThreshold: Number(s.microThreshold),
+    perTxCap: Number(s.perTxCap),
+    dailyCap: Number(s.dailyCap),
+    paused: s.paused,
+    catTransfer: Number(s.catTransfer),
+    catX402: Number(s.catX402),
+    catMpp: Number(s.catMpp),
+  };
+}
+
+/** Build the on-chain policy init payload for a scope: agent-scoped spend caps
+ * combined with the owner's (per-user) treasury band + autoYield. */
+export async function loadOnchainPolicyInit(
+  userId: string,
+  agentId?: string | null,
+) {
+  const [caps, t] = await Promise.all([
+    loadEffectiveCaps(userId, agentId),
+    loadTreasurySettings(userId),
+  ]);
+  return {
+    maxPerCallXlm: caps.perTxCap,
+    maxPerDayXlm: caps.dailyCap,
+    categories: {
+      transfer: caps.catTransfer,
+      x402: caps.catX402,
+      mpp: caps.catMpp,
+    },
+    liquidLowXlm: Number(t.liquidThreshold),
+    liquidHighXlm: Number(t.liquidHigh),
+    autoYield: t.autoYield,
+  };
+}
+
 export async function loadPolicySnapshot(
   userId: string,
+  agentId?: string | null,
 ): Promise<PolicySnapshot> {
-  const settings =
-    (await prisma.policySettings.findUnique({ where: { userId } })) ??
-    (await prisma.policySettings.create({
-      data: { userId },
-    }));
-
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [whitelist, denylist, spend] = await Promise.all([
+  const [caps, whitelist, denylist, spend] = await Promise.all([
+    loadEffectiveCaps(userId, agentId),
     prisma.whitelistEntry.findMany({ where: { userId } }),
     prisma.denylistEntry.findMany({ where: { userId } }),
-    sumSpendUsdcSince(userId, since),
+    sumSpendUsdcSince(userId, since, { agentId }),
   ]);
 
   return {
-    microThreshold: Number(settings.microThreshold),
-    perTxCap: Number(settings.perTxCap),
-    dailyCap: Number(settings.dailyCap),
-    paused: settings.paused,
+    microThreshold: caps.microThreshold,
+    perTxCap: caps.perTxCap,
+    dailyCap: caps.dailyCap,
+    paused: caps.paused,
     whitelist: whitelist.map((w) => w.address),
     denylist: denylist.map((d) => d.address),
     dailySpentUsdc: spend.total,
@@ -66,7 +128,12 @@ export async function loadTreasurySettings(userId: string) {
 }
 
 export function buildToolContext(principal: AuthPrincipal): ToolContext | null {
-  if (!principal.stellarAddress || !principal.privyWalletId) {
+  // Every account needs a Stellar address; only custodial (Privy) accounts
+  // need a Privy wallet id. Partner / EOA accounts sign via other strategies.
+  if (!principal.stellarAddress) {
+    return null;
+  }
+  if (principal.signerStrategy === "privy" && !principal.privyWalletId) {
     return null;
   }
 
@@ -79,7 +146,7 @@ export function buildToolContext(principal: AuthPrincipal): ToolContext | null {
     agentId: principal.agentId,
     tokenId: principal.tokenId,
     stellarAddress: principal.stellarAddress,
-    privyWalletId: principal.privyWalletId,
+    privyWalletId: principal.privyWalletId ?? "",
     network,
     async signTransactionXdr(_xdr: string): Promise<string> {
       throw new Error("Use signAndSubmitWithPrivy for Stellar Tier-2 raw_sign");
@@ -93,9 +160,12 @@ export function buildToolContext(principal: AuthPrincipal): ToolContext | null {
   };
 }
 
-export async function requireNotPaused(userId: string): Promise<ToolResult | null> {
-  const settings = await loadTreasurySettings(userId);
-  if (settings.paused) {
+export async function requireNotPaused(
+  userId: string,
+  agentId?: string | null,
+): Promise<ToolResult | null> {
+  const caps = await loadEffectiveCaps(userId, agentId);
+  if (caps.paused) {
     return { status: "rejected", reason: "policy_paused" };
   }
   return null;

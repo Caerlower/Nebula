@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 
 import { isDashboardAuth, resolveAuth, unauthorized } from "@/lib/auth";
 import { privyConfigured } from "@/lib/auth";
+import { privySigner } from "@/lib/signing";
 import {
   ensureUsdcTrustline,
   explorerTxUrl,
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await ensureUsdcTrustline({
       address: principal.stellarAddress,
-      walletId: principal.privyWalletId,
+      signer: privySigner(principal.privyWalletId, principal.stellarAddress),
       network,
     });
     return Response.json({

@@ -115,11 +115,15 @@ export async function rowSpendUsdc(row: {
 export async function sumSpendUsdcSince(
   userId: string,
   since: Date,
-  types: readonly string[] = SPEND_TX_TYPES,
+  opts?: { types?: readonly string[]; agentId?: string | null },
 ): Promise<{ total: number; byType: Record<string, number> }> {
+  const types = opts?.types ?? SPEND_TX_TYPES;
   const rows = await prisma.transaction.findMany({
     where: {
       userId,
+      // When scoped to an agent, count only that agent's spend so each agent
+      // gets an isolated daily/category budget.
+      ...(opts?.agentId ? { agentId: opts.agentId } : {}),
       status: "confirmed",
       type: { in: [...types] },
       createdAt: { gte: since },

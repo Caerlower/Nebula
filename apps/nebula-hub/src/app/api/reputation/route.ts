@@ -7,6 +7,7 @@ import { hubNetwork } from "@/lib/8004/config";
 import { getMyReputation, hubScoreFrom8004 } from "@/lib/8004/reputation";
 import { prisma } from "@/lib/db";
 import { privyConfigured } from "@/lib/auth";
+import { privySigner } from "@/lib/signing";
 
 async function uncachedGET(req: NextRequest) {
   const principal = await resolveAuth(req);
@@ -30,7 +31,7 @@ async function uncachedGET(req: NextRequest) {
   ) {
     const live = await getMyReputation({
       publicKey: user.stellarAddress,
-      walletId: user.privyWalletId,
+      signer: privySigner(user.privyWalletId, user.stellarAddress),
       network: hubNetwork(),
       cachedAgentId: user.stellar8004AgentId,
     });
