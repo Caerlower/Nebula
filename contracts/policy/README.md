@@ -14,6 +14,14 @@ Blend deposits themselves are not a spend category — the band tells Hub when t
 
 Hub wires this when `POLICY_CONTRACT_ID` is set: Policy/Treasury PATCH → `set_limits` / `set_category_limits` / `set_treasury_band`; transfers → `check_spend`.
 
+## Table of contents
+
+- [Build](#build)
+- [Deploy to testnet (once)](#deploy-to-testnet-once)
+- [Initialize a user slot](#initialize-a-user-slot)
+- [Contract API](#contract-api)
+- [Errors](#errors)
+
 ## Build
 
 ```bash

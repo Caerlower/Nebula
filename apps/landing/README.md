@@ -7,6 +7,17 @@ Stellar wallet with automated yield, x402/MPP payments, and on-chain reputation.
 GSAP ScrollTrigger · Lenis · Tailwind v4. All 3D is procedural — primitives,
 GLSL, instanced particles. No model files, no external assets.
 
+> Part of the [Nebula monorepo](../../README.md) — built into the Hub's `public/landing` for deploy.
+
+## Table of contents
+
+- [Run it](#run-it)
+- [How the scrub works](#how-the-scrub-works)
+- [Where to edit each beat](#where-to-edit-each-beat)
+- [Performance](#performance)
+- [Waitlist](#waitlist)
+- [Polish backlog (next passes)](#polish-backlog-next-passes)
+
 ## Run it
 
 ```bash
