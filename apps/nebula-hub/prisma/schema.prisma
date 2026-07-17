@@ -11,11 +11,17 @@ datasource db {
 
 model User {
   id             String   @id @default(cuid())
-  privyUserId    String   @unique
-  email          String   @unique
+  /// Null for wallet-native (Freighter / EOA) accounts — dapp sign-in has no Privy user.
+  privyUserId    String?  @unique
+  /// Optional: dapp accounts identify by wallet address, not email.
+  email          String?  @unique
   name           String?
   privyWalletId  String?  @unique
   stellarAddress String?  @unique
+  /// How this account holds funds: "custodial" (Privy) or "external" (self-custody EOA).
+  accountType    String   @default("custodial")
+  /// Where signatures come from: "privy" | "partner_callback" | "client_side".
+  signerStrategy String   @default("privy")
   /// On-chain Stellar8004 agent id for this wallet (null until register_identity).
   stellar8004AgentId Int?
   /// Cached Stellar8004 avgScore (0–100).
@@ -56,6 +62,16 @@ model Agent {
   name            String
   framework       String
   status          String   @default("active")
+  /// Agent's own managed wallet (Privy) id. Null for legacy agents (fall back to
+  /// owner wallet) and for partner_callback agents whose key lives off-Hub.
+  privyWalletId   String?  @unique
+  /// Agent's own Stellar address. For partner_callback (e.g. Tael) this is the
+  /// external card address the partner signs for.
+  stellarAddress  String?  @unique
+  /// How this agent's wallet holds funds: "custodial" (Nebula/Privy) or "external".
+  accountType     String   @default("custodial")
+  /// Where this agent's spend signatures come from: "privy" | "partner_callback" | "client_side".
+  signerStrategy  String   @default("privy")
   /// Cached Stellar8004 avgScore (0–100); wallet shares one on-chain identity.
   reputationScore Int      @default(0)
   reputationTier  String   @default("unrated")
@@ -63,6 +79,7 @@ model Agent {
 
   user   User          @relation(fields: [userId], references: [id])
   tokens NebulaToken[]
+  policy AgentPolicy?
 }
 
 model Transaction {
@@ -143,10 +160,34 @@ model PolicySettings {
   user User @relation(fields: [userId], references: [id])
 }
 
-/// Active MPP payment-channel session (one open session per user).
+/// Per-agent spend caps. When absent, an agent inherits the owner's
+/// PolicySettings cap *values* (but keeps its own, isolated spend counter).
+/// Whitelist/denylist and the treasury band stay owner-level.
+model AgentPolicy {
+  agentId        String  @id
+  /// Confirmation micro threshold (USDC).
+  microThreshold Decimal @default(0.1) @db.Decimal(18, 7)
+  /// Per-transaction spend cap (USDC).
+  perTxCap       Decimal @default(5) @db.Decimal(18, 7)
+  /// Agent daily spend cap (USDC).
+  dailyCap       Decimal @default(20) @db.Decimal(18, 7)
+  paused         Boolean @default(false)
+  /// Per-category daily caps (USDC).
+  catTransfer    Decimal @default(20) @db.Decimal(18, 7)
+  catX402        Decimal @default(5) @db.Decimal(18, 7)
+  catMpp         Decimal @default(5) @db.Decimal(18, 7)
+  updatedAt      DateTime @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+}
+
+/// Active MPP payment-channel session (one open session per agent; owner-level
+/// sessions use a null agentId).
 model MppSession {
   id                   String    @id @default(cuid())
   userId               String
+  /// Which agent owns this channel. Null = owner/dashboard-level session.
+  agentId              String?
   channel              String
   recipient            String
   budgetUsdc           Decimal   @db.Decimal(18, 7)
@@ -164,6 +205,7 @@ model MppSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
+  @@index([userId, agentId, status])
 }
 
 /// OAuth Dynamic Client Registration (MCP remote connectors).
