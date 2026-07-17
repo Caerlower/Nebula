@@ -89,7 +89,7 @@ function LoginForm() {
     const dest =
       returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
         ? returnTo
-        : "/dashboard";
+        : "/agents";
     // Client-side navigation keeps the Privy provider alive — a full reload
     // here re-initializes Privy and stalls on the gate for seconds.
     router.replace(dest);
@@ -104,7 +104,7 @@ function LoginForm() {
     const dest =
       returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
         ? returnTo
-        : "/dashboard";
+        : "/agents";
     router.replace(dest);
   };
 

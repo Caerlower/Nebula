@@ -6,6 +6,7 @@ const ACCENTS = {
   primary: "var(--primary)",
   teal: "var(--accent-teal)",
   gold: "var(--accent-warm)",
+  danger: "var(--destructive)",
 } as const;
 
 interface PageHeaderProps {
@@ -14,7 +15,7 @@ interface PageHeaderProps {
   subtitle?: string;
   actions?: React.ReactNode;
   className?: string;
-  /** section signature color — Treasury teal, Reputation gold, default violet */
+  /** section signature color — Treasury teal, Reputation gold, Policy danger */
   accent?: keyof typeof ACCENTS;
 }
 
@@ -47,8 +48,15 @@ export function PageHeader({
           {eyebrow}
         </p>
         <h1 className="page-title mt-3">{title}</h1>
+        <div
+          className="section-accent-bar mt-3"
+          style={{ ["--section-accent" as string]: accentColor }}
+          aria-hidden
+        />
         {subtitle ? (
-          <p className="mt-2 max-w-xl text-[15px] text-muted-foreground">{subtitle}</p>
+          <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+            {subtitle}
+          </p>
         ) : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}

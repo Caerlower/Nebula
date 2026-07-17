@@ -85,12 +85,22 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, subtitle, actionLabel, onAction, className }: EmptyStateProps) {
   return (
-    <div className={cn("flex flex-col items-center gap-1 px-6 py-14 text-center", className)}>
-      <Constellation seed={title} />
-      <h3 className="mt-4 text-base font-medium">{title}</h3>
-      <p className="max-w-sm text-sm text-muted-foreground">{subtitle}</p>
+    <div className={cn("flex flex-col items-center gap-1 px-6 py-16 text-center", className)}>
+      <div className="relative mb-2 flex size-28 items-center justify-center">
+        <span
+          aria-hidden
+          className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_70%)]"
+        />
+        <span
+          aria-hidden
+          className="absolute inset-3 rounded-full border border-border"
+        />
+        <Constellation seed={title} />
+      </div>
+      <h3 className="mt-2 text-lg font-medium">{title}</h3>
+      <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
       {actionLabel && onAction ? (
-        <Button className="mt-4" onClick={onAction}>
+        <Button className="mt-5" onClick={onAction}>
           {actionLabel}
         </Button>
       ) : null}

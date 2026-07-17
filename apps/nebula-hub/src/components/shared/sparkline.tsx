@@ -7,9 +7,17 @@ interface SparklineProps {
   color?: string;
   height?: number;
   id: string;
+  /** Animate the area drawing in (off by default so lists stay calm). */
+  animate?: boolean;
 }
 
-export function Sparkline({ data, color = "var(--chart-2)", height = 36, id }: SparklineProps) {
+export function Sparkline({
+  data,
+  color = "var(--chart-2)",
+  height = 36,
+  id,
+  animate = false,
+}: SparklineProps) {
   const points = data.map((value, i) => ({ i, value }));
   return (
     <div style={{ height }} aria-hidden>
@@ -27,7 +35,8 @@ export function Sparkline({ data, color = "var(--chart-2)", height = 36, id }: S
             stroke={color}
             strokeWidth={2}
             fill={`url(#spark-${id})`}
-            isAnimationActive={false}
+            isAnimationActive={animate}
+            animationDuration={900}
           />
         </AreaChart>
       </ResponsiveContainer>

@@ -78,13 +78,13 @@ function AuthRedirect() {
 
     // Wallet-native (Freighter) session — no Privy involved.
     if (walletAuthed) {
-      router.replace("/dashboard");
+      router.replace("/agents");
       return;
     }
 
     if (!ready || !authenticated || !user) return;
     applyPrivySession(user);
-    router.replace(onboarded ? "/dashboard" : "/onboarding");
+    router.replace(onboarded ? "/agents" : "/onboarding");
   }, [
     ready,
     hydrated,

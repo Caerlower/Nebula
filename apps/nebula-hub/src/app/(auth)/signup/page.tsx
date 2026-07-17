@@ -216,7 +216,7 @@ function SignupForm() {
       void syncHubSession().catch((error) => {
         console.error("[signup] hub session sync", error);
       });
-      router.replace("/dashboard");
+      router.replace("/agents");
     } catch (error) {
       const description =
         error instanceof WalletConnectError
