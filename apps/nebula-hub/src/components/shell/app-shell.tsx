@@ -5,6 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
+import {
+  AgentScopeGate,
+  AgentScopeProvider,
+} from "@/components/agent-scope/agent-scope";
 import { ALL_NAV_ITEMS } from "@/components/shell/nav";
 import { Sidebar, SidebarNav, UserMenu } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
@@ -22,7 +26,7 @@ function MobileNav() {
       <SheetContent side="left" className="flex w-72 flex-col gap-0 p-0">
         <SheetHeader className="border-b border-border px-4 py-3 text-left">
           <SheetTitle>
-            <Link href="/dashboard" onClick={() => setOpen(false)} aria-label="Nebula dashboard">
+            <Link href="/agents" onClick={() => setOpen(false)} aria-label="Nebula — account home">
               <Wordmark />
             </Link>
           </SheetTitle>
@@ -53,23 +57,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <div className="flex h-dvh overflow-hidden">
-      <Sidebar />
-      <MobileNav />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
-        <main className="flex-1 overflow-y-auto">
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto w-full max-w-7xl p-4 sm:p-8"
-          >
-            {children}
-          </motion.div>
-        </main>
+    <AgentScopeProvider>
+      <div className="flex h-dvh overflow-hidden">
+        <Sidebar />
+        <MobileNav />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar />
+          <main className="flex-1 overflow-y-auto">
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+              className="mx-auto w-full max-w-7xl p-4 sm:p-8"
+            >
+              <AgentScopeGate>{children}</AgentScopeGate>
+            </motion.div>
+          </main>
+        </div>
       </div>
-    </div>
+    </AgentScopeProvider>
   );
 }

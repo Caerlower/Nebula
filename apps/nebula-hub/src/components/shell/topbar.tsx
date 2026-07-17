@@ -3,49 +3,60 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Check, Globe, Menu, Moon, Search, Sun, Sunset } from "lucide-react";
+import {
+  Bell,
+  Check,
+  Globe,
+  Menu,
+  Moon,
+  Search,
+  Sparkles,
+  Sun,
+  Sunset,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { breadcrumbsFor } from "@/components/shell/nav";
+import { isAgentWorkspaceRoute } from "@/components/shell/nav";
+import { AgentSwitcher } from "@/components/shell/agent-switcher";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ListSkeleton } from "@/components/shared/skeletons";
 import * as api from "@/lib/api";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, truncMiddle } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
+import { useAuthStore } from "@/stores/auth";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 
-function Breadcrumbs() {
-  const pathname = usePathname();
-  const { section, page, detail } = breadcrumbsFor(pathname);
+/** Level 1 header identity: the account/workspace, no agent context. */
+function AccountIdentity() {
+  const user = useAuthStore((s) => s.user);
+  const walletAddress = useAuthStore((s) => s.walletAddress);
+  const secondary = walletAddress
+    ? truncMiddle(walletAddress, 4, 4)
+    : user?.email && user.email !== user?.name
+      ? user.email
+      : null;
   return (
-    <nav aria-label="Breadcrumb" className="hidden items-center gap-1.5 text-sm sm:flex">
-      <Link href="/dashboard" className="text-muted-foreground transition-colors hover:text-foreground">
-        Home
-      </Link>
-      {section ? (
-        <>
-          <span aria-hidden className="text-subtle">
-            /
-          </span>
-          <span className="text-muted-foreground">{section}</span>
-        </>
-      ) : null}
-      <span aria-hidden className="text-subtle">
-        /
+    <div className="flex items-center gap-2.5">
+      <span
+        aria-hidden
+        className="grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary to-teal text-white shadow-[var(--card-shadow)] ring-1 ring-white/10"
+      >
+        <Sparkles className="size-4" />
       </span>
-      <span aria-current="page">{page}</span>
-      {detail ? (
-        <>
-          <span aria-hidden className="text-subtle">
-            /
-          </span>
-          <span className="text-muted-foreground">{detail}</span>
-        </>
-      ) : null}
-    </nav>
+      <div className="min-w-0 leading-tight">
+        <p className="truncate text-sm font-semibold">Your workspace</p>
+        {secondary ? (
+          <p className="truncate font-mono text-[11px] text-muted-foreground">{secondary}</p>
+        ) : null}
+      </div>
+      <Badge variant="outline" className="ml-1 hidden font-normal sm:inline-flex">
+        Account
+      </Badge>
+    </div>
   );
 }
 
@@ -179,13 +190,15 @@ function NetworkBadge() {
 }
 
 export function Topbar() {
+  const pathname = usePathname();
+  const inWorkspace = isAgentWorkspaceRoute(pathname);
   const theme = useUIStore((s) => s.theme);
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const setCommandOpen = useUIStore((s) => s.setCommandOpen);
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur">
       <Button
         variant="ghost"
         size="icon"
@@ -195,22 +208,27 @@ export function Topbar() {
       >
         <Menu className="size-4" />
       </Button>
-      <Breadcrumbs />
-      <div className="flex flex-1 justify-center">
-        <button
-          type="button"
+      {inWorkspace ? <AgentSwitcher /> : <AccountIdentity />}
+      <div className="flex-1" />
+      <div className="flex items-center gap-1">
+        {!inWorkspace ? (
+          <Button asChild variant="outline" size="sm" className="mr-1 hidden h-8 sm:inline-flex">
+            <Link href="/settings/team">
+              <UserPlus className="size-3.5" aria-hidden />
+              Invite team
+            </Link>
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground"
           onClick={() => setCommandOpen(true)}
           aria-label="Search or run a command"
-          className="pressable flex h-8 w-full max-w-md items-center gap-2 rounded-full border border-border bg-surface/70 px-3.5 text-sm text-muted-foreground shadow-[var(--card-shadow)] backdrop-blur hover:border-border-strong hover:text-foreground"
+          title="Search  ⌘K"
         >
-          <Search className="size-3.5" aria-hidden />
-          <span className="flex-1 truncate text-left">Search or run command…</span>
-          <kbd className="rounded border border-border bg-elevated px-1.5 font-mono text-[10px] text-muted-foreground">
-            ⌘K
-          </kbd>
-        </button>
-      </div>
-      <div className="flex items-center gap-1.5">
+          <Search className="size-4" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

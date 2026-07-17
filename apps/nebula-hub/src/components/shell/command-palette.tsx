@@ -21,7 +21,6 @@ export function CommandPalette() {
   const setOpen = useUIStore((s) => s.setCommandOpen);
   const theme = useUIStore((s) => s.theme);
   const toggleTheme = useUIStore((s) => s.toggleTheme);
-  const setCreateAgentOpen = useUIStore((s) => s.setCreateAgentOpen);
   const setDepositOpen = useUIStore((s) => s.setDepositOpen);
   const router = useRouter();
 
@@ -47,14 +46,7 @@ export function CommandPalette() {
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Quick actions">
-          <CommandItem
-            onSelect={() =>
-              go(() => {
-                setCreateAgentOpen(true);
-                router.push("/agents");
-              })
-            }
-          >
+          <CommandItem onSelect={() => go(() => router.push("/agents/new"))}>
             <Bot className="size-4" /> Create agent
           </CommandItem>
           <CommandItem
