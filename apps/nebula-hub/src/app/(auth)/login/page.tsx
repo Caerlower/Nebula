@@ -12,12 +12,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { BadgeCheck, Github, Loader2 } from "lucide-react";
+import { BadgeCheck, Github, Loader2, Wallet } from "lucide-react";
 
 import { AuthSplash } from "@/components/shared/auth-splash";
 import { fetchBetaStatus, redeemBetaCode } from "@/lib/beta";
 import { syncHubSession } from "@/lib/hub-session";
 import { applyPrivySession } from "@/lib/hub-session";
+import { signInWithFreighter, WalletConnectError } from "@/lib/wallet-connect";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -72,9 +73,11 @@ function LoginForm() {
     searchParams.has("privy_oauth_state");
 
   const [oauthBusy, setOauthBusy] = useState<"google" | "github" | null>(null);
+  const [walletBusy, setWalletBusy] = useState(false);
   const [betaGranted, setBetaGranted] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
+  const signInWallet = useAuthStore((s) => s.signInWallet);
 
   const goToApp = useRef(() => {
     if (redirected.current) return;
@@ -240,6 +243,25 @@ function LoginForm() {
       toast.error(
         `Couldn't continue with ${provider === "google" ? "Google" : "GitHub"}`,
       );
+    }
+  };
+
+  const connectWallet = async () => {
+    if (!(await ensureBetaAccess())) return;
+    setWalletBusy(true);
+    try {
+      const { address } = await signInWithFreighter();
+      const short = `${address.slice(0, 4)}…${address.slice(-4)}`;
+      signInWallet(address, { name: short, email: "" });
+      goToApp.current();
+    } catch (error) {
+      const description =
+        error instanceof WalletConnectError
+          ? error.message
+          : "Couldn't connect your wallet. Please try again.";
+      toast.error("Wallet sign-in failed", { description });
+    } finally {
+      setWalletBusy(false);
     }
   };
 
@@ -420,6 +442,20 @@ function LoginForm() {
             <Github className="size-4" />
           )}
           Continue with GitHub
+        </Button>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => void connectWallet()}
+          disabled={walletBusy || oauthLoading}
+          aria-label="Continue with Freighter wallet"
+        >
+          {walletBusy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Wallet className="size-4" />
+          )}
+          Continue with Freighter
         </Button>
       </div>
 

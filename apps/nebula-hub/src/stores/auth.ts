@@ -7,11 +7,16 @@ interface AuthState {
   user: SessionUser | null;
   pendingEmail: string | null;
   onboarded: boolean;
+  /** Wallet-native (Freighter/EOA) session active — auth via httpOnly cookie, not Privy. */
+  walletAuthed: boolean;
+  /** Connected Stellar address for wallet sessions. */
+  walletAddress: string | null;
   /** false until localStorage rehydrate finishes */
   hydrated: boolean;
   setPendingEmail: (email: string) => void;
   completeVerification: () => void;
   signIn: (user: SessionUser) => void;
+  signInWallet: (address: string, user: SessionUser) => void;
   completeOnboarding: () => void;
   signOut: () => void;
   setHydrated: (value: boolean) => void;
@@ -23,11 +28,12 @@ const AUTH_STORAGE_KEY = "nebula-auth";
 export function flushAuthStorage() {
   if (typeof window === "undefined") return;
   try {
-    const { user, onboarded, pendingEmail } = useAuthStore.getState();
+    const { user, onboarded, pendingEmail, walletAuthed, walletAddress } =
+      useAuthStore.getState();
     localStorage.setItem(
       AUTH_STORAGE_KEY,
       JSON.stringify({
-        state: { user, onboarded, pendingEmail },
+        state: { user, onboarded, pendingEmail, walletAuthed, walletAddress },
         version: 0,
       }),
     );
@@ -42,6 +48,8 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       pendingEmail: null,
       onboarded: false,
+      walletAuthed: false,
+      walletAddress: null,
       hydrated: false,
       setPendingEmail: (email) => set({ pendingEmail: email }),
       completeVerification: () => {
@@ -64,12 +72,28 @@ export const useAuthStore = create<AuthState>()(
         set({ user, onboarded: true });
         flushAuthStorage();
       },
+      signInWallet: (address, user) => {
+        set({
+          user,
+          walletAuthed: true,
+          walletAddress: address,
+          onboarded: true,
+          pendingEmail: null,
+        });
+        flushAuthStorage();
+      },
       completeOnboarding: () => {
         set({ onboarded: true });
         flushAuthStorage();
       },
       signOut: () => {
-        set({ user: null, pendingEmail: null, onboarded: false });
+        set({
+          user: null,
+          pendingEmail: null,
+          onboarded: false,
+          walletAuthed: false,
+          walletAddress: null,
+        });
         flushAuthStorage();
       },
       setHydrated: (value) => set({ hydrated: value }),
@@ -80,6 +104,8 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         onboarded: state.onboarded,
         pendingEmail: state.pendingEmail,
+        walletAuthed: state.walletAuthed,
+        walletAddress: state.walletAddress,
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) {

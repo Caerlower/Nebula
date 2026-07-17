@@ -12,12 +12,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { BadgeCheck, Github, Loader2 } from "lucide-react";
+import { BadgeCheck, Github, Loader2, Wallet } from "lucide-react";
 
 import { AuthSplash } from "@/components/shared/auth-splash";
 import { fetchBetaStatus, redeemBetaCode } from "@/lib/beta";
 import { syncHubSession } from "@/lib/hub-session";
 import { applyPrivySession } from "@/lib/hub-session";
+import { signInWithFreighter, WalletConnectError } from "@/lib/wallet-connect";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -62,9 +63,11 @@ function SignupForm() {
     searchParams.has("privy_oauth_state");
 
   const [oauthBusy, setOauthBusy] = useState<"google" | "github" | null>(null);
+  const [walletBusy, setWalletBusy] = useState(false);
   const [betaGranted, setBetaGranted] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
+  const signInWallet = useAuthStore((s) => s.signInWallet);
 
   const goToOnboarding = useRef(() => {
     if (redirected.current) return;
@@ -198,6 +201,30 @@ function SignupForm() {
       toast.error(
         `Couldn't continue with ${provider === "google" ? "Google" : "GitHub"}`,
       );
+    }
+  };
+
+  const connectWallet = async () => {
+    if (!(await ensureBetaAccess())) return;
+    if (redirected.current) return;
+    setWalletBusy(true);
+    try {
+      const { address } = await signInWithFreighter();
+      const short = `${address.slice(0, 4)}…${address.slice(-4)}`;
+      signInWallet(address, { name: short, email: "" });
+      redirected.current = true;
+      void syncHubSession().catch((error) => {
+        console.error("[signup] hub session sync", error);
+      });
+      router.replace("/dashboard");
+    } catch (error) {
+      const description =
+        error instanceof WalletConnectError
+          ? error.message
+          : "Couldn't connect your wallet. Please try again.";
+      toast.error("Wallet sign-in failed", { description });
+    } finally {
+      setWalletBusy(false);
     }
   };
 
@@ -354,6 +381,20 @@ function SignupForm() {
             <Github className="size-4" />
           )}
           Continue with GitHub
+        </Button>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => void connectWallet()}
+          disabled={walletBusy || oauthBusy !== null}
+          aria-label="Continue with Freighter wallet"
+        >
+          {walletBusy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Wallet className="size-4" />
+          )}
+          Continue with Freighter
         </Button>
       </div>
 

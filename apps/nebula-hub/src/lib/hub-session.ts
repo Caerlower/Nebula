@@ -10,7 +10,14 @@ export async function hubFetch(
   input: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const token = await getAccessToken();
+  // Privy users send a Bearer token; wallet-native (Freighter) users
+  // authenticate via the httpOnly session cookie, sent automatically same-origin.
+  let token: string | null = null;
+  try {
+    token = await getAccessToken();
+  } catch {
+    token = null;
+  }
   const headers = new Headers(init.headers);
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);

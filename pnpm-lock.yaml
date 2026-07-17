@@ -125,6 +125,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@stellar/freighter-api':
+        specifier: ^6.0.1
+        version: 6.0.1
       '@stellar/mpp':
         specifier: 0.7.1
         version: 0.7.1(@stellar/stellar-sdk@16.0.1)(mppx@0.8.6(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(express@5.2.1)(hono@4.12.30)(typescript@5.9.3)(viem@2.55.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))
@@ -139,7 +142,7 @@ importers:
         version: 8.21.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@trionlabs/stellar8004':
         specifier: 0.0.11
-        version: 0.0.11
+        version: 0.0.11(@stellar/freighter-api@6.0.1)
       '@upstash/ratelimit':
         specifier: ^2.0.8
         version: 2.0.8(@upstash/redis@1.38.0)
@@ -2413,6 +2416,9 @@ packages:
   '@standard-schema/utils@0.3.0':
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
 
+  '@stellar/freighter-api@6.0.1':
+    resolution: {integrity: sha512-eqwakEqSg+zoLuPpSbKyrX0pG8DQFzL/J5GtbfuMCmJI+h+oiC9pQ5C6QLc80xopZQKdGt8dUAFCmDMNdAG95w==}
+
   '@stellar/js-xdr@4.0.0':
     resolution: {integrity: sha512-+NmNa7Tk5BI5XFdy/6xGTqAN4J9a9KgCrCGhj2uEUTCBhLkch0M+QbKzNH8zEnejWe0p8w+0q5hUVX6L3OzoVA==}
     engines: {node: '>=20.0.0', pnpm: '>=9.0.0'}
@@ -4582,6 +4588,11 @@ packages:
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
+    hasBin: true
+
+  semver@7.7.1:
+    resolution: {integrity: sha512-hlq8tAfn0m/61p4BVRcPzIGr6LKiMwo4VM6dGi6pt4qcRkmNzTcWq6eCEjEh+qXjkMDvPlOFFSGwQjoEa6gyMA==}
+    engines: {node: '>=10'}
     hasBin: true
 
   semver@7.7.2:
@@ -7798,6 +7809,11 @@ snapshots:
 
   '@standard-schema/utils@0.3.0': {}
 
+  '@stellar/freighter-api@6.0.1':
+    dependencies:
+      buffer: 6.0.3
+      semver: 7.7.1
+
   '@stellar/js-xdr@4.0.0': {}
 
   '@stellar/mpp@0.7.1(@stellar/stellar-sdk@16.0.1)(mppx@0.8.6(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(express@5.2.1)(hono@4.12.30)(typescript@5.9.3)(viem@2.55.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))':
@@ -7969,10 +7985,12 @@ snapshots:
 
   '@toon-format/toon@2.3.0': {}
 
-  '@trionlabs/stellar8004@0.0.11':
+  '@trionlabs/stellar8004@0.0.11(@stellar/freighter-api@6.0.1)':
     dependencies:
       '@stellar/stellar-sdk': 16.0.1
       buffer: 6.0.3
+    optionalDependencies:
+      '@stellar/freighter-api': 6.0.1
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -10293,6 +10311,8 @@ snapshots:
   secure-password-utilities@0.2.1: {}
 
   semver@6.3.1: {}
+
+  semver@7.7.1: {}
 
   semver@7.7.2: {}
 

@@ -65,6 +65,7 @@ function AuthRedirect() {
   const { ready, authenticated, user } = usePrivy();
   const hydrated = useAuthStore((s) => s.hydrated);
   const onboarded = useAuthStore((s) => s.onboarded);
+  const walletAuthed = useAuthStore((s) => s.walletAuthed);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -73,13 +74,27 @@ function AuthRedirect() {
     searchParams.has("privy_oauth_state");
 
   useEffect(() => {
-    if (!ready || !hydrated || !authenticated || !user) return;
-    // Let login/signup finish exchanging the OAuth code on this URL.
-    if (oauthReturn) return;
+    if (!hydrated || oauthReturn) return;
 
+    // Wallet-native (Freighter) session — no Privy involved.
+    if (walletAuthed) {
+      router.replace("/dashboard");
+      return;
+    }
+
+    if (!ready || !authenticated || !user) return;
     applyPrivySession(user);
     router.replace(onboarded ? "/dashboard" : "/onboarding");
-  }, [ready, hydrated, authenticated, user, onboarded, oauthReturn, router]);
+  }, [
+    ready,
+    hydrated,
+    authenticated,
+    user,
+    onboarded,
+    walletAuthed,
+    oauthReturn,
+    router,
+  ]);
 
   return null;
 }

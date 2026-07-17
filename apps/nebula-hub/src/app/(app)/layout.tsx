@@ -21,28 +21,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { ready, authenticated, user: privyUser } = usePrivy();
   const onboarded = useAuthStore((s) => s.onboarded);
   const hydrated = useAuthStore((s) => s.hydrated);
+  const walletAuthed = useAuthStore((s) => s.walletAuthed);
   const router = useRouter();
   const pathname = usePathname();
+
+  // Two ways to be signed in: Privy (custodial) or a wallet session (Freighter).
+  const privyAuthed = authenticated && !!privyUser;
+  const authed = privyAuthed || walletAuthed;
 
   useEffect(() => {
     if (!ready || !hydrated) return;
 
-    // Privy is the source of truth — never bounce to /login while Privy says
-    // the user is signed in (that was the OAuth ↔ dashboard loop).
-    if (!authenticated || !privyUser) {
+    if (!authed) {
       router.replace("/login");
       return;
     }
 
-    applyPrivySession(privyUser);
+    // Only Privy sessions mirror the Privy user; wallet sessions are set at sign-in.
+    if (privyAuthed) {
+      applyPrivySession(privyUser);
+    }
 
     if (!useAuthStore.getState().onboarded) {
       router.replace("/onboarding");
     }
-  }, [ready, hydrated, authenticated, privyUser, router, pathname]);
+  }, [ready, hydrated, authed, privyAuthed, privyUser, router, pathname]);
 
   if (!ready || !hydrated) return <GateSkeleton />;
-  if (!authenticated || !privyUser) return <GateSkeleton />;
+  if (!authed) return <GateSkeleton />;
   if (!onboarded) return <GateSkeleton />;
 
   return <AppShell>{children}</AppShell>;
