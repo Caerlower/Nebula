@@ -18,7 +18,7 @@ export default function ApiKeysPage() {
       <PageHeader
         eyebrow="agent"
         title="API Keys"
-        subtitle="Keys are scoped to this agent — each nbl_live_ token authenticates as this agent only and operates only its wallet."
+        subtitle="Manual keys and Claude.ai OAuth connectors both appear here. Revoke any key to cut off that client immediately."
       />
 
       {selectedAgent ? (

@@ -191,27 +191,57 @@ export async function updateAgentPolicyOverride(
 
 /**
  * Tokens are per-agent: each nbl_live_ key authenticates as exactly one agent
- * and operates only that agent's wallet (enforced in resolveAuth). The Connect
- * page is agent-scoped, so we only list the CURRENT agent's keys. With no agent
- * selected there is nothing to show.
+ * and operates only that agent's wallet (enforced in resolveAuth).
+ *
+ * Also surfaces legacy account-level tokens (agentId null) — e.g. early Claude
+ * OAuth grants that hit the owner's EOA — so users can find and revoke them.
  */
 export async function getApiKeys(): Promise<ApiKey[]> {
   const agentId = getSelectedAgentId();
-  if (!agentId) return [];
   const { tokens } = await hubJson<{
     tokens: Array<HubToken & { expiresAt?: string | null }>;
   }>("/api/tokens");
-  return (tokens ?? [])
-    .filter((t) => t.agentId === agentId)
-    .map((t) => ({
+
+  const mapToken = (
+    t: HubToken & { expiresAt?: string | null },
+  ): ApiKey => {
+    const isOauth =
+      t.label.startsWith("oauth-mcp") || t.label.startsWith("Claude.ai");
+    const kind: ApiKey["kind"] = !t.agentId
+      ? "unscoped"
+      : isOauth
+        ? "oauth"
+        : "manual";
+    let name = t.label;
+    if (t.label.startsWith("oauth-mcp:")) {
+      name = `Claude.ai · ${t.label.slice("oauth-mcp:".length)}`;
+    } else if (t.label === "oauth-mcp") {
+      name = "Claude.ai connector (legacy)";
+    }
+    return {
       id: t.id,
-      name: t.label,
+      name,
       prefix: "nbl_live_••••",
       createdAt: t.createdAt,
       lastUsed: t.lastUsedAt,
       expiresAt: t.expiresAt ?? null,
       agentId: t.agentId,
-    }));
+      kind,
+    };
+  };
+
+  const list = tokens ?? [];
+  const forAgent = agentId
+    ? list.filter((t) => t.agentId === agentId).map(mapToken)
+    : [];
+  // Orphans always listed so Claude EOA grants can be revoked from any agent keys page.
+  const orphans = list
+    .filter((t) => !t.agentId)
+    .map(mapToken)
+    // Avoid duplicating if somehow already included
+    .filter((o) => !forAgent.some((k) => k.id === o.id));
+
+  return [...forAgent, ...orphans];
 }
 
 export async function createApiKey(input: {
@@ -243,6 +273,7 @@ export async function createApiKey(input: {
     lastUsed: null,
     expiresAt: minted.expiresAt ?? null,
     agentId,
+    kind: "manual",
   };
   return { key, secret: minted.token };
 }

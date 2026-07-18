@@ -66,7 +66,7 @@ export async function mintOAuthAccessToken(
     data: {
       userId,
       agentId: agent.id,
-      label: `oauth-mcp:${agent.name}`.slice(0, 64),
+      label: `Claude.ai · ${agent.name}`.slice(0, 64),
       tokenHash: hashNebulaToken(plaintext),
       expiresAt,
     },

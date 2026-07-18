@@ -184,6 +184,8 @@ export interface ApiKey {
   lastUsed: string | null;
   expiresAt: string | null;
   agentId: string | null;
+  /** manual = Hub "Create key"; oauth = Claude.ai / MCP OAuth connector; unscoped = legacy account-level (EOA). */
+  kind: "manual" | "oauth" | "unscoped";
 }
 
 export interface TeamMember {
