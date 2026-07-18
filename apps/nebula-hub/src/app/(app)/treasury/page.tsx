@@ -455,8 +455,12 @@ function AutoYieldCard({
       toast.success(
         `Liquid band set to ${fmtUSD(next.liquidityFloorXLM)}–${fmtUSD(next.liquidityCeilingXLM)} USDC`,
       );
-    } catch {
+    } catch (error) {
       toast.error("Couldn't save the liquid band", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "Check the agent has XLM for fees, then retry.",
         action: { label: "Retry", onClick: () => void saveBand() },
       });
     } finally {

@@ -43,6 +43,9 @@ const patchSchema = z.object({
   catTransfer: z.number().nonnegative().optional(),
   catX402: z.number().nonnegative().optional(),
   catMpp: z.number().nonnegative().optional(),
+  /// When set (treasury UI), on-chain band writes use this agent's managed
+  /// wallet — not the owner's login wallet (often unfunded for Privy users).
+  agentId: z.string().min(1).optional(),
 });
 
 function policyChangeReason(
@@ -241,12 +244,49 @@ async function uncachedPATCH(req: NextRequest) {
       (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
       "testnet";
 
-    if (
-      onchainFieldsTouched &&
-      policyContractConfigured() &&
+    // Prefer the selected agent's managed wallet for on-chain writes. Owner
+    // Privy wallets are often empty (EOA/Privy login ≠ funded agent treasury).
+    let onchainWalletId: string | null = null;
+    let onchainAddress: string | null = null;
+    if (body.data.agentId) {
+      const agent = await prisma.agent.findFirst({
+        where: { id: body.data.agentId, userId: principal.userId },
+        select: { privyWalletId: true, stellarAddress: true },
+      });
+      if (!agent) {
+        await revertDb();
+        return Response.json(
+          { status: "error", reason: "agent_not_found" },
+          { status: 404 },
+        );
+      }
+      if (!agent.stellarAddress || !agent.privyWalletId) {
+        await revertDb();
+        return Response.json(
+          {
+            status: "error",
+            reason:
+              "agent_wallet_not_ready: wait for provisioning, then fund the agent with a little XLM for fees",
+          },
+          { status: 400 },
+        );
+      }
+      onchainWalletId = agent.privyWalletId;
+      onchainAddress = agent.stellarAddress;
+    } else if (
       principal.stellarAddress &&
       principal.privyWalletId &&
       principal.privyWalletId !== "dev-wallet"
+    ) {
+      onchainWalletId = principal.privyWalletId;
+      onchainAddress = principal.stellarAddress;
+    }
+
+    if (
+      onchainFieldsTouched &&
+      policyContractConfigured() &&
+      onchainWalletId &&
+      onchainAddress
     ) {
       const maxPerDayXlm = Number(updated.dailyCap);
       const maxPerCallXlm = Math.min(Number(updated.perTxCap), maxPerDayXlm);
@@ -262,8 +302,8 @@ async function uncachedPATCH(req: NextRequest) {
       );
 
       const init = await ensurePolicyInitialized({
-        walletId: principal.privyWalletId,
-        stellarAddress: principal.stellarAddress,
+        walletId: onchainWalletId,
+        stellarAddress: onchainAddress,
         network,
         maxPerCallXlm,
         maxPerDayXlm,
@@ -287,8 +327,8 @@ async function uncachedPATCH(req: NextRequest) {
 
       if (!freshlyInitialized && limitsTouched) {
         const res = await onchainSetLimits({
-          walletId: principal.privyWalletId,
-          stellarAddress: principal.stellarAddress,
+          walletId: onchainWalletId,
+          stellarAddress: onchainAddress,
           network,
           maxPerCallXlm,
           maxPerDayXlm,
@@ -303,8 +343,8 @@ async function uncachedPATCH(req: NextRequest) {
 
       if (!freshlyInitialized && catsTouched) {
         const res = await onchainSetCategoryLimits({
-          walletId: principal.privyWalletId,
-          stellarAddress: principal.stellarAddress,
+          walletId: onchainWalletId,
+          stellarAddress: onchainAddress,
           network,
           categories,
         });
@@ -318,8 +358,8 @@ async function uncachedPATCH(req: NextRequest) {
 
       if (!freshlyInitialized && treasuryTouched) {
         const res = await onchainSetTreasuryBand({
-          walletId: principal.privyWalletId,
-          stellarAddress: principal.stellarAddress,
+          walletId: onchainWalletId,
+          stellarAddress: onchainAddress,
           network,
           liquidLowXlm,
           liquidHighXlm,
@@ -334,6 +374,14 @@ async function uncachedPATCH(req: NextRequest) {
       }
     } else if (onchainFieldsTouched && !policyContractConfigured()) {
       onchain = "skipped_no_contract";
+    } else if (
+      onchainFieldsTouched &&
+      policyContractConfigured() &&
+      treasuryTouched &&
+      !onchainWalletId
+    ) {
+      // Freighter / no custody key — Hub DB only (same as before).
+      onchain = "hub_only_no_custodial_signer";
     }
 
     const reason = policyChangeReason(body.data, updated, { perTxClamped });
@@ -349,6 +397,7 @@ async function uncachedPATCH(req: NextRequest) {
       await prisma.transaction.create({
         data: {
           userId: principal.userId,
+          agentId: body.data.agentId ?? null,
           type: "policy_change",
           destination,
           amountXlm: 0,

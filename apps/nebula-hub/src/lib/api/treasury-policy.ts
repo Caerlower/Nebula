@@ -71,6 +71,9 @@ export async function updateTreasurySettings(
     if (patch.liquidityCeilingXLM !== undefined) {
       body.liquidHigh = patch.liquidityCeilingXLM;
     }
+    // Bind on-chain band write to the selected agent's managed wallet.
+    const agentId = getSelectedAgentId();
+    if (agentId) body.agentId = agentId;
     await hubJson("/api/policy", {
       method: "PATCH",
       body: JSON.stringify(body),
