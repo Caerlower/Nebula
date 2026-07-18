@@ -81,6 +81,14 @@ function redirectUriAllowed(uri: string, mode: DcrMode): boolean {
   ) {
     return true;
   }
+  // Claude.ai / Claude Desktop hosted connectors (OAuth callback is fixed).
+  // https://claude.com/docs/connectors/building/authentication
+  if (
+    protocol === "https:" &&
+    (host === "claude.ai" || host === "www.claude.ai")
+  ) {
+    return true;
+  }
 
   if (mode === "open") {
     return protocol === "https:";
