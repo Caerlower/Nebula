@@ -232,7 +232,11 @@ export async function signAndSubmitSoroban(params: {
       return sendResponse.hash;
     }
     if (result.status === rpc.Api.GetTransactionStatus.FAILED) {
-      throw new Error("Soroban transaction failed on ledger.");
+      const detail =
+        "resultXdr" in result && result.resultXdr
+          ? ` result=${String(result.resultXdr)}`
+          : "";
+      throw new Error(`Soroban transaction failed on ledger.${detail}`);
     }
     await sleep(1000);
   }

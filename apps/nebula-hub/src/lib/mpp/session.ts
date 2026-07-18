@@ -85,6 +85,22 @@ export async function getOpenMppSession(
   return row ? rowToSession(row) : null;
 }
 
+/** Open or mid-close (awaiting funder refund) session. */
+export async function getOpenOrClosingMppSession(
+  userId: string,
+  agentId?: string | null,
+): Promise<HubMppSession | null> {
+  const row = await prisma.mppSession.findFirst({
+    where: {
+      userId,
+      agentId: agentId ?? null,
+      status: { in: ["open", "closing"] },
+    },
+    orderBy: { openedAt: "desc" },
+  });
+  return row ? rowToSession(row) : null;
+}
+
 export async function requireOpenMppSession(
   userId: string,
   agentId?: string | null,
@@ -102,6 +118,19 @@ export async function requireOpenMppSession(
   return { ok: true, session };
 }
 
+export async function markMppSessionClosing(params: {
+  sessionId: string;
+  closeTxHash: string;
+}): Promise<void> {
+  await prisma.mppSession.update({
+    where: { id: params.sessionId },
+    data: {
+      status: "closing",
+      closeTxHash: params.closeTxHash,
+    },
+  });
+}
+
 export async function createMppSession(data: {
   userId: string;
   agentId?: string | null;
@@ -114,10 +143,12 @@ export async function createMppSession(data: {
   networkId: string;
   deployWasmHash?: string;
 }): Promise<HubMppSession> {
-  const existing = await getOpenMppSession(data.userId, data.agentId);
+  const existing = await getOpenOrClosingMppSession(data.userId, data.agentId);
   if (existing) {
     throw new Error(
-      "An MPP session is already open. Call mpp_close_session before opening another.",
+      existing.status === "closing"
+        ? "An MPP session is still closing. Call mpp_close_session again to finish the refund before opening another."
+        : "An MPP session is already open. Call mpp_close_session before opening another.",
     );
   }
 

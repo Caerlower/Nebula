@@ -172,10 +172,103 @@ export async function mppFetchUrl(params: {
 }
 
 /**
- * Settle channel via contract `close(amount, signature)`, signed by any
- * {@link HashSigner} (Privy or partner). Commitment key (session) signs
- * prepare_commitment bytes; the channel owner wallet pays fees.
+ * Settle / reclaim a channel as the **funder** (Nebula agent wallet).
+ *
+ * The contract's `close(amount, sig)` requires the *recipient* (`to`) to auth —
+ * which we never have. Funder reclaim is: `close_start` → wait refund period →
+ * `refund`. See stellar-experimental/one-way-channel.
  */
+export async function closeStartMppChannel(params: {
+  channel: string;
+  signer: HashSigner;
+  stellarAddress: string;
+  network: "testnet" | "mainnet";
+  networkId: NetworkId;
+}): Promise<{ ok: true; txHash: string } | { ok: false; error: string }> {
+  const rpcUrl = getMppRpcUrl(params.networkId);
+  const networkPassphrase = getMppNetworkPassphrase(params.networkId);
+  const server = new rpc.Server(rpcUrl);
+  const contract = new Contract(params.channel);
+
+  try {
+    const account = await server.getAccount(params.stellarAddress);
+    const tx = new TransactionBuilder(account, {
+      fee: "1000000",
+      networkPassphrase,
+    })
+      .addOperation(contract.call("close_start"))
+      .setTimeout(180)
+      .build();
+
+    const prepared = await server.prepareTransaction(tx);
+    const txHash = await signAndSubmitSoroban({
+      preparedTx: prepared,
+      signer: params.signer,
+      sourceAddress: params.stellarAddress,
+      network: params.network,
+    });
+    return { ok: true, txHash };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Already past effective close — treat as ready for refund.
+    if (/AlreadyClosed|already.?closed/i.test(message)) {
+      return { ok: true, txHash: "already_closed" };
+    }
+    return { ok: false, error: `mpp_close_start_failed: ${message}` };
+  }
+}
+
+export async function refundMppChannel(params: {
+  channel: string;
+  signer: HashSigner;
+  stellarAddress: string;
+  network: "testnet" | "mainnet";
+  networkId: NetworkId;
+}): Promise<{ ok: true; txHash: string } | { ok: false; error: string }> {
+  const rpcUrl = getMppRpcUrl(params.networkId);
+  const networkPassphrase = getMppNetworkPassphrase(params.networkId);
+  const server = new rpc.Server(rpcUrl);
+  const contract = new Contract(params.channel);
+
+  try {
+    const account = await server.getAccount(params.stellarAddress);
+    const tx = new TransactionBuilder(account, {
+      fee: "1000000",
+      networkPassphrase,
+    })
+      .addOperation(contract.call("refund"))
+      .setTimeout(180)
+      .build();
+
+    const prepared = await server.prepareTransaction(tx);
+    const txHash = await signAndSubmitSoroban({
+      preparedTx: prepared,
+      signer: params.signer,
+      sourceAddress: params.stellarAddress,
+      network: params.network,
+    });
+    return { ok: true, txHash };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/RefundWaitingPeriodNotElapsed|waiting.?period/i.test(message)) {
+      return {
+        ok: false,
+        error:
+          "mpp_refund_waiting: close was started but the on-chain waiting period has not elapsed yet. Call mpp_close_session again in about a minute.",
+      };
+    }
+    if (/NotClosed|not.?closed/i.test(message)) {
+      return {
+        ok: false,
+        error:
+          "mpp_not_closed: call mpp_close_session once to start close, then again after the waiting period to refund.",
+      };
+    }
+    return { ok: false, error: `mpp_refund_failed: ${message}` };
+  }
+}
+
+/** @deprecated Use closeStartMppChannel + refundMppChannel (funder path). */
 export async function closeMppChannel(params: {
   channel: string;
   commitmentSecretHex: string;
@@ -188,85 +281,21 @@ export async function closeMppChannel(params: {
   | { ok: true; txHash: string; settledStroops: bigint }
   | { ok: false; error: string }
 > {
-  const commitmentKey = Keypair.fromRawEd25519Seed(
-    Buffer.from(params.commitmentSecretHex, "hex"),
-  );
-  const rpcUrl = getMppRpcUrl(params.networkId);
-  const networkPassphrase = getMppNetworkPassphrase(params.networkId);
-  const server = new rpc.Server(rpcUrl);
-  const contract = new Contract(params.channel);
-
-  try {
-    const account = await server.getAccount(params.stellarAddress);
-    const simTx = new TransactionBuilder(account, {
-      fee: "100000",
-      networkPassphrase,
-    })
-      .addOperation(
-        contract.call(
-          "prepare_commitment",
-          nativeToScVal(params.amountStroops, { type: "i128" }),
-        ),
-      )
-      .setTimeout(180)
-      .build();
-
-    const simResult = await server.simulateTransaction(simTx);
-    if (!rpc.Api.isSimulationSuccess(simResult)) {
-      const detail =
-        "error" in simResult && typeof simResult.error === "string"
-          ? simResult.error
-          : "prepare_commitment simulation failed";
-      return { ok: false, error: detail };
-    }
-
-    const commitmentBytes = simResult.result?.retval.bytes();
-    if (!commitmentBytes) {
-      return {
-        ok: false,
-        error: "prepare_commitment returned no commitment bytes.",
-      };
-    }
-
-    const signature = commitmentKey.sign(Buffer.from(commitmentBytes));
-
-    const closeAccount = await server.getAccount(params.stellarAddress);
-    const closeTx = new TransactionBuilder(closeAccount, {
-      fee: "1000000",
-      networkPassphrase,
-    })
-      .addOperation(
-        contract.call(
-          "close",
-          nativeToScVal(params.amountStroops, { type: "i128" }),
-          nativeToScVal(Buffer.from(signature), { type: "bytes" }),
-        ),
-      )
-      .setTimeout(180)
-      .build();
-
-    const prepared = await server.prepareTransaction(closeTx);
-    const txHash = await signAndSubmitSoroban({
-      preparedTx: prepared,
-      signer: params.signer,
-      sourceAddress: params.stellarAddress,
-      network: params.network,
-    });
-
-    return {
-      ok: true,
-      txHash,
-      settledStroops: params.amountStroops,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Kept for type compatibility; funder cannot call contract.close (needs recipient auth).
+  void params.commitmentSecretHex;
+  void params.amountStroops;
+  const started = await closeStartMppChannel(params);
+  if (!started.ok) return started;
+  const refunded = await refundMppChannel(params);
+  if (!refunded.ok) return refunded;
+  return {
+    ok: true,
+    txHash: refunded.txHash,
+    settledStroops: 0n,
+  };
 }
 
-const REFUND_WAITING_PERIOD = 100;
+const REFUND_WAITING_PERIOD = 5; // ledgers (~25s on testnet) — short so one close can finish in-session
 const DEPLOY_FEE = "1000000";
 
 /**

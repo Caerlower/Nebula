@@ -18,16 +18,19 @@ import { scheduleParkExcessAfterActivity } from "@/lib/hub-tools/treasury";
 import { fetchUsdcBalance } from "@/lib/x402/fetch";
 
 import {
-  closeMppChannel,
+  closeStartMppChannel,
   deployPaymentChannel,
   mppFetchUrl,
+  refundMppChannel,
 } from "./channel";
 import {
   createMppSession,
   generateCommitmentKeypair,
   getMppNetworkId,
   getOpenMppSession,
+  getOpenOrClosingMppSession,
   markMppSessionClosed,
+  markMppSessionClosing,
   requireOpenMppSession,
   stroopsToUsdc,
   updateMppCumulative,
@@ -145,12 +148,17 @@ export async function executeMppOpenSession(params: {
   const signable = assertMppSignable(principal);
   if (signable) return signable;
 
-  const existing = await getOpenMppSession(principal.userId, principal.agentId);
+  const existing = await getOpenOrClosingMppSession(
+    principal.userId,
+    principal.agentId,
+  );
   if (existing) {
     return {
       status: "error",
       reason:
-        "mpp_session_already_open: call mpp_close_session before opening another",
+        existing.status === "closing"
+          ? "mpp_session_closing: call mpp_close_session again to finish refund before opening another"
+          : "mpp_session_already_open: call mpp_close_session before opening another",
     };
   }
 
@@ -481,37 +489,121 @@ export async function executeMppCloseSession(params: {
   principal: AuthPrincipal;
   ctx: ToolContext;
 }): Promise<ToolResult> {
-  const sessionState = await requireOpenMppSession(
+  const session = await getOpenOrClosingMppSession(
     params.principal.userId,
     params.principal.agentId,
   );
-  if (!sessionState.ok) {
-    return { status: "error", reason: sessionState.error };
+  if (!session) {
+    return {
+      status: "error",
+      reason:
+        "No MPP session is open. Call mpp_open_session first (one session at a time).",
+    };
   }
-  const { session } = sessionState;
 
   const signable = assertMppSignable(params.principal);
   if (signable) return signable;
 
-  const closed = await closeMppChannel({
+  const signer = resolveSigner(params.principal);
+  const networkId = session.networkId as NetworkId;
+  const common = {
     channel: session.channel,
-    commitmentSecretHex: session.commitmentSecretHex,
-    signer: resolveSigner(params.principal),
+    signer,
     stellarAddress: params.ctx.stellarAddress,
     network: params.ctx.network,
-    networkId: session.networkId as NetworkId,
-    amountStroops: session.cumulativeStroops,
-  });
-  if (!closed.ok) {
-    return { status: "error", reason: closed.error };
+    networkId,
+  };
+
+  // Phase 1: funder close_start (recipient-only `close` cannot be called by us).
+  if (session.status === "open") {
+    const started = await closeStartMppChannel(common);
+    if (!started.ok) {
+      return { status: "error", reason: started.error };
+    }
+    await markMppSessionClosing({
+      sessionId: session.id,
+      closeTxHash: started.txHash,
+    });
+
+    // Try refund immediately (works when waiting period has already elapsed /
+    // is 0–few ledgers). If not ready yet, ask the client to retry.
+    const early = await refundMppChannel(common);
+    if (early.ok) {
+      await markMppSessionClosed({
+        sessionId: session.id,
+        closeTxHash: early.txHash,
+      });
+      const settled = stroopsToUsdc(session.cumulativeStroops);
+      const refunded = Math.max(session.budgetUsdc - settled, 0);
+      await prisma.transaction.create({
+        data: {
+          userId: params.principal.userId,
+          agentId: params.principal.agentId,
+          type: "mpp_close",
+          destination: session.recipient,
+          amountXlm: settled,
+          reason: `mpp_close:refunded=${refunded}`,
+          txHash: early.txHash,
+          status: "confirmed",
+        },
+      });
+      if (params.principal.signerStrategy === "privy") {
+        scheduleParkExcessAfterActivity(
+          params.principal,
+          params.ctx,
+          "after_mpp_close",
+        );
+      }
+      return {
+        status: "ok",
+        tx_hash: early.txHash,
+        explorer_url: explorerTxUrl(params.ctx.network, early.txHash),
+        data: {
+          settled_usdc: settled,
+          refunded_usdc: refunded,
+          channel: session.channel,
+        },
+        message: [
+          "MPP session closed (funder close_start + refund)",
+          `Committed to recipient (off-chain): ${settled} USDC`,
+          `Refunded to agent wallet: remaining channel balance`,
+          `Tx: ${early.txHash}`,
+        ].join("\n"),
+      };
+    }
+
+    if (early.error.startsWith("mpp_refund_waiting")) {
+      return {
+        status: "ok",
+        data: {
+          phase: "closing",
+          channel: session.channel,
+          close_start_tx: started.txHash,
+        },
+        message: [
+          "MPP close started on-chain (close_start).",
+          "The funder must wait a short ledger window before reclaiming USDC.",
+          "Call mpp_close_session again in ~30–60 seconds to finish the refund.",
+          `close_start tx: ${started.txHash}`,
+        ].join("\n"),
+      };
+    }
+
+    return { status: "error", reason: early.error };
+  }
+
+  // Phase 2: refund after waiting period.
+  const refundedTx = await refundMppChannel(common);
+  if (!refundedTx.ok) {
+    return { status: "error", reason: refundedTx.error };
   }
 
   await markMppSessionClosed({
     sessionId: session.id,
-    closeTxHash: closed.txHash,
+    closeTxHash: refundedTx.txHash,
   });
 
-  const settled = stroopsToUsdc(closed.settledStroops);
+  const settled = stroopsToUsdc(session.cumulativeStroops);
   const refunded = Math.max(session.budgetUsdc - settled, 0);
 
   await prisma.transaction.create({
@@ -522,7 +614,7 @@ export async function executeMppCloseSession(params: {
       destination: session.recipient,
       amountXlm: settled,
       reason: `mpp_close:refunded=${refunded}`,
-      txHash: closed.txHash,
+      txHash: refundedTx.txHash,
       status: "confirmed",
     },
   });
@@ -537,18 +629,17 @@ export async function executeMppCloseSession(params: {
 
   return {
     status: "ok",
-    tx_hash: closed.txHash,
-    explorer_url: explorerTxUrl(params.ctx.network, closed.txHash),
+    tx_hash: refundedTx.txHash,
+    explorer_url: explorerTxUrl(params.ctx.network, refundedTx.txHash),
     data: {
       settled_usdc: settled,
       refunded_usdc: refunded,
       channel: session.channel,
     },
     message: [
-      "MPP session closed",
-      `Paid to recipient: ${settled} USDC`,
-      `Refunded to funder: ${refunded} USDC`,
-      `Tx: ${closed.txHash}`,
+      "MPP session closed — USDC refunded to agent wallet",
+      `Committed (off-chain) to recipient: ${settled} USDC`,
+      `Tx: ${refundedTx.txHash}`,
     ].join("\n"),
   };
 }
