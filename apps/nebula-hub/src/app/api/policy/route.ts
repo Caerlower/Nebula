@@ -142,6 +142,27 @@ async function uncachedPATCH(req: NextRequest) {
 
   // Serialize per-user so concurrent PATCH requests don't race Soroban sequences.
   return withUserPolicyLock(principal.userId, async () => {
+    try {
+      return await applyPolicyPatch(principal, body.data);
+    } catch (error) {
+      console.error("[policy] PATCH failed", error);
+      const message = error instanceof Error ? error.message : String(error);
+      return Response.json(
+        { status: "error", reason: `policy_patch_failed:${message}` },
+        { status: 500 },
+      );
+    }
+  });
+}
+
+async function applyPolicyPatch(
+  principal: {
+    userId: string;
+    stellarAddress?: string | null;
+    privyWalletId?: string | null;
+  },
+  data: z.infer<typeof patchSchema>,
+) {
     // Contract requires max_per_call <= max_per_day. Keep Hub DB consistent.
     const existing = await prisma.policySettings.findUnique({
       where: { userId: principal.userId },
@@ -162,15 +183,17 @@ async function uncachedPATCH(req: NextRequest) {
       : null;
 
     const nextDaily =
-      body.data.dailyCap ?? (existing ? Number(existing.dailyCap) : 20);
+      data.dailyCap ?? (existing ? Number(existing.dailyCap) : 20);
     const nextPerTx =
-      body.data.perTxCap ?? (existing ? Number(existing.perTxCap) : 5);
+      data.perTxCap ?? (existing ? Number(existing.perTxCap) : 5);
     const nextLow =
-      body.data.liquidThreshold ??
+      data.liquidThreshold ??
       (existing ? Number(existing.liquidThreshold) : 2);
     const nextHigh =
-      body.data.liquidHigh ?? (existing ? Number(existing.liquidHigh) : 10);
-    const patchData = { ...body.data };
+      data.liquidHigh ?? (existing ? Number(existing.liquidHigh) : 10);
+    // agentId is only for resolving the on-chain signer — never a PolicySettings column.
+    const { agentId: targetAgentId, ...settingsPatch } = data;
+    const patchData: Record<string, unknown> = { ...settingsPatch };
     let perTxClamped = false;
     if (nextPerTx > nextDaily) {
       patchData.perTxCap = nextDaily;
@@ -224,17 +247,17 @@ async function uncachedPATCH(req: NextRequest) {
     };
 
     const limitsTouched =
-      body.data.perTxCap !== undefined ||
-      body.data.dailyCap !== undefined ||
+      data.perTxCap !== undefined ||
+      data.dailyCap !== undefined ||
       perTxClamped;
     const catsTouched =
-      body.data.catTransfer !== undefined ||
-      body.data.catX402 !== undefined ||
-      body.data.catMpp !== undefined;
+      data.catTransfer !== undefined ||
+      data.catX402 !== undefined ||
+      data.catMpp !== undefined;
     const treasuryTouched =
-      body.data.liquidThreshold !== undefined ||
-      body.data.liquidHigh !== undefined ||
-      body.data.autoYield !== undefined;
+      data.liquidThreshold !== undefined ||
+      data.liquidHigh !== undefined ||
+      data.autoYield !== undefined;
     const onchainFieldsTouched = limitsTouched || catsTouched || treasuryTouched;
 
     let onchain: string = "hub_only";
@@ -248,9 +271,9 @@ async function uncachedPATCH(req: NextRequest) {
     // Privy wallets are often empty (EOA/Privy login ≠ funded agent treasury).
     let onchainWalletId: string | null = null;
     let onchainAddress: string | null = null;
-    if (body.data.agentId) {
+    if (targetAgentId) {
       const agent = await prisma.agent.findFirst({
-        where: { id: body.data.agentId, userId: principal.userId },
+        where: { id: targetAgentId, userId: principal.userId },
         select: { privyWalletId: true, stellarAddress: true },
       });
       if (!agent) {
@@ -384,7 +407,7 @@ async function uncachedPATCH(req: NextRequest) {
       onchain = "hub_only_no_custodial_signer";
     }
 
-    const reason = policyChangeReason(body.data, updated, { perTxClamped });
+    const reason = policyChangeReason(data, updated, { perTxClamped });
     const logHash =
       txHash ??
       `hub_policy_${Date.now().toString(16)}_${randomBytes(4).toString("hex")}`;
@@ -397,7 +420,7 @@ async function uncachedPATCH(req: NextRequest) {
       await prisma.transaction.create({
         data: {
           userId: principal.userId,
-          agentId: body.data.agentId ?? null,
+          agentId: targetAgentId ?? null,
           type: "policy_change",
           destination,
           amountXlm: 0,
@@ -412,11 +435,20 @@ async function uncachedPATCH(req: NextRequest) {
 
     return Response.json({
       status: "ok",
-      policy: updated,
+      policy: {
+        ...updated,
+        microThreshold: Number(updated.microThreshold),
+        perTxCap: Number(updated.perTxCap),
+        dailyCap: Number(updated.dailyCap),
+        liquidThreshold: Number(updated.liquidThreshold),
+        liquidHigh: Number(updated.liquidHigh),
+        catTransfer: Number(updated.catTransfer),
+        catX402: Number(updated.catX402),
+        catMpp: Number(updated.catMpp),
+      },
       onchain,
       tx_hash: logHash,
     });
-  });
 }
 
 export async function GET(req: NextRequest) {
