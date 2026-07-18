@@ -4,7 +4,11 @@ const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   transpilePackages: ["@privy-io/react-auth"],
   // Keep channel.wasm in the serverless trace so MPP deploy works on Vercel.
+  // Keys match App Router paths that can open an MPP session.
   outputFileTracingIncludes: {
+    "/mcp": ["./contracts/channel.wasm"],
+    "/api/tools/[tool]": ["./contracts/channel.wasm"],
+    "/api/tools": ["./contracts/channel.wasm"],
     "/*": ["./contracts/channel.wasm"],
   },
   // Avoid broken HMR/auth when the app is opened via 127.0.0.1 vs localhost.

@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -269,12 +269,31 @@ export async function closeMppChannel(params: {
 const REFUND_WAITING_PERIOD = 100;
 const DEPLOY_FEE = "1000000";
 
+/**
+ * Resolve channel.wasm for MPP deploy.
+ *
+ * On Vercel, `import.meta.url` points at a bundled chunk under `.next/server`,
+ * so a relative path from there misses the file. Prefer `process.cwd()` (the
+ * traced app root where outputFileTracingIncludes places the wasm).
+ */
 function channelWasmPath(): string {
   const override = process.env.MPP_CHANNEL_WASM_PATH?.trim();
   if (override) return override;
-  // apps/nebula-hub/contracts/channel.wasm
-  const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, "../../../contracts/channel.wasm");
+
+  const fromModule = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../contracts/channel.wasm",
+  );
+  const candidates = [
+    join(process.cwd(), "contracts/channel.wasm"),
+    // Monorepo local / mis-set cwd
+    join(process.cwd(), "apps/nebula-hub/contracts/channel.wasm"),
+    fromModule,
+  ];
+  for (const path of candidates) {
+    if (existsSync(path)) return path;
+  }
+  return candidates[0]!;
 }
 
 function createSignerSignTransaction(params: {
@@ -327,11 +346,12 @@ export async function deployPaymentChannel(params: {
 
   let wasm: Buffer;
   try {
-    wasm = readFileSync(channelWasmPath());
+    const wasmPath = channelWasmPath();
+    wasm = readFileSync(wasmPath);
   } catch (error) {
     return {
       ok: false,
-      error: `channel.wasm missing: ${error instanceof Error ? error.message : String(error)}`,
+      error: `channel.wasm missing at ${channelWasmPath()} (cwd=${process.cwd()}): ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 
