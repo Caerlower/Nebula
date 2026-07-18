@@ -250,14 +250,20 @@ export async function refundMppChannel(params: {
     return { ok: true, txHash };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/RefundWaitingPeriodNotElapsed|waiting.?period/i.test(message)) {
+    // Contract Error #3 = RefundWaitingPeriodNotElapsed (Soroban often only
+    // surfaces the numeric code, not the variant name).
+    if (
+      /RefundWaitingPeriodNotElapsed|waiting.?period|#3\b|Error\(Contract,\s*#3\)/i.test(
+        message,
+      )
+    ) {
       return {
         ok: false,
         error:
-          "mpp_refund_waiting: close was started but the on-chain waiting period has not elapsed yet. Call mpp_close_session again in about a minute.",
+          "mpp_refund_waiting: close was started but the on-chain waiting period has not elapsed yet. Old channels wait ~100 ledgers (~8–10 min on testnet); new ones ~5 ledgers (~30s). Call mpp_close_session again after that.",
       };
     }
-    if (/NotClosed|not.?closed/i.test(message)) {
+    if (/NotClosed|not.?closed|#2\b|Error\(Contract,\s*#2\)/i.test(message)) {
       return {
         ok: false,
         error:
