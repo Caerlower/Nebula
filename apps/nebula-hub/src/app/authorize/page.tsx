@@ -15,9 +15,13 @@ import { useAuthStore } from "@/stores/auth";
 function AuthorizeInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated } = usePrivy();
   const hydrated = useAuthStore((s) => s.hydrated);
+  const walletAuthed = useAuthStore((s) => s.walletAuthed);
   const [busy, setBusy] = useState(false);
+
+  // Privy (email/OAuth) or Freighter wallet session both count.
+  const authed = (authenticated || walletAuthed) && hydrated;
 
   const clientId = params.get("client_id") ?? "";
   const redirectUri = params.get("redirect_uri") ?? "";
@@ -32,13 +36,17 @@ function AuthorizeInner() {
     [clientId, redirectUri, challenge, method],
   );
 
+  const returnToLogin = useMemo(() => {
+    const returnTo = `/authorize?${params.toString()}`;
+    return `/login?returnTo=${encodeURIComponent(returnTo)}`;
+  }, [params]);
+
   useEffect(() => {
     if (!ready || !hydrated) return;
-    if (authenticated) return;
-    // Send users through Hub login, then back here.
-    const returnTo = `/authorize?${params.toString()}`;
-    router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
-  }, [ready, hydrated, authenticated, router, params]);
+    if (authed) return;
+    // Send users through Hub login, then back here (AuthRedirect honors returnTo).
+    router.replace(returnToLogin);
+  }, [ready, hydrated, authed, router, returnToLogin]);
 
   const approve = async () => {
     if (!valid) {
@@ -83,7 +91,7 @@ function AuthorizeInner() {
     );
   }
 
-  if (!authenticated) {
+  if (!authed) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-12">
         <Wordmark className="text-[26px]" />
@@ -91,16 +99,9 @@ function AuthorizeInner() {
         <p className="mt-2 text-[15px] text-muted-foreground">
           An MCP client wants access to your Nebula wallet tools.
         </p>
-        <Button className="mt-8" onClick={() => void login()}>
-          Sign in
+        <Button className="mt-8" asChild>
+          <Link href={returnToLogin}>Sign in</Link>
         </Button>
-        <p className="mt-4 text-sm text-muted-foreground">
-          Or go to{" "}
-          <Link href="/login" className="underline-offset-4 hover:underline">
-            /login
-          </Link>
-          .
-        </p>
       </div>
     );
   }

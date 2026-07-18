@@ -61,6 +61,13 @@ function RotatingQuote() {
   );
 }
 
+/** Relative return paths only (OAuth /approve flows). Reject protocol-relative. */
+function safeReturnTo(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 function AuthRedirect() {
   const { ready, authenticated, user } = usePrivy();
   const hydrated = useAuthStore((s) => s.hydrated);
@@ -76,15 +83,19 @@ function AuthRedirect() {
   useEffect(() => {
     if (!hydrated || oauthReturn) return;
 
+    // Preserve OAuth / approve returnTo so MCP consent isn't lost after login.
+    const returnTo = safeReturnTo(searchParams.get("returnTo"));
+    const home = onboarded ? "/agents" : "/onboarding";
+
     // Wallet-native (Freighter) session — no Privy involved.
     if (walletAuthed) {
-      router.replace("/agents");
+      router.replace(returnTo ?? home);
       return;
     }
 
     if (!ready || !authenticated || !user) return;
     applyPrivySession(user);
-    router.replace(onboarded ? "/agents" : "/onboarding");
+    router.replace(returnTo ?? home);
   }, [
     ready,
     hydrated,
@@ -93,6 +104,7 @@ function AuthRedirect() {
     onboarded,
     walletAuthed,
     oauthReturn,
+    searchParams,
     router,
   ]);
 
