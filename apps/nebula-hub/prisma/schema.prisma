@@ -228,6 +228,9 @@ model OAuthAuthorizationCode {
   codeHash            String    @id
   clientId            String
   userId              String
+  /// Agent whose wallet this OAuth grant will operate. Required for new grants;
+  /// null only for legacy codes issued before per-agent OAuth.
+  agentId             String?
   redirectUri         String
   codeChallenge       String
   codeChallengeMethod String    @default("S256")

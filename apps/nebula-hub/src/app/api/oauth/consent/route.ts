@@ -16,11 +16,14 @@ const consentSchema = z.object({
   code_challenge_method: z.literal("S256").default("S256"),
   state: z.string().optional(),
   scope: z.string().optional(),
+  /** Agent whose managed wallet this connector will operate. */
+  agent_id: z.string().min(1),
 });
 
 /**
- * Human consent after Privy login. Issues an authorization code and returns
- * the redirect URL the browser should navigate to.
+ * Human consent after dashboard login. Issues an authorization code bound to
+ * a specific agent so the resulting MCP token operates that agent's wallet —
+ * never the owner's EOA / account wallet.
  */
 export async function POST(req: NextRequest) {
   const principal = await resolveAuth(req);
@@ -36,6 +39,27 @@ export async function POST(req: NextRequest) {
   if (!body.success) {
     return Response.json(
       { error: "invalid_request", error_description: body.error.message },
+      { status: 400 },
+    );
+  }
+
+  const agent = await prisma.agent.findFirst({
+    where: { id: body.data.agent_id, userId: principal.userId },
+    select: { id: true, name: true, stellarAddress: true },
+  });
+  if (!agent) {
+    return Response.json(
+      { error: "invalid_request", error_description: "agent_not_found" },
+      { status: 400 },
+    );
+  }
+  if (!agent.stellarAddress) {
+    return Response.json(
+      {
+        error: "invalid_request",
+        error_description:
+          "agent_wallet_not_ready — open the agent in the Hub and wait for provisioning",
+      },
       { status: 400 },
     );
   }
@@ -67,6 +91,7 @@ export async function POST(req: NextRequest) {
       codeHash: hashOpaque(code),
       clientId: client.clientId,
       userId: principal.userId,
+      agentId: agent.id,
       redirectUri: body.data.redirect_uri,
       codeChallenge: body.data.code_challenge,
       codeChallengeMethod: body.data.code_challenge_method,

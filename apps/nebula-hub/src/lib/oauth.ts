@@ -37,10 +37,16 @@ export function parseRedirectUris(value: unknown): string[] {
   return value.filter((u): u is string => typeof u === "string" && u.length > 0);
 }
 
-/** Issue a Hub MCP token after a successful OAuth code exchange (30-day TTL). */
+/** Issue a Hub MCP token after a successful OAuth code exchange (30-day TTL).
+ *  Always bind to an agent so Claude/MCP clients operate that agent's wallet,
+ *  never the owner's EOA / account wallet.
+ */
 export const OAUTH_ACCESS_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-export async function mintOAuthAccessToken(userId: string): Promise<{
+export async function mintOAuthAccessToken(
+  userId: string,
+  agentId: string,
+): Promise<{
   accessToken: string;
   tokenId: string;
   expiresIn: number;
@@ -49,10 +55,18 @@ export async function mintOAuthAccessToken(userId: string): Promise<{
   const expiresAt = new Date(
     Date.now() + OAUTH_ACCESS_TOKEN_TTL_SECONDS * 1000,
   );
+  const agent = await prisma.agent.findFirst({
+    where: { id: agentId, userId },
+    select: { id: true, name: true },
+  });
+  if (!agent) {
+    throw new Error("oauth_agent_not_found");
+  }
   const row = await prisma.nebulaToken.create({
     data: {
       userId,
-      label: "oauth-mcp",
+      agentId: agent.id,
+      label: `oauth-mcp:${agent.name}`.slice(0, 64),
       tokenHash: hashNebulaToken(plaintext),
       expiresAt,
     },

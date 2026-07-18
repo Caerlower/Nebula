@@ -100,7 +100,30 @@ export async function POST(req: NextRequest) {
     data: { usedAt: new Date() },
   });
 
-  const { accessToken, expiresIn } = await mintOAuthAccessToken(row.userId);
+  if (!row.agentId) {
+    return Response.json(
+      {
+        error: "invalid_grant",
+        error_description:
+          "legacy_code_missing_agent — reconnect the connector and pick an agent",
+      },
+      { status: 400 },
+    );
+  }
+
+  let accessToken: string;
+  let expiresIn: number;
+  try {
+    ({ accessToken, expiresIn } = await mintOAuthAccessToken(
+      row.userId,
+      row.agentId,
+    ));
+  } catch {
+    return Response.json(
+      { error: "invalid_grant", error_description: "agent_not_found" },
+      { status: 400 },
+    );
+  }
 
   return Response.json({
     access_token: accessToken,

@@ -228,12 +228,31 @@ export async function runHubTool(
 
   if (toolName === "check_balance") {
     const balances = await fetchBalances(ctx.stellarAddress, ctx.network);
+    let agentName: string | null = null;
+    if (principal.agentId) {
+      const agent = await prisma.agent.findUnique({
+        where: { id: principal.agentId },
+        select: { name: true },
+      });
+      agentName = agent?.name ?? null;
+    }
+    const who = agentName
+      ? `agent "${agentName}"`
+      : "account wallet (no agent bound — reconnect OAuth and pick an agent)";
     return {
       status: "ok",
-      data: { address: ctx.stellarAddress, network: ctx.network, balances },
+      data: {
+        agent_id: principal.agentId,
+        agent_name: agentName,
+        address: ctx.stellarAddress,
+        network: ctx.network,
+        balances,
+      },
       message: balances.length
-        ? balances.map((b) => `${b.asset}: ${b.balance}`).join("\n")
-        : "Account not funded yet.",
+        ? `${who} (${ctx.network}, ${ctx.stellarAddress}):\n${balances
+            .map((b) => `${b.asset}: ${b.balance}`)
+            .join("\n")}`
+        : `${who} (${ctx.stellarAddress}) is not funded yet.`,
     };
   }
 
