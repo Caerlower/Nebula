@@ -151,7 +151,7 @@ export function TeamSection() {
                   Joined {fmtDate(member.joinedAt)}
                 </span>
                 {member.role === "Owner" ? (
-                  <Badge variant="outline" className="font-normal text-warm">
+                  <Badge variant="outline" className="font-normal text-primary">
                     Owner
                   </Badge>
                 ) : (

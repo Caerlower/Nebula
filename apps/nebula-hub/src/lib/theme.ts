@@ -4,8 +4,14 @@
  * else must consume CSS variables (or this module, for JS-side consumers
  * like the syntax-highlighter theme).
  *
- * Mirrors apps/landing/src/lib/theme.ts: "light" is the warm-midnight
- * default, "dark" is the deep violet night variant.
+ * Stellar 2026 brand system. Palette (no colors outside it):
+ *   deep navy #002E5D · lavender #B7ACE8 · teal #00A7B5
+ *   black #0F0F0F · off-white #F6F7F8 · sand #D6D2C4
+ *   + vivid brand purple #6D28D9 (Manav's pick) as the brand-block /
+ *     day-theme primary.
+ * Surface/text steps are mixes of those primaries. "light" is the
+ * purple-cast true-black default, "dark" is the deepest-black variant,
+ * "day" is the off-white light mode.
  */
 
 export type ThemeMode = "light" | "dark" | "day";
@@ -27,61 +33,72 @@ export interface AppThemeTokens {
 
 export const THEMES: Record<ThemeMode, AppThemeTokens> = {
   light: {
-    bg: "#0F1220",
-    surface: "#191C2F",
-    surfaceElevated: "#22263E",
-    border: "rgba(255,255,255,0.08)",
-    text: "#F1EEE8",
-    textMuted: "#A8A2B8",
-    textSubtle: "#7A738C",
-    accent: "#F26B7A",
-    accentGradientEnd: "#EB9878",
-    accent2: "#55C4B3",
-    accent3: "#EEC57C",
-    destructive: "#E5484D",
+    bg: "#0F0F0F",
+    surface: "#16141E",
+    surfaceElevated: "#1E1B29",
+    border: "rgba(246,247,248,0.12)",
+    text: "#F6F7F8",
+    textMuted: "#C0C0CB",
+    textSubtle: "#9695A2",
+    accent: "#B7ACE8",
+    accentGradientEnd: "#B7ACE8",
+    accent2: "#34B7C3",
+    accent3: "#D6D2C4",
+    destructive: "#E05C60",
   },
   dark: {
-    bg: "#0A0912",
-    surface: "#141222",
-    surfaceElevated: "#1E1B30",
-    border: "rgba(255,255,255,0.07)",
-    text: "#EEEAF4",
-    textMuted: "#9A94AA",
-    textSubtle: "#6E687E",
-    accent: "#7C6BF0",
-    accentGradientEnd: "#5B8DEF",
-    accent2: "#2DD4BF",
-    accent3: "#F5B248",
-    destructive: "#E5484D",
+    bg: "#0A0A0A",
+    surface: "#131217",
+    surfaceElevated: "#1A1920",
+    border: "rgba(246,247,248,0.12)",
+    text: "#F6F7F8",
+    textMuted: "#BCBCC7",
+    textSubtle: "#92919E",
+    accent: "#B7ACE8",
+    accentGradientEnd: "#B7ACE8",
+    accent2: "#34B7C3",
+    accent3: "#D6D2C4",
+    destructive: "#E05C60",
   },
   day: {
-    bg: "#F4F1FA",
+    bg: "#F6F7F8",
     surface: "#FFFFFF",
-    surfaceElevated: "#EEEAF8",
-    border: "rgba(26,21,46,0.12)",
-    text: "#1A152E",
-    textMuted: "#4A4466",
-    textSubtle: "#7A738E",
+    surfaceElevated: "#EEEBF8",
+    border: "#CEC7EB",
+    text: "#0F0F0F",
+    textMuted: "#383D46",
+    textSubtle: "#646972",
     accent: "#6D28D9",
-    accentGradientEnd: "#3B82F6",
-    accent2: "#0F766E",
-    accent3: "#C2410C",
-    destructive: "#DC2626",
+    accentGradientEnd: "#6D28D9",
+    accent2: "#007A85",
+    accent3: "#736E5C",
+    destructive: "#B23434",
   },
 };
 
 /**
- * Categorical chart palette — deeper steps of the brand hues, validated for
- * lightness band, chroma floor, CVD separation and surface contrast against
- * both theme surfaces. Fixed order; identical in both themes so series keep
- * their identity across a theme toggle.
+ * Chart palette — brand hues only, stepped per surface (the light mode
+ * needs darker steps for contrast on off-white; dark modes use the raw
+ * brand tints). Only chart-2 (balance / teal) and chart-3 (yield /
+ * lavender·navy) currently render; the rest are palette-derived spares.
+ * The shipping 2↔3 pair passes CVD separation, normal-vision ΔE, and
+ * surface contrast on both surfaces.
  */
 export const CHART_HEX = {
-  chart1: "#E0506A",
-  chart2: "#0F9C88",
-  chart3: "#BE8827",
-  chart4: "#6B82EC",
-  chart5: "#8B84A3",
+  dark: {
+    chart1: "#6F88A3",
+    chart2: "#00A7B5",
+    chart3: "#B7ACE8",
+    chart4: "#D6D2C4",
+    chart5: "#7B7B7C",
+  },
+  day: {
+    chart1: "#4A6B8C",
+    chart2: "#00939F",
+    chart3: "#6D28D9",
+    chart4: "#75736B",
+    chart5: "#838384",
+  },
 } as const;
 
 /** CSS-variable form — prefer these inside components. */

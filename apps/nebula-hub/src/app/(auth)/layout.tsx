@@ -52,8 +52,8 @@ function RotatingQuote() {
           <blockquote className="font-display text-xl leading-relaxed">
             “{quote.text}”
           </blockquote>
-          <figcaption className="mt-3 text-sm text-muted-foreground">
-            {quote.author} <span className="text-subtle">— {quote.role}</span>
+          <figcaption className="mt-3 text-sm opacity-75">
+            {quote.author} <span className="opacity-80">— {quote.role}</span>
           </figcaption>
         </motion.figure>
       </AnimatePresence>
@@ -122,12 +122,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {children}
         </div>
       </div>
-      <div className="aurora-panel hidden w-[46%] flex-col justify-between border-l border-border p-12 min-[900px]:flex">
-        <Wordmark className="text-[26px]" />
+      <div className="aurora-panel hidden w-[46%] flex-col justify-between border-l border-border p-12 text-[var(--brand-offwhite)] [--primary:var(--brand-lavender)] min-[900px]:flex">
+        <Wordmark className="relative z-10 text-[26px]" />
         <div className="relative z-10 max-w-md">
           <RotatingQuote />
         </div>
-        <p className="relative z-10 text-xs text-subtle">
+        <p className="relative z-10 text-xs opacity-60">
           A Stellar wallet your agent can hold. Policy on-chain, yield on idle.
         </p>
       </div>

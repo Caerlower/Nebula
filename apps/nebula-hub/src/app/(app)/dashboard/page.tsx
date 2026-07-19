@@ -61,7 +61,7 @@ function BalanceChartCard({ className }: { className?: string }) {
   const BalanceTooltip = makeTooltip((v) => fmtAmount(v, "XLM"), labelFmt);
 
   return (
-    <Card className={cn("p-5", className)}>
+    <Card className={cn("flex flex-col p-5", className)}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[13px] font-medium text-muted-foreground">Balance over time</p>
@@ -87,8 +87,8 @@ function BalanceChartCard({ className }: { className?: string }) {
       {loading && !data ? (
         <ChartSkeleton height={264} />
       ) : data ? (
-        <div className="rise-in">
-          <div className="h-44">
+        <div className="rise-in flex min-h-[264px] flex-1 flex-col">
+          <div className="min-h-44 flex-[2]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} syncId="balance">
                 <defs>
@@ -119,7 +119,7 @@ function BalanceChartCard({ className }: { className?: string }) {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-1 h-20">
+          <div className="mt-1 min-h-20 flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }} syncId="balance">
                 <defs>
@@ -322,14 +322,6 @@ export default function DashboardPage() {
       {/* 1 · agent identity */}
       {selectedAgent ? (
         <div className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-4 shadow-[var(--card-shadow)]">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 52%)",
-            }}
-          />
           <div className="relative flex flex-wrap items-center gap-4">
             <AgentAvatar
               name={selectedAgent.name}
@@ -380,11 +372,7 @@ export default function DashboardPage() {
           <Card className="relative overflow-hidden p-6 lg:col-span-8">
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(115% 115% at 0% 0%, color-mix(in srgb, var(--primary) 20%, transparent), transparent 58%), radial-gradient(120% 120% at 100% 100%, color-mix(in srgb, var(--accent-teal) 16%, transparent), transparent 55%)",
-              }}
+              className="texture-dots pointer-events-none absolute inset-0 [-webkit-mask-image:radial-gradient(90%_120%_at_100%_0%,black,transparent_65%)] [mask-image:radial-gradient(90%_120%_at_100%_0%,black,transparent_65%)]"
             />
             {unfunded ? (
               <div className="relative flex h-full flex-col">
@@ -483,12 +471,12 @@ export default function DashboardPage() {
         {/* standing stack — yield + reputation fill the column */}
         <div className="flex flex-col gap-6 lg:col-span-4">
           {wallet ? (
-            <StatCard label="Yield earned (30d)" tone="warm" icon={TrendingUp}>
+            <StatCard label="Yield earned (30d)" tone="teal" icon={TrendingUp}>
               <div className="flex items-end gap-1.5">
                 <AnimatedNumber
                   value={wallet.yield30dXLM}
                   format={fmtXLM}
-                  className="hero-number-sm text-warm"
+                  className="hero-number-sm text-teal"
                 />
                 <span className="mb-0.5 font-mono text-sm text-muted-foreground">
                   XLM

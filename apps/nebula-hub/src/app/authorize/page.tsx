@@ -199,7 +199,7 @@ function AuthorizeInner() {
                       !readyWallet && "cursor-not-allowed opacity-50",
                     )}
                   >
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary to-teal text-white">
+                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-brand text-brand-foreground">
                       <Bot className="size-4" aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1">

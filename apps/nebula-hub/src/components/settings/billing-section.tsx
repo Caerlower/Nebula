@@ -129,7 +129,7 @@ export function BillingSection() {
                   variant="outline"
                   className={cn(
                     "ml-auto font-normal",
-                    invoice.status === "paid" ? "text-success" : "text-warning",
+                    invoice.status === "paid" ? "text-success" : "text-foreground",
                   )}
                 >
                   {invoice.status === "paid" ? "Paid" : "Due"}

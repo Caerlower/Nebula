@@ -9,7 +9,6 @@ import {
   Plug,
   Settings,
   ShieldCheck,
-  SquareTerminal,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -43,7 +42,6 @@ export const ACCOUNT_NAV_SECTIONS: NavSection[] = [
 
 /** Bottom-of-sidebar utilities at the account level. */
 export const ACCOUNT_UTILITIES: NavItem[] = [
-  { label: "Claude", href: "https://claude.ai", icon: SquareTerminal, external: true },
   { label: "MCP docs", href: "https://docs.nebulaonchain.xyz", icon: Plug, external: true },
   { label: "Help & Discord", href: "https://discord.gg/nebula", icon: LifeBuoy, external: true },
 ];

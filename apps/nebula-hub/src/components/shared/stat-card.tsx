@@ -10,20 +10,11 @@ interface StatCardProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
-  /** Soft tinted wash so day-theme cards don’t read as blank white slabs. */
+  /** Accent hue for the icon chip — the card surface itself stays flat. */
   tone?: "primary" | "warm" | "teal";
   /** Optional glyph rendered top-right in the accent hue. */
   icon?: LucideIcon;
 }
-
-const TONE_CLASS: Record<NonNullable<StatCardProps["tone"]>, string> = {
-  primary:
-    "border-primary/20 bg-[linear-gradient(165deg,color-mix(in_srgb,var(--primary)_10%,var(--card))_0%,var(--card)_55%)]",
-  warm:
-    "border-[color-mix(in_srgb,var(--accent-warm)_28%,var(--border))] bg-[linear-gradient(165deg,color-mix(in_srgb,var(--accent-warm)_12%,var(--card))_0%,var(--card)_55%)]",
-  teal:
-    "border-[color-mix(in_srgb,var(--accent-teal)_28%,var(--border))] bg-[linear-gradient(165deg,color-mix(in_srgb,var(--accent-teal)_12%,var(--card))_0%,var(--card)_55%)]",
-};
 
 const ICON_TONE: Record<NonNullable<StatCardProps["tone"]>, string> = {
   primary: "text-primary",
@@ -40,7 +31,7 @@ export function StatCard({
   icon: Icon,
 }: StatCardProps) {
   return (
-    <Card className={cn("flex flex-col gap-3 p-6", tone && TONE_CLASS[tone], className)}>
+    <Card className={cn("flex flex-col gap-3 p-6", className)}>
       <div className="flex items-center justify-between gap-2">
         <p className="stat-label">{label}</p>
         {Icon ? (

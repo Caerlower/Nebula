@@ -22,9 +22,24 @@ const SIZE_CLASS = {
   lg: "size-12 text-sm",
 } as const;
 
+/** Fixed brand fills — flat Stellar palette blocks with legible ink. */
+const BRAND_FILLS = [
+  "bg-brand text-brand-foreground",
+  "bg-[var(--brand-lavender)] text-[var(--brand-black)]",
+  "bg-[var(--brand-teal)] text-[var(--brand-black)]",
+  "bg-[var(--brand-sand)] text-[var(--brand-black)]",
+] as const;
+
+/** Resolve the brand fill class for a stored hue string — same bucketing as the avatar. */
+export function brandFillForHue(hue: string): string {
+  const n = Number(hue);
+  const bucket = Number.isFinite(n) ? ((Math.round(n) % 360) + 360) % 360 : 0;
+  return BRAND_FILLS[bucket % BRAND_FILLS.length]!;
+}
+
 /**
- * Deterministic gradient avatar for an agent — the same name always yields the
- * same cosmic hue, so agents stay visually distinguishable across the app.
+ * Deterministic avatar for an agent — the same name always maps to the same
+ * Stellar brand fill, so agents stay visually distinguishable across the app.
  */
 export function AgentAvatar({
   name,
@@ -41,21 +56,19 @@ export function AgentAvatar({
   className?: string;
 }) {
   const override = color != null && color !== "" ? Number(color) : NaN;
-  const hue = Number.isFinite(override)
-    ? ((override % 360) + 360) % 360
-    : hashSeed(seed ?? name) % 360;
-  const hue2 = (hue + 42) % 360;
+  const bucket = Number.isFinite(override)
+    ? ((Math.round(override) % 360) + 360) % 360
+    : hashSeed(seed ?? name);
+  const fill = BRAND_FILLS[bucket % BRAND_FILLS.length]!;
   return (
     <span
       aria-hidden
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-xl font-semibold text-white shadow-[var(--card-shadow)] ring-1 ring-white/10",
+        "inline-flex shrink-0 items-center justify-center rounded-xl border border-border font-semibold shadow-[var(--card-shadow)]",
+        fill,
         SIZE_CLASS[size],
         className,
       )}
-      style={{
-        backgroundImage: `linear-gradient(135deg, hsl(${hue} 72% 55%), hsl(${hue2} 70% 45%))`,
-      }}
     >
       {initials(name)}
     </span>

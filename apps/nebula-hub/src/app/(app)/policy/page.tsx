@@ -449,7 +449,7 @@ export default function PolicyPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-              <div className="bg-[linear-gradient(165deg,color-mix(in_srgb,var(--primary)_7%,transparent),transparent_62%)] p-5">
+              <div className="p-5">
                 <InlineEditUSD
                   label="Per-tx cap"
                   value={policy.perCallCapXLM}
@@ -457,7 +457,7 @@ export default function PolicyPage() {
                 />
                 <p className="mt-2 text-xs text-muted-foreground">Max value of any single payment.</p>
               </div>
-              <div className="bg-[linear-gradient(165deg,color-mix(in_srgb,var(--primary)_7%,transparent),transparent_62%)] p-5">
+              <div className="p-5">
                 <InlineEditUSD
                   label="Daily cap"
                   value={policy.dailyCapUSD}

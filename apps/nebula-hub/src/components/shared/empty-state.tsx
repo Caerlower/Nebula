@@ -89,11 +89,11 @@ export function EmptyState({ title, subtitle, actionLabel, onAction, className }
       <div className="relative mb-2 flex size-28 items-center justify-center">
         <span
           aria-hidden
-          className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_70%)]"
+          className="texture-dots absolute -inset-6 [mask-image:radial-gradient(circle_at_center,black_20%,transparent_72%)] [-webkit-mask-image:radial-gradient(circle_at_center,black_20%,transparent_72%)]"
         />
         <span
           aria-hidden
-          className="absolute inset-3 rounded-full border border-border"
+          className="absolute inset-3 rounded-full border border-border bg-surface/60"
         />
         <Constellation seed={title} />
       </div>

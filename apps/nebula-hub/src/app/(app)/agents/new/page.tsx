@@ -24,7 +24,7 @@ import {
   FrameworkLabel,
 } from "@/components/shared/status-badges";
 import { getSnippet } from "@/lib/mcp-snippets";
-import { AgentAvatar } from "@/components/agent-scope/agent-avatar";
+import { AgentAvatar, brandFillForHue } from "@/components/agent-scope/agent-avatar";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,13 +36,12 @@ import type { CreatedAgent } from "@/lib/api/agents";
 import { cn } from "@/lib/utils";
 import type { Framework } from "@/types/domain";
 
+/* Stored as hue strings (0–359); the avatar buckets hue % 4 onto brand fills. */
 const COLOR_SWATCHES: { hue: string; label: string }[] = [
-  { hue: "265", label: "Violet" },
-  { hue: "210", label: "Azure" },
-  { hue: "160", label: "Teal" },
-  { hue: "130", label: "Green" },
-  { hue: "20", label: "Amber" },
-  { hue: "330", label: "Rose" },
+  { hue: "0", label: "Navy" },
+  { hue: "1", label: "Lavender" },
+  { hue: "2", label: "Teal" },
+  { hue: "3", label: "Sand" },
 ];
 
 function Perk({
@@ -175,12 +174,10 @@ function CreateForm({
                   aria-pressed={color === s.hue}
                   onClick={() => setColor(color === s.hue ? "" : s.hue)}
                   className={cn(
-                    "size-8 rounded-lg ring-2 ring-offset-2 ring-offset-background transition-transform hover:scale-105",
+                    "size-8 rounded-lg border border-border ring-2 ring-offset-2 ring-offset-background transition-colors",
+                    brandFillForHue(s.hue),
                     color === s.hue ? "ring-primary" : "ring-transparent",
                   )}
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, hsl(${s.hue} 72% 55%), hsl(${(Number(s.hue) + 42) % 360} 70% 45%))`,
-                  }}
                 />
               ))}
               <span className="text-[11px] text-subtle">Optional</span>

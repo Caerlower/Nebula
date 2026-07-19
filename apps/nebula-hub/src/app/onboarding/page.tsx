@@ -206,7 +206,7 @@ export default function OnboardingPage() {
                     value={address}
                     size={132}
                     bgColor="#ffffff"
-                    fgColor="#0a0a0a"
+                    fgColor="#0F0F0F"
                     level="M"
                   />
                 ) : (

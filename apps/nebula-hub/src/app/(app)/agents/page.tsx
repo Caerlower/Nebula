@@ -206,7 +206,7 @@ export default function AgentsPage() {
 
       {agents && agents.length > 0 ? (
         <div className="mb-5 max-w-sm">
-          <div className="flex h-9 items-center gap-2 rounded-full border border-border bg-surface/70 px-3.5 text-sm shadow-[var(--card-shadow)] backdrop-blur focus-within:border-border-strong">
+          <div className="flex h-9 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-sm shadow-[var(--card-shadow)] focus-within:border-border-strong">
             <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <input
               value={query}

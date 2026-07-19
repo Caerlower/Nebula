@@ -93,7 +93,7 @@ function DepositDialog({
                 value={address}
                 size={132}
                 bgColor="#ffffff"
-                fgColor="#0a0a0a"
+                fgColor="#0F0F0F"
                 level="M"
               />
             ) : (
@@ -715,7 +715,7 @@ export default function TreasuryPage() {
             </StatCard>
             <StatCard
               label="In Blend"
-              tone="warm"
+              tone="teal"
               icon={PiggyBank}
               footer={
                 wallet.blendXLM > 0
@@ -727,7 +727,7 @@ export default function TreasuryPage() {
                 <AnimatedNumber
                   value={wallet.blendXLM}
                   format={fmtXLM}
-                  className="hero-number text-warm"
+                  className="hero-number text-teal"
                 />
                 <span className="mb-1 font-mono text-sm text-muted-foreground">
                   XLM
@@ -828,7 +828,7 @@ export default function TreasuryPage() {
                       <TableCell className="text-right font-mono tabular">
                         {position.apyPct.toFixed(2)}%
                       </TableCell>
-                      <TableCell className="text-right font-mono tabular text-warm">
+                      <TableCell className="text-right font-mono tabular text-teal">
                         +{fmtAmount(position.earned, position.asset)}
                       </TableCell>
                       <TableCell>
@@ -867,7 +867,7 @@ export default function TreasuryPage() {
                     <p className="mt-1 font-mono text-[13px] tabular text-muted-foreground">
                       {fmtAmount(position.deposited, position.asset)} · {position.apyPct.toFixed(2)}%
                     </p>
-                    <p className="font-mono text-[13px] tabular text-warm">
+                    <p className="font-mono text-[13px] tabular text-teal">
                       +{fmtAmount(position.earned, position.asset)}
                     </p>
                   </div>
@@ -930,7 +930,7 @@ export default function TreasuryPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Earned to date</dt>
-                <dd className="font-mono tabular text-warm">+{fmtAmount(detail.earned, detail.asset)}</dd>
+                <dd className="font-mono tabular text-teal">+{fmtAmount(detail.earned, detail.asset)}</dd>
               </div>
             </dl>
           ) : null}

@@ -114,7 +114,7 @@ const TabsList = React.forwardRef<
           transition={
             reduceMotion
               ? { duration: 0 }
-              : { type: "spring", stiffness: 420, damping: 34 }
+              : { duration: 0.25, ease: [0.22, 1, 0.36, 1] }
           }
         />
       ) : null}

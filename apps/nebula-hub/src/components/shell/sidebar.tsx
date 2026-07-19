@@ -56,7 +56,7 @@ export function SidebarNav({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-3 py-2">
+      <nav aria-label="Main navigation" className="flex flex-1 flex-col overflow-y-auto px-3 py-2">
         {sections.map((section, sectionIndex) => (
           <div key={section.label}>
             {sectionIndex > 0 ? <div className="mx-1 my-3 h-px bg-border" /> : null}
@@ -114,7 +114,7 @@ export function SidebarNav({
         ))}
 
         {showUtilities ? (
-          <div>
+          <div className="mt-auto pt-2">
             <div className="mx-1 my-3 h-px bg-border" />
             <ul className="space-y-0.5">
               {ACCOUNT_UTILITIES.map((item) => (
@@ -163,7 +163,7 @@ export function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
       {user.imageUrl ? (
         <AvatarImage src={user.imageUrl} alt="" referrerPolicy="no-referrer" />
       ) : null}
-      <AvatarFallback className="bg-gradient-to-br from-primary to-teal text-xs font-semibold text-white">
+      <AvatarFallback className="bg-brand text-xs font-semibold text-brand-foreground">
         {initialsOf(user.name)}
       </AvatarFallback>
     </Avatar>
@@ -254,7 +254,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-r border-border bg-surface/70 backdrop-blur-xl transition-[width] duration-200 min-[900px]:flex",
+        "hidden shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 min-[900px]:flex",
         collapsed ? "w-16" : "w-60",
       )}
     >

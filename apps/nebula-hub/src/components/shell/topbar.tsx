@@ -43,7 +43,7 @@ function AccountIdentity() {
     <div className="flex items-center gap-2.5">
       <span
         aria-hidden
-        className="grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary to-teal text-white shadow-[var(--card-shadow)] ring-1 ring-white/10"
+        className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand text-brand-foreground shadow-[var(--card-shadow)]"
       >
         <Sparkles className="size-4" />
       </span>
@@ -198,7 +198,7 @@ export function Topbar() {
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
       <Button
         variant="ghost"
         size="icon"
@@ -236,14 +236,12 @@ export function Topbar() {
           onClick={toggleTheme}
           aria-label={
             theme === "light"
-              ? "Theme: warm midnight — switch to violet night"
+              ? "Theme: midnight — switch to black"
               : theme === "dark"
-                ? "Theme: violet night — switch to daybreak"
-                : "Theme: daybreak — switch to warm midnight"
+                ? "Theme: black — switch to day"
+                : "Theme: day — switch to midnight"
           }
-          title={
-            theme === "light" ? "Warm midnight" : theme === "dark" ? "Violet night" : "Daybreak"
-          }
+          title={theme === "light" ? "Midnight" : theme === "dark" ? "Black" : "Day"}
         >
           {theme === "light" ? (
             <Sunset className="size-4" />

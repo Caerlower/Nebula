@@ -11,7 +11,7 @@ export function Wordmark({ compact = false, className }: { compact?: boolean; cl
       {compact ? "N" : "Nebula"}
       <span
         aria-hidden
-        className="inline-block size-2 translate-y-[-1px] rounded-full bg-[image:var(--gradient-primary)] shadow-[0_0_10px_var(--shadow-primary)]"
+        className="inline-block size-2 translate-y-[-1px] rounded-full bg-primary"
       />
     </span>
   );

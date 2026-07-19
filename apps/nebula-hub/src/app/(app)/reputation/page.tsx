@@ -40,7 +40,7 @@ function SignalTile({
   return (
     <div className="p-5">
       <div className="flex items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-md border border-border bg-elevated/50 text-warm">
+        <span className="flex size-7 items-center justify-center rounded-md border border-border bg-elevated/50 text-primary">
           <Icon className="size-3.5" aria-hidden />
         </span>
         <p className="stat-label">{label}</p>
@@ -73,7 +73,7 @@ export default function ReputationPage() {
     <div>
       <PageHeader
         eyebrow="agents"
-        accent="gold"
+        accent="primary"
         title="Reputation"
         subtitle="Your on-chain track record — written by the agents you work with."
         actions={
@@ -96,12 +96,7 @@ export default function ReputationPage() {
       ) : (
         <div className="space-y-8">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-            <Card
-              className={cn(
-                "flex flex-col items-center justify-center gap-4 p-6",
-                "border-[color-mix(in_srgb,var(--accent-warm)_28%,var(--border))] bg-[linear-gradient(165deg,color-mix(in_srgb,var(--accent-warm)_10%,var(--card))_0%,var(--card)_60%)]",
-              )}
-            >
+            <Card className="flex flex-col items-center justify-center gap-4 p-6">
               <ScoreRing
                 score={reputation.score}
                 max={reputation.scoreMax}

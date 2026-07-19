@@ -19,17 +19,28 @@ import type { Transaction } from "@/types/domain";
 
 const STELLAR_EXPERT = "https://stellar.expert/explorer/testnet";
 
-/** Dashed perforation with clipped side notches — reads as a torn receipt. */
+/**
+ * Dashed perforation. With notches, the strip masks true half-circle holes
+ * out of its own card fill, so the dialog backdrop shows through the cut and
+ * a clipped ring draws the border curving around it.
+ */
 function Perforation({ notches = true }: { notches?: boolean }) {
+  if (!notches) {
+    return (
+      <div className="border-x border-border-strong bg-card py-1" aria-hidden>
+        <div className="mx-6 border-t border-dashed border-border" />
+      </div>
+    );
+  }
   return (
-    <div className="relative py-1" aria-hidden>
-      {notches ? (
-        <>
-          <span className="absolute -left-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full bg-black/80" />
-          <span className="absolute -right-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full bg-black/80" />
-        </>
-      ) : null}
-      <div className="mx-6 border-t border-dashed border-border" />
+    <div className="relative flex h-5 items-stretch" aria-hidden>
+      <div className="receipt-notch-left relative flex-1 border-l border-border-strong bg-card">
+        <span className="absolute -left-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full border border-border-strong" />
+      </div>
+      <div className="receipt-notch-right relative flex-1 border-r border-border-strong bg-card">
+        <span className="absolute -right-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full border border-border-strong" />
+      </div>
+      <div className="absolute inset-x-8 top-1/2 border-t border-dashed border-border" />
     </div>
   );
 }
@@ -66,7 +77,7 @@ export function TransactionReceipt({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm gap-0 overflow-hidden rounded-2xl border-strong bg-card p-0 shadow-[var(--card-shadow)]">
+      <DialogContent className="max-w-sm gap-0 rounded-none border-0 bg-transparent p-0 shadow-none">
         {tx ? (
           <ReceiptBody
             tx={tx}
@@ -102,15 +113,7 @@ function ReceiptBody({
   return (
     <div className="text-foreground">
       {/* header band */}
-      <div className="relative px-6 pb-7 pt-7 text-center">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 60%)",
-          }}
-        />
+      <div className="relative overflow-hidden rounded-t-2xl border border-b-0 border-border-strong bg-card px-6 pb-7 pt-7 text-center">
         <div className="relative">
           <DialogTitle className="sr-only">
             Receipt · {meta.label} from {agentName}
@@ -120,7 +123,7 @@ function ReceiptBody({
             {fmtDateTime(tx.time)}
           </DialogDescription>
 
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 py-1 pl-1 pr-3 backdrop-blur">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-3">
             <AgentAvatar name={agentName} color={agentColor} size="sm" />
             <div className="text-left leading-tight">
               <p className="text-[13px] font-semibold">{agentName}</p>
@@ -154,7 +157,7 @@ function ReceiptBody({
       <Perforation />
 
       {/* itemized body */}
-      <dl className="space-y-3 px-6 py-5">
+      <dl className="space-y-3 border-x border-border-strong bg-card px-6 py-5">
         <Row label="Type">
           <span className="inline-flex items-center gap-1.5">
             <Icon className="size-3.5 text-muted-foreground" aria-hidden />
@@ -187,7 +190,7 @@ function ReceiptBody({
       {tx.operations.length > 0 ? (
         <>
           <Perforation notches={false} />
-          <div className="px-6 py-5">
+          <div className="border-x border-border-strong bg-card px-6 py-5">
             <p className="stat-label mb-2.5">Operations</p>
             <ul className="space-y-1.5">
               {tx.operations.map((op, i) => (
@@ -209,7 +212,7 @@ function ReceiptBody({
       <Perforation notches={false} />
 
       {/* footer — hash + explorer */}
-      <div className="px-6 pb-6 pt-4">
+      <div className="rounded-b-2xl border border-t-0 border-border-strong bg-card px-6 pb-6 pt-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="stat-label">Transaction hash</p>

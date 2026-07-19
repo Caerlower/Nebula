@@ -44,6 +44,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Animate page entrances only when the top-level section changes —
+  // sub-route swaps (e.g. /settings/account → /settings/team) must not
+  // replay the whole-page rise-in.
+  const sectionKey = `/${pathname.split("/")[1] ?? ""}`;
+
   // Warm Turbopack / RSC caches for every nav destination so first click isn't a 5–10s compile.
   useEffect(() => {
     for (const item of ALL_NAV_ITEMS) {
@@ -65,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Topbar />
           <main className="flex-1 overflow-y-auto">
             <motion.div
-              key={pathname}
+              key={sectionKey}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}

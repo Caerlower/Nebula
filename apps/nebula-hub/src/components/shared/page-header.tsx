@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const ACCENTS = {
   primary: "var(--primary)",
   teal: "var(--accent-teal)",
-  gold: "var(--accent-warm)",
+  gold: "var(--accent-warm)", // sand in the Stellar palette
   danger: "var(--destructive)",
 } as const;
 
@@ -38,11 +38,7 @@ export function PageHeader({
             background: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
           }}
         >
-          <span
-            className="eyebrow-dot"
-            style={{ color: accentColor, textShadow: `0 0 12px ${accentColor}` }}
-            aria-hidden
-          >
+          <span className="eyebrow-dot" style={{ color: accentColor }} aria-hidden>
             •
           </span>
           {eyebrow}
