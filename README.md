@@ -1,6 +1,6 @@
 # Nebula
 
-**A Stellar wallet for AI agents** — custody, policy, and payments so agents can spend USDC on-chain without ever holding a private key.
+**Treasury infrastructure for AI agents on Stellar** — custody, policy, liquid/yield split, and payment rails so an agent can hold and move capital without holding a private key.
 
 [Production](https://nebulaonchain.xyz)
 
@@ -24,14 +24,14 @@
 
 ## Overview
 
-Agents can already plan and call tools — they still stop at paywalls. Nebula gives each agent a **bounded Stellar wallet**: inline USDC payments (x402), session budgets (MPP), DeFi hooks (Blend), and spend limits the agent cannot bypass.
+Agents can plan and call tools; they still need a place for capital to live, earn, and leave under bounds. Nebula is that **treasury layer**: each agent gets an isolated Stellar wallet, a liquid band for spend, optional Blend yield on idle funds, and policy the agent cannot bypass.
 
-Private keys never leave the Hub. Agents and MCP clients only present a `nbl_live_…` token (or OAuth). The Hub enforces policy, confirms transfers when required, signs with Privy custody, and submits to Stellar — the agent only expresses intent.
+Private keys never leave the Hub. Agents and MCP clients only present a `nbl_live_…` token (or OAuth). The Hub enforces policy, confirms when required, signs with Privy custody, and submits to Stellar — the agent only expresses intent.
 
 - **Custody** — Privy-managed Stellar wallets, one per agent, isolated from each other and the owner.
-- **Policy** — per-transaction / daily / per-category USDC caps, allow/deny lists, and an emergency pause, enforced in Postgres and (optionally) on-chain via a Soroban contract.
-- **Payments** — classic transfers, XLM ↔ USDC swaps, x402 pay-walled HTTP, and MPP payment channels.
-- **Treasury** — Blend auto-yield with a configurable liquid band.
+- **Treasury** — liquid band + Blend auto-yield: keep enough spendable, park the rest.
+- **Policy** — per-transaction / daily / per-category USDC caps, allow/deny lists, emergency pause — Postgres and (optionally) on-chain via Soroban.
+- **Payment rails** — transfers, XLM ↔ USDC swaps, x402 pay-walled HTTP, MPP session channels — spend from the treasury, not a separate wallet product.
 - **Reputation** — Stellar8004-backed on-chain agent identity and score.
 
 ---
@@ -51,7 +51,7 @@ flowchart TB
   end
 
   subgraph hub [Nebula Hub — apps/nebula-hub]
-    UI[Dashboard · Policy · Approvals · Connect]
+    UI[Dashboard · Treasury · Policy · Connect]
     API["/api/tools/* · /api/wallet · /api/agents"]
     MCP["POST /mcp · OAuth DCR"]
     PIPE[Tool pipeline + confirmations]
@@ -60,7 +60,8 @@ flowchart TB
 
   subgraph chain [Stellar]
     POL[Policy contract]
-    NET[Payments · x402 · MPP · Blend]
+    TREAS[Blend liquid / yield]
+    NET[Payments · x402 · MPP]
   end
 
   subgraph data [Data]
@@ -76,22 +77,19 @@ flowchart TB
   UI --> API
   PIPE --> PRIVY
   PIPE --> POL
+  PRIVY --> TREAS
   PRIVY --> NET
   PIPE --> SB
   UI --> SB
 ```
 
-
-
-
-| Layer                                    | Role                                                                                |
-| ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Hub** (`apps/nebula-hub`)              | Next.js app: Privy auth + custody, dashboard, tool APIs, remote Streamable HTTP MCP |
-| `nebulamcp-core`                         | Shared Zod tool schemas + confirmation / policy matrix                              |
-| `nebulamcp-stdio`                        | Thin stdio MCP client → Hub (`npx nebulamcp-stdio`)                                 |
-| **Landing** (`apps/landing`)             | Marketing site; built into Hub `public/landing` for deploy                          |
-| **Policy contract** (`contracts/policy`) | On-chain spend caps / treasury bands when `POLICY_CONTRACT_ID` is set               |
-
+| Layer | Role |
+| ----- | ---- |
+| **Hub** (`apps/nebula-hub`) | Next.js app: Privy auth + custody, treasury/policy UI, tool APIs, remote Streamable HTTP MCP |
+| `nebulamcp-core` | Shared Zod tool schemas + confirmation / policy matrix |
+| `nebulamcp-stdio` | Thin stdio MCP client → Hub (`npx nebulamcp-stdio`) |
+| **Landing** (`apps/landing`) | Marketing site; built into Hub `public/landing` for deploy |
+| **Policy contract** (`contracts/policy`) | On-chain spend caps / treasury bands when `POLICY_CONTRACT_ID` is set |
 
 Full phase status and stack map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -102,12 +100,12 @@ Full phase status and stack map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ```
 nebula/
 ├── apps/
-│   ├── nebula-hub/          # Custody Hub (dashboard + APIs + /mcp)
+│   ├── nebula-hub/          # Custody + treasury Hub (dashboard + APIs + /mcp)
 │   └── landing/             # Marketing site → hub public/landing
 ├── packages/
 │   ├── nebulamcp-core/      # nebulamcp-core (shared schemas)
 │   └── nebulamcp/           # nebulamcp-stdio  (bin: nebulamcp)
-├── contracts/policy/        # Soroban policy contract
+├── contracts/policy/        # Soroban policy + treasury-band contract
 └── docs/                    # Architecture, structure, setup guides
 ```
 
@@ -141,16 +139,14 @@ pnpm --filter nebula-landing preview
 
 Minimum for a working Hub:
 
+| Group | Variables |
+| ----- | --------- |
+| Database | `DATABASE_URL`, `DIRECT_URL` |
+| Privy custody | `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_AUTHORIZATION_PRIVATE_KEY` |
+| App origin | `NEXT_PUBLIC_APP_URL`, `APP_BASE_URL` |
+| Wallet sign-in | `WALLET_SESSION_SECRET` (HMAC for Freighter/EOA SIWS — required in production) |
 
-| Group          | Variables                                                                                         |
-| -------------- | ------------------------------------------------------------------------------------------------- |
-| Database       | `DATABASE_URL`, `DIRECT_URL`                                                                      |
-| Privy custody  | `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_AUTHORIZATION_PRIVATE_KEY` |
-| App origin     | `NEXT_PUBLIC_APP_URL`, `APP_BASE_URL`                                                             |
-| Wallet sign-in | `WALLET_SESSION_SECRET` (HMAC for Freighter/EOA SIWS — required in production)                    |
-
-
-Optional: `POLICY_CONTRACT_ID` (on-chain caps), `TAEL_PARTNER_SIGN_URL` / `TAEL_HMAC_SECRET` (partner signing), Upstash Redis (rate limits). The template documents every variable.
+Optional: `POLICY_CONTRACT_ID` (on-chain caps + treasury band), `TAEL_PARTNER_SIGN_URL` / `TAEL_HMAC_SECRET` (partner signing), Upstash Redis (rate limits). The template documents every variable.
 
 ---
 
@@ -160,8 +156,6 @@ Optional: `POLICY_CONTRACT_ID` (on-chain caps), `TAEL_PARTNER_SIGN_URL` / `TAEL_
 2. Pick a path below. Prefer the **www** Hub host so Bearer tokens survive redirects.
 
 > **Never put a Stellar secret key in MCP config** — only `NEBULA_TOKEN`.
-
-
 
 ### npm package (Claude Desktop / Cursor)
 
@@ -207,18 +201,16 @@ OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/
 
 ## What agents can do
 
-
-| Capability    | Tools / surface                                                  |
-| ------------- | ---------------------------------------------------------------- |
-| Wallet        | Balances, identity, fund (testnet), transfer                     |
-| Swap          | XLM ↔ Circle USDC on Stellar DEX (`get_swap_quote`, `swap`)      |
-| Policy        | Caps, allow/deny lists; on-chain when policy contract configured |
-| Confirmations | Human approve flow + `await_confirmation`                        |
-| x402          | Pay-walled HTTP via Stellar USDC                                 |
-| MPP           | Open session → fetch → close / settle                            |
-| Treasury      | Blend XLM deposit/withdraw, auto-yield on activity               |
-| Reputation    | Stellar8004-backed agent reputation (Hub-provisioned)            |
-
+| Capability | Tools / surface |
+| ---------- | --------------- |
+| Treasury | Blend XLM deposit/withdraw, liquid band, auto-yield on activity |
+| Wallet | Balances, identity, fund (testnet), transfer |
+| Policy | Caps, allow/deny lists; on-chain when policy contract configured |
+| Swap | XLM ↔ Circle USDC on Stellar DEX (`get_swap_quote`, `swap`) |
+| Confirmations | Human approve flow + `await_confirmation` |
+| x402 | Pay-walled HTTP via Stellar USDC |
+| MPP | Open session → fetch → close / settle |
+| Reputation | Stellar8004-backed agent reputation (Hub-provisioned) |
 
 ---
 
@@ -228,24 +220,18 @@ OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/
 
 ---
 
-
-
 ## Documentation
 
-
-| Doc                                                | Contents                               |
-| -------------------------------------------------- | -------------------------------------- |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md)            | Phase status, stack map                |
-| [STRUCTURE.md](docs/STRUCTURE.md)                  | Repo layout                            |
-| [SUPABASE.md](docs/SUPABASE.md)                    | Database setup                         |
-| [MCP-DEV.md](docs/MCP-DEV.md)                      | MCP testing (x402, MPP, confirmations) |
-| [contracts/policy](contracts/policy/README.md)     | Soroban policy contract API + deploy   |
-| [packages/nebulamcp](packages/nebulamcp/README.md) | stdio MCP client                       |
-
+| Doc | Contents |
+| --- | -------- |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Phase status, stack map |
+| [STRUCTURE.md](docs/STRUCTURE.md) | Repo layout |
+| [SUPABASE.md](docs/SUPABASE.md) | Database setup |
+| [MCP-DEV.md](docs/MCP-DEV.md) | MCP testing (x402, MPP, confirmations) |
+| [contracts/policy](contracts/policy/README.md) | Soroban policy + treasury-band API + deploy |
+| [packages/nebulamcp](packages/nebulamcp/README.md) | stdio MCP client |
 
 ---
-
-
 
 ## Contributing
 
@@ -259,8 +245,6 @@ pnpm --filter nebula-hub run build        # prisma generate + next build
 Keep private keys and `.env.local` out of commits (only `.env.example` is tracked).
 
 ---
-
-
 
 ## License
 
