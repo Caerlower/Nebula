@@ -39,6 +39,12 @@ import {
 } from "./hub-stubs.js";
 import { helpTool } from "./help.js";
 import { getSwapQuoteTool, swapTool } from "./swap.js";
+import {
+  trustlineBorrowTool,
+  trustlineOnboardTool,
+  trustlineRepayTool,
+  trustlineStatusTool,
+} from "./trustline.js";
 
 export interface NebulaToolDefinition<TSchema extends z.ZodType = z.ZodType> {
   name: string;
@@ -112,6 +118,10 @@ export const tools = {
   }),
   register_identity: wrap(registerIdentityTool),
   get_my_reputation: wrap(getMyReputationTool),
+  trustline_status: wrap(trustlineStatusTool),
+  trustline_onboard: wrap(trustlineOnboardTool),
+  trustline_borrow: wrap(trustlineBorrowTool),
+  trustline_repay: wrap(trustlineRepayTool),
   await_confirmation: wrap(awaitConfirmationTool),
 } as const;
 

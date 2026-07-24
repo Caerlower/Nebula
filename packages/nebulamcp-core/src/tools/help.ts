@@ -11,6 +11,7 @@ export const helpCategorySchema = z.enum([
   "x402",
   "mpp",
   "treasury",
+  "credit",
   "identity",
   "approvals",
 ]);
@@ -98,6 +99,26 @@ export const HELP_CATALOG: Record<
       name: "optimize_treasury",
       summary:
         "Force park/top-up vs the liquid band. Auto-park also runs (throttled) after swap/x402/mpp/transfer when auto-yield is on.",
+    },
+  ],
+  credit: [
+    {
+      name: "trustline_status",
+      summary:
+        "TrustLine credit terms, available credit, vault, wallet USDC (testnet)",
+    },
+    {
+      name: "trustline_onboard",
+      summary:
+        "Register (idempotent) + underwrite on TrustLine; safe to re-call to refresh score",
+    },
+    {
+      name: "trustline_borrow",
+      summary: "Draw USDC from TrustLine credit line into the wallet",
+    },
+    {
+      name: "trustline_repay",
+      summary: "Repay TrustLine USDC (interest then principal)",
     },
   ],
   identity: [

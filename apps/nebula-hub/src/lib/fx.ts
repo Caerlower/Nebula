@@ -90,12 +90,12 @@ export async function liquidBandToXlm(params: {
 }
 
 /** Outbound spend types counted toward USDC daily / category caps. */
-export const SPEND_TX_TYPES = ["transfer", "x402", "mpp"] as const;
+export const SPEND_TX_TYPES = ["transfer", "x402", "mpp", "trustline_repay"] as const;
 
 /**
  * Convert a ledger row into USDC for policy accounting.
  * - transfer: native XLM → USDC via oracle
- * - x402 / mpp: amountXlm column already stores USDC face value
+ * - x402 / mpp / trustline_repay: amountXlm column already stores USDC face value
  */
 export async function rowSpendUsdc(row: {
   type: string;
@@ -106,7 +106,11 @@ export async function rowSpendUsdc(row: {
   if (row.type === "transfer") {
     return xlmToUsdc(raw);
   }
-  if (row.type === "x402" || row.type === "mpp") {
+  if (
+    row.type === "x402" ||
+    row.type === "mpp" ||
+    row.type === "trustline_repay"
+  ) {
     return raw;
   }
   return 0;

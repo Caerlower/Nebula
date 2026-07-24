@@ -24,7 +24,9 @@ export function ledgerAsset(type: string): "USDC" | "XLM" {
     type === "x402" ||
     type === "mpp" ||
     type === "mpp_open" ||
-    type === "mpp_close"
+    type === "mpp_close" ||
+    type === "trustline_repay" ||
+    type === "trustline_borrow"
   ) {
     return "USDC";
   }

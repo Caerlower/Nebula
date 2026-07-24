@@ -53,6 +53,12 @@ import {
   executeGetMyReputation,
   executeRegisterIdentity,
 } from "./identity";
+import {
+  executeTrustlineBorrow,
+  executeTrustlineOnboard,
+  executeTrustlineRepay,
+  executeTrustlineStatus,
+} from "./trustline";
 
 export { SPEND_TX_TYPES, loadPolicySnapshot, buildToolContext } from "./context";
 
@@ -81,6 +87,9 @@ const REQUIRES_SERVER_SIGNING = new Set<string>([
   "mpp_fetch",
   "mpp_close_session",
   "register_identity",
+  "trustline_onboard",
+  "trustline_borrow",
+  "trustline_repay",
 ]);
 
 /** Spend tools that need a resolvable signer before doing any work. */
@@ -93,6 +102,9 @@ const SPEND_TOOLS = new Set<string>([
   "mpp_fetch",
   "mpp_close_session",
   "register_identity",
+  "trustline_borrow",
+  "trustline_repay",
+  "trustline_onboard",
 ]);
 
 export async function runHubTool(
@@ -607,6 +619,31 @@ export async function runHubTool(
     return executeRegisterIdentity(principal);
   }
 
+  if (toolName === "trustline_status") {
+    return executeTrustlineStatus(ctx, principal);
+  }
+
+  if (toolName === "trustline_onboard") {
+    const input = parsed.data as {
+      skip_proof?: boolean;
+      from_ledger?: number;
+    };
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    return executeTrustlineOnboard(input, ctx, principal, policy);
+  }
+
+  if (toolName === "trustline_borrow") {
+    const input = parsed.data as { amount_usdc: number; reason: string };
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    return executeTrustlineBorrow(input, ctx, principal, policy);
+  }
+
+  if (toolName === "trustline_repay") {
+    const input = parsed.data as { amount_usdc: number; reason: string };
+    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    return executeTrustlineRepay(input, ctx, principal, policy);
+  }
+
   return {
     status: "error",
     reason: `${toolName}_not_implemented_yet`,
@@ -907,12 +944,14 @@ export async function executeApprovedConfirmation(
     conf.toolName !== "x402_fetch" &&
     conf.toolName !== "x402_pay" &&
     conf.toolName !== "mpp_open_session" &&
-    conf.toolName !== "mpp_fetch"
+    conf.toolName !== "mpp_fetch" &&
+    conf.toolName !== "trustline_borrow" &&
+    conf.toolName !== "trustline_repay"
   ) {
     return { status: "error", reason: "unsupported_confirmation_tool" };
   }
 
-  const principal: AuthPrincipal = {
+  let principal: AuthPrincipal = {
     userId: conf.userId,
     agentId: null,
     tokenId: null,
@@ -923,9 +962,62 @@ export async function executeApprovedConfirmation(
     accountType: "custodial",
     signerStrategy: "privy",
   };
+
+  // TrustLine confirmations store the agent id so approve signs with the
+  // agent wallet (same wallet that opened the credit line), not the owner.
+  const confInput = conf.input as { _agentId?: string | null };
+  if (
+    (conf.toolName === "trustline_borrow" ||
+      conf.toolName === "trustline_repay") &&
+    confInput._agentId
+  ) {
+    const agent = await prisma.agent.findFirst({
+      where: { id: confInput._agentId, userId: conf.userId },
+    });
+    if (!agent?.stellarAddress || !agent.privyWalletId) {
+      return { status: "error", reason: "agent_wallet_not_provisioned" };
+    }
+    principal = {
+      ...principal,
+      agentId: agent.id,
+      stellarAddress: agent.stellarAddress,
+      privyWalletId: agent.privyWalletId,
+      accountType: "custodial",
+      signerStrategy: "privy",
+    };
+  }
+
   const ctx = buildToolContext(principal);
   if (!ctx) {
     return { status: "error", reason: "wallet_not_provisioned" };
+  }
+
+  if (
+    conf.toolName === "trustline_borrow" ||
+    conf.toolName === "trustline_repay"
+  ) {
+    const input = conf.input as {
+      amount_usdc: number;
+      reason: string;
+    };
+    const policy = await loadPolicySnapshot(conf.userId, principal.agentId);
+    const result =
+      conf.toolName === "trustline_borrow"
+        ? await executeTrustlineBorrow(input, ctx, principal, policy, {
+            skipConfirmation: true,
+            confirmationId,
+          })
+        : await executeTrustlineRepay(input, ctx, principal, policy, {
+            skipConfirmation: true,
+            confirmationId,
+          });
+    if (result.status === "ok" && result.tx_hash) {
+      await prisma.confirmation.update({
+        where: { id: confirmationId },
+        data: { txHash: result.tx_hash },
+      });
+    }
+    return result;
   }
 
   if (conf.toolName === "x402_fetch" || conf.toolName === "x402_pay") {

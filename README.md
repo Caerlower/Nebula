@@ -204,6 +204,7 @@ OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/
 | Capability | Tools / surface |
 | ---------- | --------------- |
 | Treasury | Blend XLM deposit/withdraw, liquid band, auto-yield on activity |
+| Credit | TrustLine revenue-underwritten USDC credit (testnet): `trustline_*` |
 | Wallet | Balances, identity, fund (testnet), transfer |
 | Policy | Caps, allow/deny lists; on-chain when policy contract configured |
 | Swap | XLM ↔ Circle USDC on Stellar DEX (`get_swap_quote`, `swap`) |
@@ -217,6 +218,8 @@ OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/
 ## Partners
 
 **[Tael Protocol](https://taelprotocol.xyz/)** — Nebula's capabilities are listed on Tael so Tael agents can discover and call them, paying per call in USDC on Stellar. Read-only capabilities are live; agent-spend signing (Tael card via `partner_callback`) is rolling out next.
+
+**[TrustLine](https://docs.0xtrustline.online/)** — revenue-underwritten, uncollateralized USDC credit for AI agents on Stellar (testnet prototype). Nebula MCP exposes `trustline_*` tools; the Hub signs with Privy instead of handing agents a secret key ([SDK v0.2](https://github.com/TechnicallyKiller/TrustLine/releases/tag/v0.2.0)).
 
 ---
 
