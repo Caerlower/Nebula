@@ -3,7 +3,6 @@ import { NextRequest } from "next/server";
 import { cachedJsonResponse } from "@/lib/route-cache";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
-import { hubNetwork } from "@/lib/stellar8004/config";
 import { getMyReputation, hubScoreFrom8004 } from "@/lib/stellar8004/reputation";
 import { prisma } from "@/lib/db";
 import { privyConfigured } from "@/lib/auth";
@@ -24,7 +23,11 @@ async function uncachedGET(req: NextRequest) {
 
   const agent = targetAgentId
     ? await prisma.agent.findFirst({
-        where: { id: targetAgentId, userId: principal.userId },
+        where: {
+          id: targetAgentId,
+          userId: principal.userId,
+          network: principal.network,
+        },
       })
     : null;
 
@@ -62,7 +65,7 @@ async function uncachedGET(req: NextRequest) {
     const live = await getMyReputation({
       publicKey: agent.stellarAddress!,
       signer: privySigner(agent.privyWalletId!, agent.stellarAddress!),
-      network: hubNetwork(),
+      network: principal.network,
       cachedAgentId: agent.stellar8004AgentId,
     });
 
@@ -146,7 +149,9 @@ export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
   const agentId = new URL(req.url).searchParams.get("agentId") ?? principal.agentId ?? "owner";
-  return cachedJsonResponse(`rep:${principal.userId}:${agentId}`, 60000, () =>
-    uncachedGET(req),
+  return cachedJsonResponse(
+    `rep:${principal.userId}:${principal.network}:${agentId}`,
+    60000,
+    () => uncachedGET(req),
   );
 }
