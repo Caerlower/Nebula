@@ -28,6 +28,8 @@ model User {
   reputationScore    Int      @default(0)
   /// Cached confidence: unrated | low | medium | high
   reputationTier     String   @default("unrated")
+  /// Preferred Stellar ledger for this account: "testnet" | "mainnet".
+  preferredNetwork   String   @default("testnet")
   createdAt          DateTime @default(now())
 
   tokens           NebulaToken[]
@@ -36,7 +38,8 @@ model User {
   confirmations    Confirmation[]
   whitelistEntries WhitelistEntry[]
   denylistEntries  DenylistEntry[]
-  policySettings   PolicySettings?
+  /// One PolicySettings row per ledger (userId + network).
+  policySettings   PolicySettings[]
   mppSessions      MppSession[]
 }
 
@@ -62,6 +65,8 @@ model Agent {
   name               String
   framework          String
   status             String   @default("active")
+  /// Ledger this agent belongs to. Twin agents are separate rows per network.
+  network            String   @default("testnet")
   /// What this agent is for — free-text purpose set at creation.
   description        String?
   /// Optional avatar hue (0–359) chosen at creation; null = deterministic from name.
@@ -89,12 +94,16 @@ model Agent {
   policy AgentPolicy?
   whitelistEntries WhitelistEntry[]
   denylistEntries  DenylistEntry[]
+
+  @@index([userId, network])
 }
 
 model Transaction {
   id             String   @id @default(cuid())
   userId         String
   agentId        String?
+  /// Ledger this tx was executed on.
+  network        String   @default("testnet")
   type           String
   destination    String
   amountXlm      Decimal  @db.Decimal(18, 7)
@@ -106,11 +115,15 @@ model Transaction {
   createdAt      DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, network, createdAt])
 }
 
 model Confirmation {
   id         String    @id @default(cuid())
   userId     String
+  /// Ledger this confirmation will execute on.
+  network    String    @default("testnet")
   toolName   String
   input      Json
   summary    String
@@ -121,6 +134,8 @@ model Confirmation {
   createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, network])
 }
 
 model WhitelistEntry {
@@ -156,7 +171,9 @@ model DenylistEntry {
 }
 
 model PolicySettings {
-  userId          String  @id
+  userId          String
+  /// Ledger these treasury / default caps apply to.
+  network         String  @default("testnet")
   /// Confirmation micro threshold (USDC).
   microThreshold  Decimal @default(0.1) @db.Decimal(18, 7)
   /// Per-transaction spend cap (USDC).
@@ -175,6 +192,8 @@ model PolicySettings {
   catMpp          Decimal @default(5) @db.Decimal(18, 7)
 
   user User @relation(fields: [userId], references: [id])
+
+  @@id([userId, network])
 }
 
 /// Per-agent spend caps. When absent, an agent inherits the owner's
