@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { networkFromPrincipal, parseHubNetwork } from "@/lib/network";
 import {
   mintWalletSessionToken,
   sessionCookie,
@@ -51,9 +52,12 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  const network = networkFromPrincipal({
+    network: parseHubNetwork(user.preferredNetwork),
+  });
   await prisma.policySettings.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id },
+    where: { userId_network: { userId: user.id, network } },
+    create: { userId: user.id, network },
     update: {},
   });
 
