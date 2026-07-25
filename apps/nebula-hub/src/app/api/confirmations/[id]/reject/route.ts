@@ -32,6 +32,17 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (conf.userId !== principal.userId) {
     return Response.json({ status: "error", reason: "forbidden" }, { status: 403 });
   }
+  if (conf.network !== principal.network) {
+    return Response.json(
+      {
+        status: "error",
+        reason: "network_mismatch",
+        confirmationNetwork: conf.network,
+        dashboardNetwork: principal.network,
+      },
+      { status: 409 },
+    );
+  }
 
   if (conf.status === "executing") {
     return Response.json(
