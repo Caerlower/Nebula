@@ -24,7 +24,7 @@
 
 ## Overview
 
-Agents can plan and call tools; they still need a place for capital to live, earn, and leave under bounds. Nebula is that **treasury layer**: each agent gets an isolated Stellar wallet, a liquid band for spend, optional Blend yield on idle funds, and policy the agent cannot bypass.
+Agents can plan and call tools; they still need a place for capital to live, earn, and leave under bounds. Nebula is that **treasury layer**: each agent gets an isolated Stellar wallet, a liquid band for spend, optional Blend yield on idle funds, and an on-chain policy ledger the Hub enforces before it signs spend.
 
 Private keys never leave the Hub. Agents and MCP clients only present a `nbl_live_…` token (or OAuth). The Hub enforces policy, confirms when required, signs with Privy custody, and submits to Stellar — the agent only expresses intent.
 
