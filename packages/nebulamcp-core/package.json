@@ -1,6 +1,6 @@
 {
   "name": "nebulamcp-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Transport-agnostic Nebula tool schemas and handlers. No MCP or HTTP.",
   "type": "module",
   "license": "MIT",
