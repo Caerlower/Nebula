@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { KeyRound } from "lucide-react";
 
-import { PageHeader } from "@/components/shared/page-header";
+import { SectionRule } from "@/components/design/primitives";
 import { ApiKeysCard } from "@/components/shared/api-keys-card";
-import { AgentAvatar } from "@/components/agent-scope/agent-avatar";
+import { agentAttribution } from "@/components/shared/status-badges";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
-import { Card } from "@/components/ui/card";
 import { truncMiddle } from "@/lib/utils";
 
 export default function ApiKeysPage() {
@@ -15,46 +13,41 @@ export default function ApiKeysPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="agent"
-        title="API Keys"
-        subtitle="Manual keys and Claude.ai OAuth connectors both appear here. Revoke any key to cut off that client immediately."
-      />
+      <div className="pb-6">
+        <SectionRule>API KEYS</SectionRule>
+        <h1 className="page-title">API Keys</h1>
+        <p className="mt-3 max-w-xl text-[14px] text-pretty text-muted-foreground">
+          Manual tokens and Claude.ai OAuth connectors for this agent. Revoke
+          any key to cut that client off immediately — the wallet stays put.
+        </p>
+      </div>
 
       {selectedAgent ? (
-        <Card className="mb-6 flex flex-wrap items-center gap-3 p-4">
-          <AgentAvatar
-            name={selectedAgent.name}
-            seed={selectedAgent.id}
-            color={selectedAgent.avatarColor}
-            size="md"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{selectedAgent.name}</p>
-            {selectedAgent.address !== "—" ? (
-              <p className="font-mono text-xs text-muted-foreground">
-                {truncMiddle(selectedAgent.address, 6, 6)}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">wallet provisioning…</p>
-            )}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+          <div className="min-w-0">
+            <p className="font-mono text-[13px]">{selectedAgent.name}</p>
+            <p className="mt-1 font-mono text-[10px] tracking-[0.06em] text-subtle">
+              {agentAttribution(selectedAgent).toUpperCase()}
+              {selectedAgent.address !== "—"
+                ? ` · ${truncMiddle(selectedAgent.address, 4, 4)}`
+                : " · PROVISIONING…"}
+            </p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-elevated/60 px-2.5 py-1 text-[11px] text-muted-foreground">
-            <KeyRound className="size-3" aria-hidden />
-            per-agent scoped
+          <span className="font-mono text-[9px] tracking-[0.14em] text-subtle">
+            PER-AGENT SCOPED
           </span>
-        </Card>
+        </div>
       ) : null}
 
       <ApiKeysCard />
 
-      <p className="mt-4 text-[13px] text-muted-foreground">
-        Ready to wire this key into a client?{" "}
+      <p className="mt-5 font-mono text-[11px] tracking-[0.04em] text-muted-foreground">
+        Wire a token into a client on{" "}
         <Link
           href="/connect"
           className="text-foreground underline-offset-4 hover:underline"
         >
-          Set up MCP →
+          Connect →
         </Link>
       </p>
     </div>
