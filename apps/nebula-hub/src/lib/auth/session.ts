@@ -120,7 +120,6 @@ export function applyPrivySession(
   useAuthStore.setState({
     user: session,
     onboarded: options?.onboarded ?? prev.onboarded,
-    pendingEmail: null,
   });
   flushAuthStorage();
   return session;
