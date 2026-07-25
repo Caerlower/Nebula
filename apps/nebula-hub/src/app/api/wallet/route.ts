@@ -18,9 +18,7 @@ export async function GET(req: NextRequest) {
     return unauthorized();
   }
 
-  const network =
-    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-    "testnet";
+  const network = principal.network;
 
   const agentId = new URL(req.url).searchParams.get("agentId");
 
@@ -28,7 +26,11 @@ export async function GET(req: NextRequest) {
 
   if (agentId) {
     const agent = await prisma.agent.findFirst({
-      where: { id: agentId, userId: principal.userId },
+      where: {
+        id: agentId,
+        userId: principal.userId,
+        network: principal.network,
+      },
       select: { stellarAddress: true },
     });
     if (!agent) {
