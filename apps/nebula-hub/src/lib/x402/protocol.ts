@@ -5,7 +5,7 @@ import { ExactStellarScheme } from "@x402/stellar/exact/client";
 import type { ClientStellarSigner } from "@x402/stellar";
 import { DEFAULT_TOKEN_DECIMALS, getNetworkPassphrase } from "@x402/stellar";
 
-import { type HashSigner, privySigner } from "@/lib/signing";
+import { type HashSigner } from "@/lib/signing";
 
 export type X402Network = "stellar:testnet" | "stellar:pubnet";
 
@@ -121,18 +121,6 @@ export function createHubX402Signer(params: {
   };
 }
 
-/** Backwards-compatible Privy-backed x402 signer. */
-export function createPrivyX402Signer(params: {
-  walletId: string;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-}): ClientStellarSigner {
-  return createHubX402Signer({
-    signer: privySigner(params.walletId, params.stellarAddress),
-    network: params.network,
-  });
-}
-
 export function createHubX402ClientWithSigner(params: {
   signer: HashSigner;
   network: "testnet" | "mainnet";
@@ -150,15 +138,4 @@ export function createHubX402ClientWithSigner(params: {
     .registerPolicy((_version, requirements) =>
       requirements.filter((req) => req.network.startsWith("stellar:")),
     );
-}
-
-export function createHubX402Client(params: {
-  walletId: string;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-}): x402Client {
-  return createHubX402ClientWithSigner({
-    signer: privySigner(params.walletId, params.stellarAddress),
-    network: params.network,
-  });
 }
