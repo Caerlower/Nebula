@@ -23,6 +23,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     toolName: conf.toolName,
     summary: conf.summary,
     status: conf.status,
+    network: conf.network,
     expiresAt: conf.expiresAt.toISOString(),
     input: conf.input,
     txHash: conf.txHash,
