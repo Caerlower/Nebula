@@ -1,7 +1,10 @@
 /**
- * TrustLine client for Nebula Hub — same protocol as @trustline-agents/agent-sdk
- * (https://docs.0xtrustline.online), but signing uses Privy HashSigner instead of
- * an agent-held secret. Testnet only.
+ * Fianza (formerly TrustLine) client for Nebula Hub — same protocol as
+ * @fianza/agent-sdk / @trustline-agents/agent-sdk, but signing uses Privy
+ * HashSigner instead of an agent-held secret.
+ *
+ * Runtime: testnet only until Fianza’s pubnet API / underwriter is live.
+ * Mainnet contract IDs are pinned for a future enable flag.
  */
 import {
   Address,
@@ -22,6 +25,10 @@ import { explorerTxUrl, signAndSubmitSoroban } from "../stellar";
 
 const DEFAULT_API = "https://trustline-rpxt.onrender.com";
 const TESTNET_RPC = "https://soroban-testnet.stellar.org";
+
+/** Circle USDC SAC on Stellar pubnet. */
+const USDC_SAC_MAINNET =
+  "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75";
 
 export type TrustLineContracts = {
   registry: string;
@@ -99,13 +106,35 @@ export function trustlineApiBase(): string {
 }
 
 /**
- * Pinned TrustLine testnet contract IDs. Env overrides win; remote `/config`
- * must match these before the Hub will sign any invoke.
- * Live defaults from https://trustline-rpxt.onrender.com/config (Jul 2026).
+ * Pinned Fianza / TrustLine contract IDs by network.
+ * Env overrides win; remote `/config` must match before the Hub will sign.
+ * Mainnet IDs are stored for a future enable — runtime still rejects mainnet.
  */
-export function pinnedTrustLineContracts(): TrustLineContracts & {
+export function pinnedTrustLineContracts(
+  network: "testnet" | "mainnet" = "testnet",
+): TrustLineContracts & {
   usdcSac: string;
 } {
+  if (network === "mainnet") {
+    return {
+      registry:
+        process.env.FIANZA_REGISTRY_ID_MAINNET?.trim() ||
+        process.env.TRUSTLINE_REGISTRY_ID_MAINNET?.trim() ||
+        "CAHWYFLMQI6BBOL6ZLZRRINCK6KVBX73ACH7LCPB24WDED4LSMCI7YZC",
+      creditLine:
+        process.env.FIANZA_CREDIT_LINE_ID_MAINNET?.trim() ||
+        process.env.TRUSTLINE_CREDIT_LINE_ID_MAINNET?.trim() ||
+        "CDK7S4UWY227FHFKDSV37DGT7AIJ5Z2QEYO5AY456M7RBGJN25WYJVGC",
+      vault:
+        process.env.FIANZA_VAULT_ID_MAINNET?.trim() ||
+        process.env.TRUSTLINE_VAULT_ID_MAINNET?.trim() ||
+        "CAE5C5UJYVED5DAVY4YKYT6E2C4NBZCIUBAK2MXGKGLKZESBBXKFPZ4U",
+      usdcSac:
+        process.env.FIANZA_USDC_SAC_MAINNET?.trim() ||
+        process.env.TRUSTLINE_USDC_SAC_MAINNET?.trim() ||
+        USDC_SAC_MAINNET,
+    };
+  }
   return {
     registry:
       process.env.TRUSTLINE_REGISTRY_ID?.trim() ||
@@ -162,7 +191,7 @@ export class TrustLineHubClient {
   ) {
     if (network !== "testnet") {
       throw new Error(
-        "TrustLine is testnet-only (prototype — https://docs.0xtrustline.online).",
+        "Fianza credit is testnet-only until the pubnet underwriter/API is live. Switch the Hub network chip to testnet to borrow or repay.",
       );
     }
     this.passphrase = Networks.TESTNET;
