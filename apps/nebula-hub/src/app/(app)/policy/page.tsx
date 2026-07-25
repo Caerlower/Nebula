@@ -2,52 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  ArrowRightLeft,
-  Check,
-  ExternalLink,
-  Globe,
-  Loader2,
-  Pencil,
-  Radio,
-  ShieldCheck,
-  Trash2,
-  Wallet,
-  X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ChevronDown, Loader2, Plus } from "lucide-react";
 
-import { PageHeader } from "@/components/shared/page-header";
-import { CopyButton } from "@/components/shared/copy-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { EmptyState } from "@/components/shared/empty-state";
-import { StatusDot } from "@/components/shared/status-badges";
-import { TableSkeleton } from "@/components/shared/skeletons";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { SectionRule } from "@/components/design/primitives";
 import * as api from "@/lib/api";
-import { fmtDate, fmtUSD, truncMiddle } from "@/lib/utils";
+import { truncMiddle, cn } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
-import { cn } from "@/lib/utils";
-import type { PolicyCategory } from "@/types/domain";
+import type { PolicyCategory, PolicyEntry } from "@/types/domain";
+
+const FIELD =
+  "box-border h-10 w-full rounded-xl border border-border bg-[var(--panel-3)] px-3.5 text-[13px] text-foreground outline-none transition-[border-color] placeholder:text-muted-foreground focus:border-border-strong";
 
 function PendingOnChain() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
       <Loader2 className="size-3 animate-spin" aria-hidden />
       Saving…
     </span>
@@ -64,19 +34,54 @@ function policyToast(message: string, txHash: string) {
   });
 }
 
-/** Click the number → it becomes an input with save/cancel. */
-function InlineEditUSD({
+function fmtCap(value: number) {
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+  });
+}
+
+function EditPill({
+  label,
+  accent,
+  onClick,
+  disabled,
+}: {
+  label: "EDIT" | "SAVE";
+  accent?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "shrink-0 rounded-full border px-3 py-[5px] font-mono text-[10px] tracking-[0.12em] disabled:opacity-50",
+        accent
+          ? "border-[color-mix(in_srgb,var(--primary)_55%,var(--border-strong))] text-foreground"
+          : "border-border-strong text-muted-foreground",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Hard-cap card — reading shows value; editing uses SAVE + full-width input. */
+function CapCard({
   label,
   value,
+  hint,
+  meter,
   onSave,
-  icon: Icon,
-  iconClassName,
 }: {
   label: string;
   value: number;
+  hint: string;
+  meter?: { used: number; total: number };
   onSave: (next: number) => Promise<void>;
-  icon?: LucideIcon;
-  iconClassName?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
@@ -88,7 +93,7 @@ function InlineEditUSD({
   }, [value, pending, editing]);
 
   const save = async () => {
-    const parsed = Number.parseFloat(draft);
+    const parsed = Number.parseFloat(draft.replace(/,/g, ""));
     if (!Number.isFinite(parsed) || parsed <= 0) {
       toast.error("Enter an amount above zero");
       return;
@@ -106,112 +111,194 @@ function InlineEditUSD({
     }
   };
 
+  const pct = meter
+    ? Math.min(100, (meter.used / Math.max(meter.total, 1)) * 100)
+    : 0;
+
   return (
-    <div>
-      <div className="flex items-center gap-2">
-        {Icon ? (
-          <span
-            className={cn(
-              "flex size-6 items-center justify-center rounded-md border border-border bg-elevated/50 text-primary",
-              iconClassName,
-            )}
-          >
-            <Icon className="size-3.5" aria-hidden />
-          </span>
-        ) : null}
-        <p className="stat-label">{label}</p>
-      </div>
-      {editing ? (
-        <form
-          className="mt-1 flex items-center gap-1"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
-          <Input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            type="number"
-            min="1"
-            step="any"
-            className="h-8 w-28 font-mono"
-            autoFocus
-            aria-label={`${label} in USDC`}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setEditing(false);
+    <div className="rounded-[14px] border border-border bg-elevated p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground">
+          {label}
+        </p>
+        {pending ? (
+          <PendingOnChain />
+        ) : editing ? (
+          <EditPill label="SAVE" accent onClick={() => void save()} />
+        ) : (
+          <EditPill
+            label="EDIT"
+            onClick={() => {
+              setDraft(String(display));
+              setEditing(true);
             }}
           />
-          <Button type="submit" size="icon" variant="ghost" className="size-7" aria-label="Save limit">
-            <Check className="size-3.5 text-success" />
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            onClick={() => setEditing(false)}
-            aria-label="Cancel edit"
-          >
-            <X className="size-3.5" />
-          </Button>
-        </form>
-      ) : (
-        <button
-          type="button"
-          className="group mt-1.5 flex w-full items-center gap-2 rounded-lg text-left hover:text-primary disabled:opacity-60"
-          onClick={() => {
-            setDraft(String(display));
-            setEditing(true);
+        )}
+      </div>
+
+      {editing ? (
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          type="text"
+          inputMode="decimal"
+          autoFocus
+          aria-label={`${label} in USDC`}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void save();
+            }
+            if (e.key === "Escape") setEditing(false);
           }}
-          disabled={pending}
-          aria-label={`Edit ${label.toLowerCase()} — currently ${fmtUSD(display)}`}
-        >
-          <span className="hero-number-sm tabular">{fmtUSD(display)}</span>
-          {pending ? (
-            <PendingOnChain />
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-elevated/60 px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors group-hover:border-primary/40 group-hover:text-primary">
-              <Pencil className="size-3" aria-hidden />
-              Edit
-            </span>
-          )}
-        </button>
+          className="mt-2.5 w-full rounded-xl border border-primary bg-[var(--panel-3)] px-3 py-2.5 font-mono text-[24px] tabular-nums outline-none"
+        />
+      ) : (
+        <div className="mt-2.5 flex items-baseline gap-2">
+          <span className="font-mono text-[28px] leading-none tabular-nums">
+            {fmtCap(display)}
+          </span>
+          <span className="font-mono text-[11px] text-subtle">USDC</span>
+        </div>
+      )}
+
+      {meter ? (
+        <div className="mt-3">
+          <div className="h-1 overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full bg-primary transition-all duration-500"
+              style={{ width: `${editing ? Math.min(100, (meter.used / Math.max(Number.parseFloat(draft) || meter.total, 1)) * 100) : pct}%` }}
+            />
+          </div>
+          <p className="mt-2 font-mono text-[10px] tracking-[0.08em] text-subtle uppercase">
+            {fmtCap(meter.used)} / {fmtCap(editing ? Number.parseFloat(draft) || display : display)} USED TODAY
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 font-mono text-[10px] tracking-[0.08em] text-subtle uppercase">
+          {hint}
+        </p>
       )}
     </div>
   );
 }
 
-const CATEGORY_META: Record<
-  PolicyCategory,
-  { label: string; blurb: string; icon: LucideIcon; tone: string }
-> = {
-  x402: {
-    label: "x402 payments",
-    blurb: "One-shot HTTP 402 payments for API calls and content.",
-    icon: Globe,
-    tone: "border-primary/30 bg-primary/10 text-primary",
-  },
-  mpp: {
-    label: "MPP payments",
-    blurb: "Streaming micropayment channels, settled on close.",
-    icon: Radio,
-    tone: "border-[color-mix(in_srgb,var(--accent-teal)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent-teal)_14%,transparent)] text-teal",
-  },
-  transfer: {
-    label: "Transfers",
-    blurb: "Native XLM sends — counted in USDC via live XLM/USD rate.",
-    icon: ArrowRightLeft,
-    tone: "border-[color-mix(in_srgb,var(--accent-warm)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent-warm)_14%,transparent)] text-warm",
-  },
+const CATEGORY_META: Record<PolicyCategory, { label: string }> = {
+  x402: { label: "x402 payments" },
+  mpp: { label: "MPP payments" },
+  transfer: { label: "Transfers" },
 };
 
-export default function PolicyPage() {
-  const { selectedAgentId } = useAgentScope();
-  const { data: policy, setData: setPolicy, loading } = useLoad(
-    () => api.getPolicy(),
-    [selectedAgentId],
+function CategoryRow({
+  name,
+  cap,
+  used,
+  onSave,
+}: {
+  name: string;
+  cap: number;
+  used: number;
+  onSave: (next: number) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(cap));
+  const [pending, setPending] = useState(false);
+  const [display, setDisplay] = useState(cap);
+
+  useEffect(() => {
+    if (!pending && !editing) setDisplay(cap);
+  }, [cap, pending, editing]);
+
+  const save = async () => {
+    const parsed = Number.parseFloat(draft.replace(/,/g, ""));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      toast.error("Enter an amount above zero");
+      return;
+    }
+    const previous = display;
+    setEditing(false);
+    setDisplay(parsed);
+    setPending(true);
+    try {
+      await onSave(parsed);
+    } catch {
+      setDisplay(previous);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const shownCap = editing
+    ? Number.parseFloat(draft.replace(/,/g, "")) || display
+    : display;
+  const pct = Math.min(100, (used / Math.max(shownCap, 1)) * 100);
+  const unused = used <= 0;
+
+  return (
+    <div className="border-b border-border py-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 text-[14px]">{name}</p>
+        <div className="flex shrink-0 items-center gap-3">
+          {editing ? (
+            <span className="flex items-center gap-2 font-mono text-[12px]">
+              <span className="text-subtle tabular-nums">{fmtCap(used)} /</span>
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                type="text"
+                inputMode="decimal"
+                autoFocus
+                aria-label={`${name} cap`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void save();
+                  }
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                className="w-24 rounded-[10px] border border-primary bg-[var(--panel-3)] px-2.5 py-1.5 font-mono text-[12px] tabular-nums outline-none"
+              />
+            </span>
+          ) : (
+            <span className="font-mono text-[12px] text-muted-foreground tabular-nums">
+              {fmtCap(used)} / {fmtCap(display)}
+              {unused ? " · unused" : ""}
+            </span>
+          )}
+          {pending ? (
+            <PendingOnChain />
+          ) : editing ? (
+            <EditPill label="SAVE" accent onClick={() => void save()} />
+          ) : (
+            <EditPill
+              label="EDIT"
+              onClick={() => {
+                setDraft(String(display));
+                setEditing(true);
+              }}
+            />
+          )}
+        </div>
+      </div>
+      <div className="mt-2.5 h-[3px] bg-border">
+        <div
+          className="h-[3px] bg-primary transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   );
+}
+
+export default function PolicyPage() {
+  const { selectedAgentId, selectedAgent, reloadAgents } = useAgentScope();
+  const {
+    data: policy,
+    setData: setPolicy,
+    loading,
+    reload: reloadPolicy,
+  } = useLoad(() => api.getPolicy(), [selectedAgentId]);
+  const { data: wallet } = useLoad(() => api.getWallet(), [selectedAgentId]);
 
   const [entryAddress, setEntryAddress] = useState("");
   const [entryLabel, setEntryLabel] = useState("");
@@ -219,7 +306,15 @@ export default function PolicyPage() {
   const [addingEntry, setAddingEntry] = useState(false);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [pausePending, setPausePending] = useState(false);
+  const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false);
   const [revokeOpen, setRevokeOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<PolicyEntry | null>(null);
+  const [simulateAmount, setSimulateAmount] = useState("");
+  const [simulateRail, setSimulateRail] = useState<PolicyCategory>("transfer");
+
+  // Same source of truth as Overview: either flag means spend is blocked.
+  const isPaused =
+    policy?.paused === true || selectedAgent?.status === "paused";
 
   const saveDailyCap = async (next: number) => {
     try {
@@ -275,7 +370,7 @@ export default function PolicyPage() {
       );
       if (updated.perCallCapXLM < next) {
         toast.info("Per-tx cap can't exceed the daily cap", {
-          description: `Set to ${fmtUSD(updated.perCallCapXLM)} to match the daily cap. Raise the daily cap first to go higher.`,
+          description: `Set to ${fmtCap(updated.perCallCapXLM)} USDC to match the daily cap. Raise the daily cap first to go higher.`,
         });
       } else {
         policyToast("Limits updated", txHash);
@@ -291,14 +386,21 @@ export default function PolicyPage() {
 
   const saveCategory = async (category: PolicyCategory, next: number) => {
     try {
-      const { policy: updated, txHash } = await api.updateCategoryLimit(category, next);
+      const { policy: updated, txHash } = await api.updateCategoryLimit(
+        category,
+        next,
+      );
       setPolicy(updated);
       policyToast(`${CATEGORY_META[category].label} cap updated`, txHash);
     } catch (error) {
       toast.error("Policy update failed", {
         description: error instanceof Error ? error.message : undefined,
-        action: { label: "Retry", onClick: () => void saveCategory(category, next) },
+        action: {
+          label: "Retry",
+          onClick: () => void saveCategory(category, next),
+        },
       });
+      throw error;
     }
   };
 
@@ -315,10 +417,15 @@ export default function PolicyPage() {
         label: entryLabel.trim() || "Untitled",
         kind: entryKind,
       });
-      setPolicy(policy ? { ...policy, entries: [entry, ...policy.entries] } : policy);
+      setPolicy(
+        policy ? { ...policy, entries: [entry, ...policy.entries] } : policy,
+      );
       setEntryAddress("");
       setEntryLabel("");
-      policyToast(`${entryKind === "allow" ? "Allowlisted" : "Denylisted"} ${truncMiddle(address)}`, txHash);
+      policyToast(
+        `${entryKind === "allow" ? "Allowlisted" : "Denylisted"} ${truncMiddle(address)}`,
+        txHash,
+      );
     } catch {
       toast.error("Couldn't add the address", {
         action: { label: "Retry", onClick: () => void addEntry() },
@@ -332,7 +439,11 @@ export default function PolicyPage() {
     setRemovingIds((prev) => new Set(prev).add(id));
     try {
       const { txHash } = await api.removePolicyEntry(id);
-      setPolicy(policy ? { ...policy, entries: policy.entries.filter((e) => e.id !== id) } : policy);
+      setPolicy(
+        policy
+          ? { ...policy, entries: policy.entries.filter((e) => e.id !== id) }
+          : policy,
+      );
       policyToast("Address removed", txHash);
     } catch {
       toast.error("Couldn't remove the address", {
@@ -347,17 +458,23 @@ export default function PolicyPage() {
     }
   };
 
-  const togglePause = async (paused: boolean) => {
+  const togglePause = async () => {
     if (!policy) return;
+    const nextPaused = !isPaused;
     setPausePending(true);
-    setPolicy({ ...policy, paused });
+    setPolicy({ ...policy, paused: nextPaused });
     try {
-      const { txHash } = await api.setPolicyPaused(paused);
-      policyToast(paused ? "All agent activity paused" : "Agent activity resumed", txHash);
+      const { txHash } = await api.setPolicyPaused(nextPaused);
+      reloadAgents();
+      reloadPolicy();
+      policyToast(
+        nextPaused ? "All agent activity paused" : "Agent activity resumed",
+        txHash,
+      );
     } catch {
-      setPolicy({ ...policy, paused: !paused });
+      setPolicy({ ...policy, paused: !nextPaused });
       toast.error("Couldn't update pause state", {
-        action: { label: "Retry", onClick: () => void togglePause(paused) },
+        action: { label: "Retry", onClick: () => void togglePause() },
       });
     } finally {
       setPausePending(false);
@@ -366,348 +483,464 @@ export default function PolicyPage() {
 
   const revokeAccess = async () => {
     try {
-      const { txHash } = await api.revokeAgentAccess();
-      policyToast("Agent access revoked", txHash);
+      const { txHash, revokedKeys } = await api.revokeAgentAccess();
+      reloadAgents();
+      reloadPolicy();
+      policyToast(
+        revokedKeys > 0
+          ? `Revoked ${revokedKeys} API key${revokedKeys === 1 ? "" : "s"}`
+          : "Agent taken offline",
+        txHash,
+      );
     } catch {
-      toast.error("Revoke failed", { action: { label: "Retry", onClick: () => void revokeAccess() } });
+      toast.error("Revoke failed", {
+        action: { label: "Retry", onClick: () => void revokeAccess() },
+      });
     }
   };
 
-  const onchain = Boolean(policy?.contractId?.startsWith("C"));
+  const allowList = policy?.entries.filter((e) => e.kind === "allow") ?? [];
+  const denyList = policy?.entries.filter((e) => e.kind === "deny") ?? [];
+  const spentToday = wallet?.spendTodayUSD ?? 0;
+  const spendByCategory = wallet?.spendTodayByCategory ?? {
+    transfer: 0,
+    x402: 0,
+    mpp: 0,
+  };
+  const largestToday = wallet?.largestSpendTodayUSD ?? 0;
+
+  const parsedSimulateAmount = Number.parseFloat(simulateAmount);
+  const simulateValid =
+    Number.isFinite(parsedSimulateAmount) && parsedSimulateAmount > 0;
+  const dailyRemaining = policy
+    ? Math.max(0, policy.dailyCapUSD - spentToday)
+    : 0;
+  const categoryCap = policy ? policy.categories[simulateRail] : 0;
+  const categoryUsed = spendByCategory[simulateRail] ?? 0;
+  const categoryRemaining = Math.max(0, categoryCap - categoryUsed);
+
+  let simulateVerdict: "ALLOWED" | "REJECTED" | null = null;
+  let simulateWhy: string | null = null;
+  if (simulateValid && policy) {
+    if (isPaused) {
+      simulateVerdict = "REJECTED";
+      simulateWhy =
+        "Agent is paused. Every payment rail is blocked until you resume.";
+    } else if (parsedSimulateAmount > policy.perCallCapXLM) {
+      simulateVerdict = "REJECTED";
+      simulateWhy = `Over the ${fmtCap(policy.perCallCapXLM)} USDC per-transaction cap. The agent would get a policy error, not a partial payment.`;
+    } else if (parsedSimulateAmount > dailyRemaining) {
+      simulateVerdict = "REJECTED";
+      simulateWhy = `Over remaining daily budget — ${fmtCap(dailyRemaining)} of ${fmtCap(policy.dailyCapUSD)} USDC left today.`;
+    } else if (parsedSimulateAmount > categoryRemaining) {
+      simulateVerdict = "REJECTED";
+      simulateWhy = `Over the ${CATEGORY_META[simulateRail].label} category cap — ${fmtCap(categoryRemaining)} of ${fmtCap(categoryCap)} USDC left.`;
+    } else {
+      simulateVerdict = "ALLOWED";
+      simulateWhy = `Within per-tx (${fmtCap(policy.perCallCapXLM)}), daily remaining (${fmtCap(dailyRemaining)}), and ${CATEGORY_META[simulateRail].label} (${fmtCap(categoryRemaining)} left).`;
+    }
+  }
 
   return (
     <div>
-      <PageHeader
-        eyebrow="wallet"
-        title="Spending policy"
-        subtitle="Hard limits, enforced before anything signs. Your agent can't spend around them."
-        accent="primary"
-      />
+      <div className="mb-8">
+        <SectionRule>
+          POLICY · {selectedAgent?.name?.toUpperCase() ?? "AGENT"}
+        </SectionRule>
+        <h1 className="page-title">What this agent may spend</h1>
+        <p className="mt-4 max-w-[560px] text-[15px] text-pretty text-muted-foreground">
+          These limits live on-chain. The agent cannot raise them, and a payment
+          that breaks one never reaches the network.
+        </p>
+      </div>
 
       {loading || !policy ? (
-        <Card className="p-5">
-          <TableSkeleton rows={4} cols={3} />
-        </Card>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="soft-panel h-[420px] animate-pulse" />
+          <div className="soft-panel h-[320px] animate-pulse bg-elevated" />
+        </div>
       ) : (
-        <div className="space-y-8">
-          {/* on-chain policy contract */}
-          <Card className="flex flex-wrap items-center gap-3 p-5">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-elevated/50 text-primary">
-              <ShieldCheck className="size-5" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-medium">On-chain policy contract</p>
-                {onchain ? (
-                  <Badge variant="success" className="gap-1">
-                    <StatusDot tone="success" /> On-chain
-                  </Badge>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+          {/* LEFT */}
+          <div className="soft-panel" style={{ padding: "30px 32px" }}>
+            <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+              HARD CAPS
+            </p>
+            <div className="mt-[18px] grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <CapCard
+                label="PER TRANSACTION"
+                value={policy.perCallCapXLM}
+                hint={
+                  largestToday > 0
+                    ? `Largest so far ${fmtCap(largestToday)}`
+                    : "Largest single payment · USDC"
+                }
+                onSave={savePerCallCap}
+              />
+              <CapCard
+                label="PER DAY"
+                value={policy.dailyCapUSD}
+                hint="Resets every 24h · USDC"
+                meter={{ used: spentToday, total: policy.dailyCapUSD }}
+                onSave={saveDailyCap}
+              />
+            </div>
+
+            <p className="mt-[34px] font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+              CATEGORY LIMITS
+            </p>
+            <div>
+              {(Object.keys(CATEGORY_META) as PolicyCategory[]).map(
+                (category) => (
+                  <CategoryRow
+                    key={category}
+                    name={CATEGORY_META[category].label}
+                    cap={policy.categories[category]}
+                    used={spendByCategory[category]}
+                    onSave={(next) => saveCategory(category, next)}
+                  />
+                ),
+              )}
+            </div>
+
+            <div className="mt-[34px] grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                  ALLOWED COUNTERPARTIES
+                </p>
+                <p className="mt-1 font-mono text-[9px] tracking-[0.08em] text-subtle">
+                  THIS AGENT ONLY
+                </p>
+                {allowList.length === 0 ? (
+                  <p className="py-3 font-mono text-[11px] text-subtle">
+                    None yet
+                  </p>
                 ) : (
-                  <Badge variant="outline" className="font-normal">
-                    Hub-enforced
-                  </Badge>
+                  allowList.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      disabled={removingIds.has(entry.id)}
+                      onClick={() => setRemoveTarget(entry)}
+                      title="Remove from allow list"
+                      className="group flex w-full items-center justify-between gap-3 border-b border-border py-2.5 text-left font-mono text-[11px] disabled:opacity-50"
+                    >
+                      <span className="truncate">
+                        {truncMiddle(entry.address, 4, 4)}
+                      </span>
+                      <span className="shrink-0 text-[10px] tracking-[0.04em] text-subtle uppercase group-hover:text-destructive">
+                        {removingIds.has(entry.id)
+                          ? "…"
+                          : entry.label || "—"}
+                      </span>
+                    </button>
+                  ))
                 )}
               </div>
-              {onchain ? (
-                <div className="mt-1 flex items-center gap-1.5">
-                  <code
-                    className="min-w-0 truncate font-mono text-[13px] text-muted-foreground"
-                    title={policy.contractId}
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                  DENIED
+                </p>
+                <p className="mt-1 font-mono text-[9px] tracking-[0.08em] text-subtle">
+                  THIS AGENT ONLY
+                </p>
+                {denyList.length === 0 ? (
+                  <p className="py-3 font-mono text-[11px] text-subtle">
+                    None yet
+                  </p>
+                ) : (
+                  denyList.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      disabled={removingIds.has(entry.id)}
+                      onClick={() => setRemoveTarget(entry)}
+                      title="Remove from deny list"
+                      className="group flex w-full items-center justify-between gap-3 border-b border-border py-2.5 text-left font-mono text-[11px] disabled:opacity-50"
+                    >
+                      <span className="truncate text-destructive">
+                        {truncMiddle(entry.address, 4, 4)}
+                      </span>
+                      <span className="shrink-0 text-[10px] tracking-[0.04em] text-subtle uppercase group-hover:text-destructive">
+                        {removingIds.has(entry.id)
+                          ? "…"
+                          : entry.label || "—"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-border pt-5">
+              <p className="mb-3 font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+                ADD COUNTERPARTY
+              </p>
+              <form
+                className="flex flex-wrap items-end gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void addEntry();
+                }}
+              >
+                <div className="min-w-[10rem] flex-1 space-y-1.5">
+                  <label
+                    htmlFor="entry-address"
+                    className="block h-4 font-mono text-[10px] leading-4 tracking-[0.12em] text-muted-foreground"
                   >
-                    {truncMiddle(policy.contractId, 8, 8)}
-                  </code>
-                  <CopyButton value={policy.contractId} label="Copy contract ID" />
+                    ADDRESS
+                  </label>
+                  <input
+                    id="entry-address"
+                    placeholder="G…"
+                    value={entryAddress}
+                    onChange={(e) => setEntryAddress(e.target.value)}
+                    className={cn(FIELD, "font-mono")}
+                  />
                 </div>
+                <div className="min-w-[8rem] flex-1 space-y-1.5">
+                  <label
+                    htmlFor="entry-label"
+                    className="block h-4 font-mono text-[10px] leading-4 tracking-[0.12em] text-muted-foreground"
+                  >
+                    NOTE
+                  </label>
+                  <input
+                    id="entry-label"
+                    placeholder="e.g. Data vendor"
+                    value={entryLabel}
+                    onChange={(e) => setEntryLabel(e.target.value)}
+                    className={FIELD}
+                  />
+                </div>
+                <div className="w-[6.75rem] shrink-0 space-y-1.5">
+                  <label
+                    htmlFor="entry-kind"
+                    className="block h-4 font-mono text-[10px] leading-4 tracking-[0.12em] text-muted-foreground"
+                  >
+                    TYPE
+                  </label>
+                  <div className="relative h-10">
+                    <select
+                      id="entry-kind"
+                      value={entryKind}
+                      onChange={(e) =>
+                        setEntryKind(e.target.value as "allow" | "deny")
+                      }
+                      aria-label="Entry type"
+                      className={cn(
+                        FIELD,
+                        "absolute inset-0 cursor-pointer appearance-none pr-8",
+                      )}
+                    >
+                      <option value="allow">Allow</option>
+                      <option value="deny">Deny</option>
+                    </select>
+                    <ChevronDown
+                      className="pointer-events-none absolute top-1/2 right-3 z-10 size-3.5 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={addingEntry}
+                  aria-label="Add counterparty"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full disabled:opacity-50"
+                  style={{
+                    background: "var(--btn-bg)",
+                    color: "var(--btn-fg)",
+                  }}
+                >
+                  {addingEntry ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Plus className="size-4" strokeWidth={2.5} aria-hidden />
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <div
+            className="soft-panel flex flex-col bg-elevated"
+            style={{ padding: "30px 28px" }}
+          >
+            <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+              SIMULATE A PAYMENT
+            </p>
+            <p className="mt-2.5 mb-4 text-[12px] text-muted-foreground">
+              Check a payment against this agent&apos;s live caps before it
+              tries one.
+            </p>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {(Object.keys(CATEGORY_META) as PolicyCategory[]).map((rail) => {
+                const on = simulateRail === rail;
+                return (
+                  <button
+                    key={rail}
+                    type="button"
+                    onClick={() => setSimulateRail(rail)}
+                    className={cn(
+                      "rounded-[10px] border px-2.5 py-1.5 font-mono text-[10px] tracking-[0.08em]",
+                      on
+                        ? "border-transparent"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                    style={
+                      on
+                        ? {
+                            background: "var(--btn-bg)",
+                            color: "var(--btn-fg)",
+                          }
+                        : undefined
+                    }
+                  >
+                    {CATEGORY_META[rail].label.toUpperCase()}
+                  </button>
+                );
+              })}
+            </div>
+            {policy ? (
+              <p className="mb-3 font-mono text-[10px] tracking-[0.06em] text-subtle">
+                LIVE · PER TX {fmtCap(policy.perCallCapXLM)} · DAILY LEFT{" "}
+                {fmtCap(Math.max(0, policy.dailyCapUSD - spentToday))} ·{" "}
+                {CATEGORY_META[simulateRail].label.toUpperCase()} LEFT{" "}
+                {fmtCap(
+                  Math.max(
+                    0,
+                    policy.categories[simulateRail] -
+                      (spendByCategory[simulateRail] ?? 0),
+                  ),
+                )}
+              </p>
+            ) : null}
+            <input
+              id="simulate-amount"
+              type="text"
+              inputMode="decimal"
+              value={simulateAmount}
+              onChange={(e) => setSimulateAmount(e.target.value)}
+              className="w-full rounded-xl border border-border bg-[var(--panel-3)] px-3 py-3 font-mono text-[20px] tabular-nums outline-none focus:border-border-strong"
+              placeholder="0.00"
+            />
+            <div
+              className={cn(
+                "mt-3.5 border p-3.5",
+                simulateVerdict === "REJECTED"
+                  ? "border-destructive/50 bg-destructive/5"
+                  : simulateVerdict === "ALLOWED"
+                    ? "border-success/40 bg-success/5"
+                    : "border-border",
+              )}
+            >
+              {simulateVerdict ? (
+                <>
+                  <p
+                    className={cn(
+                      "font-mono text-[11px] tracking-[0.14em]",
+                      simulateVerdict === "ALLOWED"
+                        ? "text-success"
+                        : "text-destructive",
+                    )}
+                  >
+                    {simulateVerdict}
+                  </p>
+                  <p className="mt-2 text-[12px] text-pretty text-muted-foreground">
+                    {simulateWhy}
+                  </p>
+                </>
               ) : (
-                <p className="mt-1 text-[13px] text-muted-foreground">
-                  Caps enforced by the Hub before signing. Set POLICY_CONTRACT_ID to
-                  also bind these limits to Soroban.
+                <p className="text-[12px] text-muted-foreground">
+                  Enter an amount to see verdict
                 </p>
               )}
             </div>
-            {onchain ? (
-              <a
-                href={`https://stellar.expert/explorer/testnet/contract/${policy.contractId}`}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-auto inline-flex items-center gap-1.5 text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+
+            <div className="mt-[30px] border-t border-border pt-[22px]">
+              <p className="font-mono text-[10px] tracking-[0.16em] text-destructive">
+                EMERGENCY
+              </p>
+              <button
+                type="button"
+                disabled={pausePending}
+                onClick={() => setPauseConfirmOpen(true)}
+                className="mt-3.5 w-full rounded-full border border-border-strong py-[11px] text-[13px] disabled:opacity-50"
               >
-                Stellar Expert <ExternalLink className="size-3.5" aria-hidden />
-              </a>
-            ) : null}
-          </Card>
-
-          {/* wallet limits — editable caps up top, projections as a footer strip */}
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-              <div className="flex items-center gap-2">
-                <Wallet className="size-4 text-primary" aria-hidden />
-                <p className="text-sm font-medium">Wallet limits</p>
-              </div>
-              <span className="rounded-full border border-border bg-elevated/50 px-2 py-0.5 text-[11px] text-muted-foreground">
-                USDC
-              </span>
+                {pausePending ? (
+                  <Loader2 className="mr-2 inline size-4 animate-spin" />
+                ) : null}
+                {isPaused ? "Resume agent" : "Pause agent"}
+              </button>
+              <p className="mt-2.5 mb-[18px] text-[12px] text-muted-foreground">
+                {isPaused
+                  ? "Payments, swaps, and treasury moves are blocked until you resume. Funds stay in the agent wallet."
+                  : "Blocks every payment rail for this agent immediately. Funds stay put; nothing is lost."}
+              </p>
+              <button
+                type="button"
+                onClick={() => setRevokeOpen(true)}
+                className="w-full rounded-full border border-destructive py-[11px] text-[13px] text-destructive"
+              >
+                Revoke all API keys
+              </button>
+              <p className="mt-2.5 text-[12px] text-subtle">
+                Invalidates every MCP/API key for this agent and takes it
+                offline. Funds stay in the wallet — this does not sweep them.
+              </p>
             </div>
-            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-              <div className="p-5">
-                <InlineEditUSD
-                  label="Per-tx cap"
-                  value={policy.perCallCapXLM}
-                  onSave={savePerCallCap}
-                />
-                <p className="mt-2 text-xs text-muted-foreground">Max value of any single payment.</p>
-              </div>
-              <div className="p-5">
-                <InlineEditUSD
-                  label="Daily cap"
-                  value={policy.dailyCapUSD}
-                  onSave={saveDailyCap}
-                />
-                <p className="mt-2 text-xs text-muted-foreground">Resets every 24h.</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border bg-elevated/30 px-5 py-3.5">
-              <span className="stat-label">Projected</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xs text-muted-foreground">Weekly</span>
-                <span className="font-mono text-base font-semibold tabular">
-                  {fmtUSD(policy.weeklyCapUSD)}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xs text-muted-foreground">Monthly</span>
-                <span className="font-mono text-base font-semibold tabular">
-                  {fmtUSD(policy.monthlyCapUSD)}
-                </span>
-              </div>
-              <span className="ml-auto text-[11px] text-subtle">
-                Derived from your daily cap
-              </span>
-            </div>
-          </Card>
-
-          {/* category limits — color-accented per rail, before allow/deny */}
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-primary" aria-hidden />
-                <p className="text-sm font-medium">Per-category daily limits</p>
-              </div>
-              <span className="rounded-full border border-border bg-elevated/50 px-2 py-0.5 text-[11px] text-muted-foreground">
-                USDC
-              </span>
-            </div>
-            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-y-0 sm:[&>*:nth-child(n+2)]:border-l">
-              {(Object.keys(CATEGORY_META) as PolicyCategory[]).map((category) => (
-                <div key={category} className="p-5">
-                  <InlineEditUSD
-                    label={CATEGORY_META[category].label}
-                    value={policy.categories[category]}
-                    onSave={(v) => saveCategory(category, v)}
-                    icon={CATEGORY_META[category].icon}
-                    iconClassName={CATEGORY_META[category].tone}
-                  />
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    {CATEGORY_META[category].blurb}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* allowlist / denylist */}
-          <Card className="overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
-              <p className="text-[13px] font-medium text-muted-foreground">Allowlist / denylist</p>
-            </div>
-            <form
-              className="flex flex-wrap items-end gap-3 border-b border-border px-5 py-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void addEntry();
-              }}
-            >
-              <div className="min-w-52 flex-1 space-y-1.5">
-                <Label htmlFor="entry-address" className="text-xs">
-                  Destination address
-                </Label>
-                <Input
-                  id="entry-address"
-                  placeholder="G…"
-                  value={entryAddress}
-                  onChange={(e) => setEntryAddress(e.target.value)}
-                  className="font-mono"
-                />
-              </div>
-              <div className="min-w-40 flex-1 space-y-1.5">
-                <Label htmlFor="entry-label" className="text-xs">
-                  Label
-                </Label>
-                <Input
-                  id="entry-label"
-                  placeholder="e.g. Data vendor"
-                  value={entryLabel}
-                  onChange={(e) => setEntryLabel(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs" htmlFor="entry-kind">
-                  Type
-                </Label>
-                <Select value={entryKind} onValueChange={(v) => setEntryKind(v as "allow" | "deny")}>
-                  <SelectTrigger id="entry-kind" className="w-28" aria-label="Entry type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="allow">Allow</SelectItem>
-                    <SelectItem value="deny">Deny</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" disabled={addingEntry}>
-                {addingEntry ? <Loader2 className="size-4 animate-spin" /> : null}
-                {addingEntry ? "Adding…" : "Add address"}
-              </Button>
-            </form>
-            {policy.entries.length === 0 ? (
-              <EmptyState
-                title="No listed addresses"
-                subtitle="Allowlist trusted destinations or block bad actors (Hub-enforced today)."
-              />
-            ) : (
-              <>
-                <div className="hidden sm:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Address</TableHead>
-                        <TableHead>Label</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Added</TableHead>
-                        <TableHead className="w-12" aria-label="Remove" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {policy.entries.map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell className="font-mono text-[13px]">
-                            <span className="inline-flex items-center">
-                              {truncMiddle(entry.address)}
-                              <CopyButton value={entry.address} label="Copy address" className="ml-1" />
-                            </span>
-                          </TableCell>
-                          <TableCell>{entry.label}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "font-normal",
-                                entry.kind === "allow" ? "text-success" : "text-destructive",
-                              )}
-                            >
-                              {entry.kind === "allow" ? "Allow" : "Deny"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{fmtDate(entry.addedAt)}</TableCell>
-                          <TableCell>
-                            {removingIds.has(entry.id) ? (
-                              <PendingOnChain />
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => void removeEntry(entry.id)}
-                                aria-label={`Remove ${entry.label}`}
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-                <ul className="divide-y divide-border sm:hidden">
-                  {policy.entries.map((entry) => (
-                    <li key={entry.id} className="flex items-center gap-3 px-5 py-3.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">{entry.label}</p>
-                        <p className="font-mono text-xs text-muted-foreground">
-                          {truncMiddle(entry.address)}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "font-normal",
-                          entry.kind === "allow" ? "text-success" : "text-destructive",
-                        )}
-                      >
-                        {entry.kind}
-                      </Badge>
-                      {removingIds.has(entry.id) ? (
-                        <PendingOnChain />
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 text-muted-foreground"
-                          onClick={() => void removeEntry(entry.id)}
-                          aria-label={`Remove ${entry.label}`}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </Card>
-
-          {/* emergency controls */}
-          <Card className="border-destructive/40 p-5">
-            <p className="text-[13px] font-medium text-destructive">Emergency controls</p>
-            <div className="mt-4 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm">Pause all agent activity</p>
-                <p className="text-[13px] text-muted-foreground">
-                  Freezes every payment path in the contract until resumed.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-3">
-                {pausePending ? <PendingOnChain /> : null}
-                <Switch
-                  checked={policy.paused}
-                  disabled={pausePending}
-                  onCheckedChange={(next) => void togglePause(next)}
-                  aria-label="Pause all agent activity"
-                />
-              </span>
-            </div>
-            <div className="mt-5 flex items-center justify-between gap-4 border-t border-border pt-5">
-              <div>
-                <p className="text-sm">Revoke agent access</p>
-                <p className="text-[13px] text-muted-foreground">
-                  Invalidates every agent session and takes them offline.
-                </p>
-              </div>
-              <Button variant="destructive" onClick={() => setRevokeOpen(true)}>
-                Revoke access
-              </Button>
-            </div>
-          </Card>
+          </div>
         </div>
       )}
 
       <ConfirmDialog
+        open={removeTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title={
+          removeTarget?.kind === "deny"
+            ? "Remove from deny list?"
+            : "Remove from allow list?"
+        }
+        description={
+          removeTarget
+            ? `${truncMiddle(removeTarget.address, 6, 6)}${
+                removeTarget.label ? ` · ${removeTarget.label}` : ""
+              } will be removed from this agent's ${
+                removeTarget.kind === "deny" ? "deny" : "allow"
+              } list.`
+            : ""
+        }
+        confirmLabel="Remove"
+        destructive
+        onConfirm={async () => {
+          if (!removeTarget) return;
+          await removeEntry(removeTarget.id);
+          setRemoveTarget(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={pauseConfirmOpen}
+        onOpenChange={setPauseConfirmOpen}
+        title={isPaused ? "Resume this agent?" : "Pause this agent?"}
+        description={
+          isPaused
+            ? "Payments, swaps, and treasury moves will be allowed again under the current caps."
+            : "Every payment rail for this agent will be blocked immediately. Funds stay in the wallet — nothing is lost."
+        }
+        confirmLabel={isPaused ? "Resume agent" : "Pause agent"}
+        onConfirm={togglePause}
+      />
+
+      <ConfirmDialog
         open={revokeOpen}
         onOpenChange={setRevokeOpen}
-        title="Revoke all agent access?"
-        description="Every connected agent goes offline immediately and will need new keys to reconnect."
-        confirmLabel="Revoke access"
+        title="Revoke all API keys for this agent?"
+        description="Every MCP/API key tied to this agent stops working immediately, and the agent goes offline. Funds stay in the agent wallet — nothing is swept."
+        confirmLabel="Revoke all keys"
         destructive
         typeToConfirm="REVOKE"
         onConfirm={revokeAccess}
