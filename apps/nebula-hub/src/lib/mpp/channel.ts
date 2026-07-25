@@ -274,33 +274,6 @@ export async function refundMppChannel(params: {
   }
 }
 
-/** @deprecated Use closeStartMppChannel + refundMppChannel (funder path). */
-export async function closeMppChannel(params: {
-  channel: string;
-  commitmentSecretHex: string;
-  signer: HashSigner;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-  networkId: NetworkId;
-  amountStroops: bigint;
-}): Promise<
-  | { ok: true; txHash: string; settledStroops: bigint }
-  | { ok: false; error: string }
-> {
-  // Kept for type compatibility; funder cannot call contract.close (needs recipient auth).
-  void params.commitmentSecretHex;
-  void params.amountStroops;
-  const started = await closeStartMppChannel(params);
-  if (!started.ok) return started;
-  const refunded = await refundMppChannel(params);
-  if (!refunded.ok) return refunded;
-  return {
-    ok: true,
-    txHash: refunded.txHash,
-    settledStroops: 0n,
-  };
-}
-
 const REFUND_WAITING_PERIOD = 5; // ledgers (~25s on testnet) — short so one close can finish in-session
 const DEPLOY_FEE = "1000000";
 
