@@ -3,11 +3,11 @@ import { z } from "zod";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
-import { buildMcpConfig } from "@/lib/mcp-config";
-import { appBaseUrl } from "@/lib/oauth";
+import { buildMcpConfig } from "@/lib/mcp/config";
+import { appBaseUrl } from "@/lib/auth/oauth";
 import { bustRouteCache } from "@/lib/route-cache";
 import { partnerSignerConfigFromEnv } from "@/lib/signing";
-import { isStellarPublicKey } from "@/lib/wallet-auth";
+import { isStellarPublicKey } from "@/lib/wallet/auth";
 
 /**
  * Register a partner (Tael) card as a Nebula agent. The card is non-custodial:

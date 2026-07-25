@@ -4,7 +4,7 @@ import { z } from "zod";
 import { resolveAuth, unauthorized } from "@/lib/auth";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
 import { demoPrivyWalletId, demoStellarAddress } from "@/lib/auth";
-import { buildMcpConfig } from "@/lib/mcp-config";
+import { buildMcpConfig } from "@/lib/mcp/config";
 
 /** null = never expires. Allowed UI presets: 7 / 30 / 180 days. */
 const createSchema = z.object({
