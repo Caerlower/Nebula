@@ -16,6 +16,7 @@ import {
   policyContractConfigured,
   policyContractId,
 } from "@/lib/policy/onchain";
+import { policyContractIdFor } from "@/lib/network";
 
 const userPolicyTails = new Map<string, Promise<unknown>>();
 function withUserPolicyLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
@@ -101,9 +102,11 @@ function policyChangeReason(
 async function uncachedGET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
-  const policy = await loadPolicySnapshot(principal.userId);
+  const policy = await loadPolicySnapshot(principal.userId, principal.network);
   const settings = await prisma.policySettings.findUnique({
-    where: { userId: principal.userId },
+    where: {
+      userId_network: { userId: principal.userId, network: principal.network },
+    },
   });
   return Response.json({
     policy: {
@@ -112,8 +115,8 @@ async function uncachedGET(req: NextRequest) {
       catX402: settings ? Number(settings.catX402) : policy.perTxCap,
       catMpp: settings ? Number(settings.catMpp) : policy.perTxCap,
     },
-    onchainConfigured: policyContractConfigured(),
-    contractId: process.env.POLICY_CONTRACT_ID?.trim() || null,
+    onchainConfigured: policyContractConfigured(principal.network),
+    contractId: policyContractIdFor(principal.network),
   });
 }
 
@@ -158,6 +161,7 @@ async function uncachedPATCH(req: NextRequest) {
 async function applyPolicyPatch(
   principal: {
     userId: string;
+    network: "testnet" | "mainnet";
     stellarAddress?: string | null;
     privyWalletId?: string | null;
   },
@@ -165,7 +169,12 @@ async function applyPolicyPatch(
 ) {
     // Contract requires max_per_call <= max_per_day. Keep Hub DB consistent.
     const existing = await prisma.policySettings.findUnique({
-      where: { userId: principal.userId },
+      where: {
+        userId_network: {
+          userId: principal.userId,
+          network: principal.network,
+        },
+      },
     });
     const snapshot = existing
       ? {
@@ -204,20 +213,33 @@ async function applyPolicyPatch(
     }
 
     const updated = await prisma.policySettings.upsert({
-      where: { userId: principal.userId },
-      create: { userId: principal.userId, ...patchData },
+      where: {
+        userId_network: {
+          userId: principal.userId,
+          network: principal.network,
+        },
+      },
+      create: {
+        userId: principal.userId,
+        network: principal.network,
+        ...patchData,
+      },
       update: patchData,
     });
 
     const revertDb = async () => {
+      const where = {
+        userId_network: {
+          userId: principal.userId,
+          network: principal.network,
+        },
+      } as const;
       if (!snapshot) {
-        await prisma.policySettings.delete({
-          where: { userId: principal.userId },
-        }).catch(() => undefined);
+        await prisma.policySettings.delete({ where }).catch(() => undefined);
         return;
       }
       await prisma.policySettings.update({
-        where: { userId: principal.userId },
+        where,
         data: snapshot,
       });
     };
@@ -263,17 +285,19 @@ async function applyPolicyPatch(
     let onchain: string = "hub_only";
     let txHash: string | null = null;
 
-    const network =
-      (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-      "testnet";
+    const network = principal.network;
 
-    // Prefer the selected agent's managed wallet for on-chain writes. Owner
-    // Privy wallets are often empty (EOA/Privy login ≠ funded agent treasury).
+    // Prefer the selected agent's managed wallet for on-chain writes (funded
+    // custodial key). Without an agent, Hub DB only.
     let onchainWalletId: string | null = null;
     let onchainAddress: string | null = null;
     if (targetAgentId) {
       const agent = await prisma.agent.findFirst({
-        where: { id: targetAgentId, userId: principal.userId },
+        where: {
+          id: targetAgentId,
+          userId: principal.userId,
+          network: principal.network,
+        },
         select: { privyWalletId: true, stellarAddress: true },
       });
       if (!agent) {
@@ -307,7 +331,7 @@ async function applyPolicyPatch(
 
     if (
       onchainFieldsTouched &&
-      policyContractConfigured() &&
+      policyContractConfigured(principal.network) &&
       onchainWalletId &&
       onchainAddress
     ) {
@@ -395,15 +419,13 @@ async function applyPolicyPatch(
         txHash = res.hash;
         onchain = "set_treasury_band_ok";
       }
-    } else if (onchainFieldsTouched && !policyContractConfigured()) {
+    } else if (onchainFieldsTouched && !policyContractConfigured(principal.network)) {
       onchain = "skipped_no_contract";
     } else if (
       onchainFieldsTouched &&
-      policyContractConfigured() &&
-      treasuryTouched &&
+      policyContractConfigured(principal.network) &&
       !onchainWalletId
     ) {
-      // Freighter / no custody key — Hub DB only (same as before).
       onchain = "hub_only_no_custodial_signer";
     }
 
@@ -412,8 +434,8 @@ async function applyPolicyPatch(
       txHash ??
       `hub_policy_${Date.now().toString(16)}_${randomBytes(4).toString("hex")}`;
     const destination =
-      txHash && policyContractConfigured()
-        ? policyContractId()
+      txHash && policyContractConfigured(principal.network)
+        ? policyContractId(principal.network)
         : "hub-policy";
 
     try {
@@ -421,6 +443,7 @@ async function applyPolicyPatch(
         data: {
           userId: principal.userId,
           agentId: targetAgentId ?? null,
+          network: principal.network,
           type: "policy_change",
           destination,
           amountXlm: 0,
@@ -454,7 +477,11 @@ async function applyPolicyPatch(
 export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
-  return cachedJsonResponse(`policy:${principal.userId}`, 15000, () => uncachedGET(req));
+  return cachedJsonResponse(
+    `policy:${principal.userId}:${principal.network}`,
+    15000,
+    () => uncachedGET(req),
+  );
 }
 
 export async function PATCH(req: NextRequest) {
