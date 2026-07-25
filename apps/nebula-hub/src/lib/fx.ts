@@ -49,9 +49,6 @@ export async function quoteXlmUsd(): Promise<FxQuote> {
   return { usdPerXlm, source: "coingecko" };
 }
 
-/** @deprecated alias — Turbopack HMR sometimes stuck on old export names */
-export const getUsdPerXlmQuote = quoteXlmUsd;
-
 export async function getUsdPerXlm(): Promise<number> {
   return (await quoteXlmUsd()).usdPerXlm;
 }
@@ -130,7 +127,11 @@ export async function rowSpendUsdc(row: {
 export async function sumSpendUsdcSince(
   userId: string,
   since: Date,
-  opts?: { types?: readonly string[]; agentId?: string | null },
+  opts?: {
+    types?: readonly string[];
+    agentId?: string | null;
+    network?: string | null;
+  },
 ): Promise<{ total: number; byType: Record<string, number> }> {
   const types = opts?.types ?? SPEND_TX_TYPES;
   const rows = await prisma.transaction.findMany({
@@ -139,6 +140,8 @@ export async function sumSpendUsdcSince(
       // When scoped to an agent, count only that agent's spend so each agent
       // gets an isolated daily/category budget.
       ...(opts?.agentId ? { agentId: opts.agentId } : {}),
+      // Isolate by ledger so testnet/mainnet twins never share a spend budget.
+      ...(opts?.network ? { network: opts.network } : {}),
       status: "confirmed",
       type: { in: [...types] },
       createdAt: { gte: since },
