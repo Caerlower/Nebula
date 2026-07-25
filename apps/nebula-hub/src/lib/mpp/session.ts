@@ -76,10 +76,16 @@ function rowToSession(row: {
 export async function getOpenMppSession(
   userId: string,
   agentId?: string | null,
+  networkId?: string,
 ): Promise<HubMppSession | null> {
   const row = await prisma.mppSession.findFirst({
-    // Scope to the agent (null = owner-level) so each agent has its own channel.
-    where: { userId, agentId: agentId ?? null, status: "open" },
+    // Scope to the agent (null = owner-level) + ledger so twins don't share channels.
+    where: {
+      userId,
+      agentId: agentId ?? null,
+      status: "open",
+      ...(networkId ? { networkId } : {}),
+    },
     orderBy: { openedAt: "desc" },
   });
   return row ? rowToSession(row) : null;
@@ -89,12 +95,14 @@ export async function getOpenMppSession(
 export async function getOpenOrClosingMppSession(
   userId: string,
   agentId?: string | null,
+  networkId?: string,
 ): Promise<HubMppSession | null> {
   const row = await prisma.mppSession.findFirst({
     where: {
       userId,
       agentId: agentId ?? null,
       status: { in: ["open", "closing"] },
+      ...(networkId ? { networkId } : {}),
     },
     orderBy: { openedAt: "desc" },
   });
@@ -104,10 +112,11 @@ export async function getOpenOrClosingMppSession(
 export async function requireOpenMppSession(
   userId: string,
   agentId?: string | null,
+  networkId?: string,
 ): Promise<
   { ok: true; session: HubMppSession } | { ok: false; error: string }
 > {
-  const session = await getOpenMppSession(userId, agentId);
+  const session = await getOpenMppSession(userId, agentId, networkId);
   if (!session) {
     return {
       ok: false,
@@ -143,7 +152,11 @@ export async function createMppSession(data: {
   networkId: string;
   deployWasmHash?: string;
 }): Promise<HubMppSession> {
-  const existing = await getOpenOrClosingMppSession(data.userId, data.agentId);
+  const existing = await getOpenOrClosingMppSession(
+    data.userId,
+    data.agentId,
+    data.networkId,
+  );
   if (existing) {
     throw new Error(
       existing.status === "closing"
