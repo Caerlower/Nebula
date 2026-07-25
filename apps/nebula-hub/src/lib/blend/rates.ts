@@ -92,7 +92,7 @@ export async function fetchBlendSupplyRates(
     return {
       ok: false,
       error:
-        "No Blend pools are configured for this network. Rate checks are available on testnet only.",
+        "No Blend pools are configured for this network.",
     };
   }
 
