@@ -39,6 +39,52 @@ function horizonUrl(network: "testnet" | "mainnet"): string {
     : "https://horizon-testnet.stellar.org";
 }
 
+function isHorizonNotFound(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "response" in error &&
+      (error as { response?: { status?: number } }).response?.status === 404,
+  );
+}
+
+/** On testnet, Friendbot-create the account when Horizon has never seen it. */
+export async function ensureAccountFunded(
+  address: string,
+  network: "testnet" | "mainnet",
+): Promise<{ friendbotUsed: boolean }> {
+  const server = new Horizon.Server(horizonUrl(network));
+  try {
+    await server.loadAccount(address);
+    return { friendbotUsed: false };
+  } catch (error) {
+    if (!isHorizonNotFound(error)) throw error;
+    if (network !== "testnet") {
+      throw new Error(
+        "account_unfunded: fund this wallet with XLM before opening a USDC trustline",
+      );
+    }
+    const res = await fetch(
+      `https://friendbot.stellar.org?addr=${encodeURIComponent(address)}`,
+    );
+    if (!res.ok) {
+      throw new Error(`friendbot_failed: ${res.status}`);
+    }
+    // Horizon can lag Friendbot by a ledger or two.
+    for (let attempt = 0; attempt < 8; attempt++) {
+      await sleep(500 + attempt * 250);
+      try {
+        await server.loadAccount(address);
+        balancesCache.delete(`${network}:${address}`);
+        return { friendbotUsed: true };
+      } catch (retryError) {
+        if (!isHorizonNotFound(retryError) || attempt === 7) throw retryError;
+      }
+    }
+    throw new Error("friendbot_failed: account still missing on Horizon");
+  }
+}
+
 /**
  * Horizon is a ~400–500ms round trip and balances rarely change second to
  * second — cache briefly per address so a burst of page fetches pays once.
@@ -286,14 +332,7 @@ export async function hasUsdcTrustline(
         b.asset_issuer === issuer,
     );
   } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "response" in error &&
-      (error as { response?: { status?: number } }).response?.status === 404
-    ) {
-      return false;
-    }
+    if (isHorizonNotFound(error)) return false;
     throw error;
   }
 }
@@ -301,15 +340,21 @@ export async function hasUsdcTrustline(
 /**
  * Open (or no-op) a classic Circle USDC trustline, signed by any
  * {@link HashSigner} (Privy or partner). Required before x402 / USDC payments.
+ * On testnet, auto-funds the account via Friendbot when it does not exist yet.
  */
 export async function ensureUsdcTrustline(params: {
   address: string;
   signer: HashSigner;
   network: "testnet" | "mainnet";
-}): Promise<{ alreadyHad: boolean; txHash: string | null }> {
+}): Promise<{ alreadyHad: boolean; txHash: string | null; friendbotUsed: boolean }> {
   if (await hasUsdcTrustline(params.address, params.network)) {
-    return { alreadyHad: true, txHash: null };
+    return { alreadyHad: true, txHash: null, friendbotUsed: false };
   }
+
+  const { friendbotUsed } = await ensureAccountFunded(
+    params.address,
+    params.network,
+  );
 
   const server = new Horizon.Server(horizonUrl(params.network));
   const account = await server.loadAccount(params.address);
@@ -336,5 +381,5 @@ export async function ensureUsdcTrustline(params: {
   });
 
   balancesCache.delete(`${params.network}:${params.address}`);
-  return { alreadyHad: false, txHash };
+  return { alreadyHad: false, txHash, friendbotUsed };
 }

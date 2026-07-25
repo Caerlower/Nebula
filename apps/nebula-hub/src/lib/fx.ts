@@ -94,25 +94,36 @@ export const SPEND_TX_TYPES = ["transfer", "x402", "mpp", "trustline_repay"] as 
 
 /**
  * Convert a ledger row into USDC for policy accounting.
- * - transfer: native XLM → USDC via oracle
+ * - transfer with `asset=USDC` in reason: amountXlm column is already USDC face value
+ * - transfer (native / asset=XLM): native XLM → USDC via oracle
  * - x402 / mpp / trustline_repay: amountXlm column already stores USDC face value
  */
 export async function rowSpendUsdc(row: {
   type: string;
   amountXlm: { toString(): string } | number;
+  reason?: string | null;
 }): Promise<number> {
   const raw = Number(row.amountXlm);
   if (!Number.isFinite(raw) || raw === 0) return 0;
-  if (row.type === "transfer") {
-    return xlmToUsdc(raw);
-  }
+
   if (
     row.type === "x402" ||
     row.type === "mpp" ||
+    row.type === "mpp_open" ||
+    row.type === "mpp_close" ||
     row.type === "trustline_repay"
   ) {
-    return raw;
+    return Math.abs(raw);
   }
+
+  if (row.type === "transfer") {
+    const tagged = /asset=(USDC|XLM)/i.exec(row.reason ?? "");
+    if (tagged?.[1]?.toUpperCase() === "USDC") {
+      return Math.abs(raw);
+    }
+    return Math.abs(await xlmToUsdc(raw));
+  }
+
   return 0;
 }
 
@@ -132,14 +143,16 @@ export async function sumSpendUsdcSince(
       type: { in: [...types] },
       createdAt: { gte: since },
     },
-    select: { type: true, amountXlm: true },
+    select: { type: true, amountXlm: true, reason: true },
   });
 
   const byType: Record<string, number> = {};
   let total = 0;
   for (const row of rows) {
     const usdc = await rowSpendUsdc(row);
-    byType[row.type] = (byType[row.type] ?? 0) + usdc;
+    const bucket =
+      row.type === "mpp_open" || row.type === "mpp_close" ? "mpp" : row.type;
+    byType[bucket] = (byType[bucket] ?? 0) + usdc;
     total += usdc;
   }
   return { total, byType };
