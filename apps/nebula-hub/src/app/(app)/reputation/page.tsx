@@ -1,205 +1,178 @@
 "use client";
 
-import { ExternalLink, MessageSquare, Sigma, Star, Users } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 
-import { PageHeader } from "@/components/shared/page-header";
+import { SectionRule } from "@/components/design/primitives";
 import { AnimatedNumber } from "@/components/shared/animated-number";
-import { ScoreRing } from "@/components/shared/score-ring";
 import { ListSkeleton, StatCardSkeleton } from "@/components/shared/skeletons";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import * as api from "@/lib/api";
-import { fmtInt, timeAgo } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
-import { cn } from "@/lib/utils";
+import * as api from "@/lib/api";
+import { fmtInt, timeAgo } from "@/lib/utils";
 
-const CONFIDENCE_BLURB: Record<string, string> = {
-  unrated: "No ratings yet — your score appears once clients rate this agent on-chain.",
-  low: "Fewer than 5 feedback events — treat the average cautiously.",
-  medium: "5–49 feedback events — a usable signal.",
-  high: "50+ feedback events — stronger confidence in the average.",
-  nascent: "No ratings yet — your score appears once clients rate this agent on-chain.",
-  Emerging: "Fewer than 5 feedback events — treat the average cautiously.",
+const TIER_LABEL: Record<string, string> = {
+  unrated: "UNRATED",
+  low: "EMERGING",
+  medium: "RELIABLE",
+  high: "TRUSTED",
+  nascent: "UNRATED",
+  Emerging: "EMERGING",
+  Established: "RELIABLE",
+  Trusted: "TRUSTED",
+  Elite: "ELITE",
 };
 
-function SignalTile({
-  icon: Icon,
-  label,
-  value,
-  suffix,
-  explainer,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: number | null;
-  suffix?: string;
-  explainer: string;
-}) {
-  return (
-    <div className="p-5">
-      <div className="flex items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-md border border-border bg-elevated/50 text-primary">
-          <Icon className="size-3.5" aria-hidden />
-        </span>
-        <p className="stat-label">{label}</p>
-      </div>
-      <p className="mt-3 hero-number-sm tabular">
-        {value == null ? (
-          "—"
-        ) : (
-          <>
-            <AnimatedNumber value={value} format={fmtInt} />
-            {suffix ? (
-              <span className="text-sm text-muted-foreground">{suffix}</span>
-            ) : null}
-          </>
-        )}
-      </p>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{explainer}</p>
-    </div>
-  );
-}
-
 export default function ReputationPage() {
-  const { selectedAgentId } = useAgentScope();
+  const { selectedAgentId, selectedAgent } = useAgentScope();
   const { data: reputation, loading } = useLoad(
     () => api.getReputation(),
     [selectedAgentId],
   );
 
+  const hasScore = reputation && (reputation.registered || reputation.score > 0);
+  const max = reputation?.scoreMax ?? 1000;
+  const tier =
+    reputation != null
+      ? (TIER_LABEL[reputation.confidence] ?? String(reputation.confidence).toUpperCase())
+      : "UNRATED";
+
   return (
     <div>
-      <PageHeader
-        eyebrow="agents"
-        accent="primary"
-        title="Reputation"
-        subtitle="Your on-chain track record — written by the agents you work with."
-        actions={
-          <a
-            href="https://stellar8004.com"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            Stellar8004 explorer <ExternalLink className="size-3.5" aria-hidden />
-          </a>
-        }
-      />
+      <div className="pb-6">
+        <SectionRule>REPUTATION · STELLAR8004</SectionRule>
+        <h1 className="page-title">
+          How counterparties see {selectedAgent?.name ?? "this agent"}
+        </h1>
+      </div>
 
       {loading || !reputation ? (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
           <StatCardSkeleton />
-          <StatCardSkeleton className="lg:col-span-2" />
+          <StatCardSkeleton />
+        </div>
+      ) : !hasScore ? (
+        <div className="soft-panel-lg px-10 py-24 text-center">
+          <p className="text-[clamp(2.5rem,8vw,5.125rem)] font-semibold tracking-[-0.022em] leading-[1.1] text-subtle">
+            Unrated
+          </p>
+          <p className="mx-auto mt-5 max-w-md text-[15px] text-pretty text-muted-foreground">
+            This agent needs settled payments before Stellar8004 issues a score. It has{" "}
+            {reputation.feedbackCount} feedback events so far.
+          </p>
+          <Link
+            href="/transactions"
+            className="mt-7 inline-flex rounded-full px-[26px] py-3 text-[13px] font-semibold"
+            style={{ background: "var(--btn-bg)", color: "var(--btn-fg)" }}
+          >
+            See settled payments
+          </Link>
         </div>
       ) : (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-            <Card className="flex flex-col items-center justify-center gap-4 p-6">
-              <ScoreRing
-                score={reputation.score}
-                max={reputation.scoreMax}
-                label={`of ${reputation.scoreMax}`}
-              />
-              <div className="text-center">
-                <Badge
-                  variant={reputation.registered ? "success" : "outline"}
-                  className="capitalize"
-                >
-                  {reputation.confidence}
-                </Badge>
-                <p className="mx-auto mt-3 max-w-60 text-[13px] leading-relaxed text-muted-foreground">
-                  {CONFIDENCE_BLURB[reputation.confidence] ??
-                    CONFIDENCE_BLURB.unrated}
-                </p>
-                {reputation.stellar8004AgentId != null ? (
-                  <p className="mt-3 font-mono text-[13px] text-muted-foreground">
-                    Stellar8004 agent #{reputation.stellar8004AgentId}
-                  </p>
-                ) : (
-                  <p className="mt-3 text-[13px] text-muted-foreground">
-                    Not registered on-chain yet
-                  </p>
-                )}
-                {reputation.explorerUrl ? (
-                  <a
-                    href={reputation.explorerUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                  >
-                    View on explorer <ExternalLink className="size-3" aria-hidden />
-                  </a>
-                ) : null}
-              </div>
-            </Card>
-
-            <div className="lg:col-span-2">
-              <p className="stat-label mb-3">Stellar8004 signals</p>
-              <Card className="grid grid-cols-1 divide-y divide-border overflow-hidden sm:grid-cols-2 sm:divide-y-0 sm:[&>*:nth-child(n+3)]:border-t sm:[&>*:nth-child(2n)]:border-l">
-                <SignalTile
-                  icon={Star}
-                  label="Average score"
-                  value={reputation.score}
-                  suffix="/100"
-                  explainer="Mean of on-chain feedback, normalized to 0–100."
-                />
-                <SignalTile
-                  icon={MessageSquare}
-                  label="Feedback count"
-                  value={reputation.feedbackCount}
-                  explainer="Non-revoked feedback records left for this agent."
-                />
-                <SignalTile
-                  icon={Users}
-                  label="Unique clients"
-                  value={reputation.uniqueClients}
-                  explainer="Distinct addresses that left feedback (sybil-relevant)."
-                />
-                <SignalTile
-                  icon={Sigma}
-                  label="Total score"
-                  value={reputation.totalScore}
-                  explainer="Explorer aggregate totalScore when indexed; else 0."
-                />
-              </Card>
-              <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-                Read straight from on-chain feedback — Nebula mirrors the chain, it
-                never invents a score.
-                {reputation.source ? ` Source: ${reputation.source}.` : ""}
-              </p>
+        <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+          <div className="soft-panel px-8 py-8">
+            <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+              ON-CHAIN SCORE
+            </p>
+            <div className="mt-3.5 flex items-baseline gap-2.5">
+              <span className="font-mono text-[72px] leading-none tracking-[-0.05em] tabular-nums">
+                <AnimatedNumber value={reputation.score} format={fmtInt} />
+              </span>
+              <span className="font-mono text-[13px] text-subtle">/ {max}</span>
             </div>
+            <div className="mt-5 h-1.5 bg-border">
+              <div
+                className="h-1.5 bg-primary transition-[width] duration-700"
+                style={{ width: `${Math.min(100, (reputation.score / max) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-3 font-mono text-[11px] tracking-[0.12em] text-primary-2">
+              {tier}
+            </p>
+            <p className="mt-5 text-[13px] text-pretty text-muted-foreground">
+              Attested from settled payments, disputes, and channel history. Counterparties on
+              x402 and MPP read this before they extend credit.
+            </p>
+            {reputation.explorerUrl ? (
+              <a
+                href={reputation.explorerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-block font-mono text-[10px] tracking-[0.12em] text-muted-foreground hover:text-foreground"
+              >
+                STELLAR8004 EXPLORER ↗
+              </a>
+            ) : null}
           </div>
 
-          <Card className="overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
-              <p className="stat-label">Status</p>
-            </div>
-            {reputation.events.length === 0 ? (
-              <ListSkeleton rows={2} className="p-5" />
+          <div className="soft-panel px-8 py-8">
+            <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+              SIGNALS
+            </p>
+            {loading ? (
+              <ListSkeleton rows={6} className="mt-4" />
             ) : (
-              <ul className="divide-y divide-border">
-                {reputation.events.map((event) => (
-                  <li key={event.id} className="flex items-center gap-3 px-5 py-3 text-sm">
-                    <span
-                      className={cn(
-                        "w-10 shrink-0 font-mono text-[13px] tabular",
-                        event.delta >= 0 ? "text-success" : "text-destructive",
-                      )}
-                    >
-                      {event.delta >= 0 ? "+" : ""}
-                      {event.delta}
+              <div className="mt-2 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                {[
+                  {
+                    label: "SETTLEMENT RATE",
+                    val:
+                      reputation.averageScore != null
+                        ? `${reputation.averageScore.toFixed(1)}`
+                        : "—",
+                    note: `${reputation.feedbackCount} EVENTS`,
+                  },
+                  {
+                    label: "DELTA · 7D",
+                    val:
+                      reputation.deltaWeek === 0
+                        ? "0"
+                        : `${reputation.deltaWeek > 0 ? "+" : ""}${reputation.deltaWeek}`,
+                    note: "SCORE",
+                  },
+                  {
+                    label: "COUNTERPARTIES",
+                    val: String(reputation.uniqueClients ?? 0),
+                    note: "UNIQUE",
+                  },
+                  {
+                    label: "TOTAL SCORE",
+                    val:
+                      reputation.totalScore != null
+                        ? String(reputation.totalScore)
+                        : "—",
+                    note: "",
+                  },
+                  {
+                    label: "LAST EVENT",
+                    val: reputation.events[0]
+                      ? timeAgo(reputation.events[0].time).toUpperCase()
+                      : "—",
+                    note: "",
+                  },
+                  {
+                    label: "FEEDBACK",
+                    val: String(reputation.feedbackCount),
+                    note: "TOTAL",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="flex items-baseline justify-between gap-3 border-b border-border py-3.5"
+                  >
+                    <span className="font-mono text-[11px] tracking-[0.05em] text-muted-foreground">
+                      {s.label}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{event.text}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {timeAgo(event.time)}
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-mono text-[15px] tabular-nums">{s.val}</span>
+                      {s.note ? (
+                        <span className="font-mono text-[10px] text-subtle">{s.note}</span>
+                      ) : null}
                     </span>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
-          </Card>
+          </div>
         </div>
       )}
     </div>
