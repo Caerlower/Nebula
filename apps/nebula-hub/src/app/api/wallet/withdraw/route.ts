@@ -40,7 +40,11 @@ export async function POST(req: NextRequest) {
   let walletId = principal.privyWalletId;
   if (body.agentId) {
     const agent = await prisma.agent.findFirst({
-      where: { id: body.agentId, userId: principal.userId },
+      where: {
+        id: body.agentId,
+        userId: principal.userId,
+        network: principal.network,
+      },
       select: { stellarAddress: true, privyWalletId: true },
     });
     if (!agent) {
@@ -78,9 +82,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const network =
-    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-    "testnet";
+  const network = principal.network;
 
   if (asset === "USDC") {
     const ready = await hasUsdcTrustline(sourceAddress, network);
@@ -112,6 +114,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: principal.userId,
         agentId: body.agentId ?? null,
+        network: principal.network,
         type: "transfer",
         destination,
         amountXlm: amount,
@@ -152,6 +155,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: principal.userId,
         agentId: body.agentId ?? null,
+        network: principal.network,
         type: "transfer",
         destination,
         amountXlm: amount,
