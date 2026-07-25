@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-
 import { bustRouteCache } from "@/lib/route-cache";
 import { z } from "zod";
 
@@ -8,14 +7,14 @@ import { prisma } from "@/lib/db";
 import { loadEffectiveCaps } from "@/lib/hub-tools/context";
 import { fetchBalances } from "@/lib/stellar";
 
-const HUB_NETWORK =
-  (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-  "testnet";
 
-async function agentNativeXlm(address: string | null): Promise<number> {
+async function agentNativeXlm(
+  address: string | null,
+  network: "testnet" | "mainnet",
+): Promise<number> {
   if (!address) return 0;
   try {
-    const balances = await fetchBalances(address, HUB_NETWORK);
+    const balances = await fetchBalances(address, network);
     const xlm = balances.find((b) => b.asset === "XLM" || b.asset === "native");
     return xlm ? Number(xlm.balance) : 0;
   } catch {
@@ -37,9 +36,9 @@ const patchSchema = z.object({
     .optional(),
 });
 
-async function loadOwnedAgent(userId: string, id: string) {
+async function loadOwnedAgent(userId: string, id: string, network: string) {
   return prisma.agent.findFirst({
-    where: { id, userId },
+    where: { id, userId, network },
     include: {
       tokens: {
         where: { revokedAt: null },
@@ -63,12 +62,12 @@ export async function GET(
   }
 
   const { id } = await ctx.params;
-  const agent = await loadOwnedAgent(principal.userId, id);
+  const agent = await loadOwnedAgent(principal.userId, id, principal.network);
   if (!agent) {
     return Response.json({ status: "error", reason: "not_found" }, { status: 404 });
   }
   return Response.json({
-    agent: { ...agent, balanceXlm: await agentNativeXlm(agent.stellarAddress) },
+    agent: { ...agent, balanceXlm: await agentNativeXlm(agent.stellarAddress, principal.network) },
   });
 }
 
@@ -86,7 +85,7 @@ async function uncachedPATCH(
   }
 
   const { id } = await ctx.params;
-  const existing = await loadOwnedAgent(principal.userId, id);
+  const existing = await loadOwnedAgent(principal.userId, id, principal.network);
   if (!existing) {
     return Response.json({ status: "error", reason: "not_found" }, { status: 404 });
   }
@@ -114,7 +113,11 @@ async function uncachedPATCH(
   // and Fleet never disagree on whether spend is blocked.
   if (body.data.status !== undefined) {
     const paused = body.data.status !== "active";
-    const current = await loadEffectiveCaps(principal.userId, id);
+    const current = await loadEffectiveCaps(
+      principal.userId,
+      principal.network,
+      id,
+    );
     await prisma.agentPolicy.upsert({
       where: { agentId: id },
       create: {
@@ -148,7 +151,7 @@ async function uncachedDELETE(
   }
 
   const { id } = await ctx.params;
-  const existing = await loadOwnedAgent(principal.userId, id);
+  const existing = await loadOwnedAgent(principal.userId, id, principal.network);
   if (!existing) {
     return Response.json({ status: "error", reason: "not_found" }, { status: 404 });
   }
