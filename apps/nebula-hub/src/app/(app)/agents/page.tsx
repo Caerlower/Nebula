@@ -8,16 +8,10 @@ import { PageEcho, SectionRule, SplitBar } from "@/components/design/primitives"
 import { agentAttribution } from "@/components/shared/status-badges";
 import { useLoad } from "@/hooks/use-load";
 import * as api from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, fmtUsdc } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useUIStore } from "@/stores/ui";
 import type { Agent } from "@/types/domain";
-
-const fmtUsdc = (n: number) =>
-  n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 
 const fmtCap = (n: number) =>
   n.toLocaleString("en-US", {
