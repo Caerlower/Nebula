@@ -33,7 +33,11 @@ async function resolveWallet(
     };
   }
   const agent = await prisma.agent.findFirst({
-    where: { id: agentId, userId: principal.userId },
+    where: {
+      id: agentId,
+      userId: principal.userId,
+      network: principal.network,
+    },
     select: { stellarAddress: true, privyWalletId: true },
   });
   if (!agent) return { ok: false, status: 404, reason: "not_found" };
@@ -48,9 +52,7 @@ export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
 
-  const network =
-    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-    "testnet";
+  const network = principal.network;
 
   const agentId = new URL(req.url).searchParams.get("agentId");
   const resolved = await resolveWallet(principal, agentId);
@@ -92,9 +94,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const network =
-    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-    "testnet";
+  const network = principal.network;
 
   const body = (await req.json().catch(() => ({}))) as { agentId?: string };
   const agentId = body.agentId ?? null;
