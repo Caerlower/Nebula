@@ -1,6 +1,6 @@
 {
   "name": "nebulamcp-stdio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Nebula stdio MCP — presents NEBULA_TOKEN to the Hub. Never holds private keys.",
   "type": "module",
   "license": "MIT",
@@ -25,8 +25,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "nebulamcp-core": "workspace:^",
-    "zod": "^3.25.76"
+    "nebulamcp-core": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
