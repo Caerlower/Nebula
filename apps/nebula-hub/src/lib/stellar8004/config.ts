@@ -4,13 +4,16 @@ import {
   type StellarConfig,
 } from "@trionlabs/stellar8004";
 
-export type HubNetwork = "testnet" | "mainnet";
+import { envHubNetwork, type HubNetwork } from "@/lib/network";
+
+export type { HubNetwork };
 
 const EXPLORER_BASE_URL =
   process.env.STELLAR8004_EXPLORER_URL?.trim() ?? "https://stellar8004.com";
 
+/** Deploy default — prefer {@link networkFromPrincipal} for authenticated work. */
 export function hubNetwork(): HubNetwork {
-  return process.env.STELLAR_NETWORK === "mainnet" ? "mainnet" : "testnet";
+  return envHubNetwork();
 }
 
 export function get8004Config(network: HubNetwork = hubNetwork()): StellarConfig {
