@@ -2,17 +2,17 @@
 
 import { cn } from "@/lib/utils";
 
-export function Wordmark({ compact = false, className }: { compact?: boolean; className?: string }) {
+export function Wordmark({ className }: { className?: string }) {
   return (
     <span
-      className={cn("inline-flex items-baseline gap-1 font-display text-[22px] leading-none", className)}
+      className={cn(
+        "inline-flex items-center gap-2.5 text-[16px] font-bold leading-none tracking-[-0.02em]",
+        className,
+      )}
       aria-label="Nebula"
     >
-      {compact ? "N" : "Nebula"}
-      <span
-        aria-hidden
-        className="inline-block size-2 translate-y-[-1px] rounded-full bg-primary"
-      />
+      <span aria-hidden className="block size-2.5 shrink-0 rounded-full bg-primary" />
+      Nebula
     </span>
   );
 }

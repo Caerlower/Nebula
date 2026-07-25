@@ -7,7 +7,6 @@ import {
   LifeBuoy,
   PiggyBank,
   Plug,
-  Settings,
   ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -28,14 +27,13 @@ export interface NavSection {
 /* ============================ LEVEL 1: ACCOUNT ============================ */
 /**
  * Account home. No agent is selected here, so it only shows account-wide
- * destinations — never agent-scoped tools (Treasury / Transactions / …).
+ * destinations — never agent-scoped tools (Treasury / Activity / …).
  */
 export const ACCOUNT_NAV_SECTIONS: NavSection[] = [
   {
     label: "Account",
     items: [
-      { label: "Agents", href: "/agents", icon: Bot },
-      { label: "Settings", href: "/settings", icon: Settings },
+      { label: "Fleet", href: "/agents", icon: Bot },
     ],
   },
 ];
@@ -49,29 +47,36 @@ export const ACCOUNT_UTILITIES: NavItem[] = [
 /* ========================= LEVEL 2: AGENT WORKSPACE ======================= */
 /**
  * Everything here is scoped to the currently selected agent's own wallet.
+ * Labels match Claude Design (hrefs unchanged for AgentScopeGate / deep links).
  */
 export const AGENT_NAV_SECTIONS: NavSection[] = [
   {
-    label: "Overview",
-    items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
-  },
-  {
-    label: "Wallet",
+    label: "Workspace",
     items: [
+      { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
       { label: "Treasury", href: "/treasury", icon: PiggyBank },
-      { label: "Transactions", href: "/transactions", icon: ArrowRightLeft },
+      { label: "Activity", href: "/transactions", icon: ArrowRightLeft },
       { label: "Policy", href: "/policy", icon: ShieldCheck },
-    ],
-  },
-  {
-    label: "Agent",
-    items: [
       { label: "Reputation", href: "/reputation", icon: Award },
       { label: "Connect", href: "/connect", icon: Plug },
       { label: "API Keys", href: "/api-keys", icon: KeyRound },
+      { label: "Fleet", href: "/agents", icon: Bot },
     ],
   },
 ];
+
+/** Flat tab lists for the sticky header (Claude Design). */
+export function tabsFor(pathname: string): NavItem[] {
+  // Settings is account content, not a separate chrome level — keep workspace tabs.
+  if (
+    isAgentWorkspaceRoute(pathname) ||
+    pathname.startsWith("/agents") ||
+    pathname.startsWith("/settings")
+  ) {
+    return AGENT_NAV_SECTIONS.flatMap((s) => s.items);
+  }
+  return ACCOUNT_NAV_SECTIONS.flatMap((s) => s.items);
+}
 
 /** Routes that live INSIDE an agent workspace (Level 2). */
 const AGENT_WORKSPACE_ROUTES = [
@@ -90,23 +95,7 @@ export function isAgentWorkspaceRoute(pathname: string): boolean {
   );
 }
 
-/** The nav to show for the current level. */
-export function navSectionsFor(pathname: string): NavSection[] {
-  return isAgentWorkspaceRoute(pathname)
-    ? AGENT_NAV_SECTIONS
-    : ACCOUNT_NAV_SECTIONS;
-}
-
 export const ALL_NAV_ITEMS: NavItem[] = [
   ...ACCOUNT_NAV_SECTIONS,
   ...AGENT_NAV_SECTIONS,
 ].flatMap((section) => section.items);
-
-/** Human label for the current page (used in breadcrumbs). */
-export function pageLabelFor(pathname: string): string {
-  const item = ALL_NAV_ITEMS.find(
-    (candidate) =>
-      pathname === candidate.href || pathname.startsWith(`${candidate.href}/`),
-  );
-  return item?.label ?? "Home";
-}
