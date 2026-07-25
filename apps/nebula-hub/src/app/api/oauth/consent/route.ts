@@ -44,7 +44,11 @@ export async function POST(req: NextRequest) {
   }
 
   const agent = await prisma.agent.findFirst({
-    where: { id: body.data.agent_id, userId: principal.userId },
+    where: {
+      id: body.data.agent_id,
+      userId: principal.userId,
+      network: principal.network,
+    },
     select: { id: true, name: true, stellarAddress: true },
   });
   if (!agent) {
