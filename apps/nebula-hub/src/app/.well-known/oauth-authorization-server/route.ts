@@ -1,4 +1,4 @@
-import { appBaseUrl } from "@/lib/auth/oauth";
+import { appBaseUrl } from "@/lib/app-url";
 
 export async function GET() {
   const issuer = appBaseUrl();
