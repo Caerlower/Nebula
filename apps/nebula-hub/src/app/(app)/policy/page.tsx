@@ -112,7 +112,7 @@ function CapCard({
   };
 
   const pct = meter
-    ? Math.min(100, (meter.used / Math.max(meter.total, 1)) * 100)
+    ? Math.min(100, (meter.used / Math.max(meter.total, 1e-9)) * 100)
     : 0;
 
   return (
@@ -167,7 +167,7 @@ function CapCard({
           <div className="h-1 overflow-hidden rounded-full bg-border">
             <div
               className="h-full bg-primary transition-all duration-500"
-              style={{ width: `${editing ? Math.min(100, (meter.used / Math.max(Number.parseFloat(draft) || meter.total, 1)) * 100) : pct}%` }}
+              style={{ width: `${editing ? Math.min(100, (meter.used / Math.max(Number.parseFloat(draft) || meter.total, 1e-9)) * 100) : pct}%` }}
             />
           </div>
           <p className="mt-2 font-mono text-[10px] tracking-[0.08em] text-subtle uppercase">
@@ -231,7 +231,8 @@ function CategoryRow({
   const shownCap = editing
     ? Number.parseFloat(draft.replace(/,/g, "")) || display
     : display;
-  const pct = Math.min(100, (used / Math.max(shownCap, 1)) * 100);
+  // Denominator must not floor to 1 — micro caps (e.g. $0.01) would show ~1% full.
+  const pct = Math.min(100, (used / Math.max(shownCap, 1e-9)) * 100);
   const unused = used <= 0;
 
   return (
@@ -549,8 +550,8 @@ export default function PolicyPage() {
         </SectionRule>
         <h1 className="page-title">What this agent may spend</h1>
         <p className="mt-4 max-w-[560px] text-[15px] text-pretty text-muted-foreground">
-          These limits live on-chain. The agent cannot raise them, and a payment
-          that breaks one never reaches the network.
+          These limits are recorded on-chain. The Hub checks them before it
+          signs spend, and pause blocks that path until you resume.
         </p>
       </div>
 
