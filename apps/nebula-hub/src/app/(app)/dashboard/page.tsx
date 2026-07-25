@@ -23,13 +23,7 @@ import { agentAttribution } from "@/components/shared/status-badges";
 import { Button } from "@/components/ui/button";
 import { useLoad } from "@/hooks/use-load";
 import * as api from "@/lib/api";
-import { cn, fmtAmount, timeAgo, truncMiddle } from "@/lib/utils";
-
-const fmtUsdc = (n: number) =>
-  n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+import { cn, fmtAmount, fmtUsdc, timeAgo, truncMiddle } from "@/lib/utils";
 
 function sparkPath(
   points: { balance: number }[],
