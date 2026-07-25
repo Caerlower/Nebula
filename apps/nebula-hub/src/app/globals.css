@@ -4,157 +4,168 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
- * Nebula app tokens — Stellar 2026 brand system.
- * Values are written as rgb()/rgba() triplets on purpose: the canonical hex
- * tokens live in src/lib/theme.ts and nowhere else.
+ * Nebula Hub tokens — Claude Design system (Archivo + JetBrains Mono).
+ * Canonical hex lives in src/lib/theme.ts; CSS vars are rgb()/rgba().
  *
- * Palette: navy #002E5D · lavender #B7ACE8 · teal #00A7B5
- *          black #0F0F0F · off-white #F6F7F8 · sand #D6D2C4
+ * Default data-theme="light" ≈ mock dark (#0B0B0D + violet #8B5CF6).
+ * data-theme="dark" = deeper black variant.
+ * data-theme="day" ≈ mock [data-theme=light] warm paper.
  */
 
-/* ------- stellar night (default, data-theme="light") — true black, purple-cast ------- */
+/* ------- default night (data-theme="light") — mock dark ------- */
 :root {
-  --background: rgb(15 15 15);
+  --background: rgb(11 11 13);
   --foreground: rgb(246 247 248);
-  --surface: rgb(22 20 30);
-  --surface-elevated: rgb(30 27 41);
-  --card: rgb(22 20 30);
+  --surface: rgb(18 18 22);
+  --surface-elevated: rgb(22 22 26);
+  --panel-3: rgb(28 28 33);
+  --card: rgb(18 18 22);
   --card-foreground: rgb(246 247 248);
-  --popover: rgb(30 27 41);
+  --popover: rgb(22 22 26);
   --popover-foreground: rgb(246 247 248);
-  --primary: rgb(183 172 232);
+  --primary: rgb(139 92 246);
   --primary-2: rgb(183 172 232);
-  --primary-foreground: rgb(15 15 15);
-  --brand-navy: rgb(0 46 93);
-  --brand-navy-foreground: rgb(246 247 248);
-  --secondary: rgb(30 27 41);
-  --secondary-foreground: rgb(246 247 248);
-  --muted: rgb(30 27 41);
-  --muted-foreground: rgb(192 192 203);
-  --subtle-foreground: rgb(150 149 162);
-  --accent: rgb(30 27 41);
-  --accent-foreground: rgb(246 247 248);
-  --accent-teal: rgb(52 183 195);
-  --accent-warm: rgb(214 210 196);
-  --destructive: rgb(224 92 96);
-  --destructive-foreground: rgb(246 247 248);
-  --success: rgb(52 183 195);
-  --warning: rgb(214 210 196);
-  --border: rgba(246, 247, 248, 0.12);
-  --border-strong: rgba(246, 247, 248, 0.22);
-  --input: rgba(246, 247, 248, 0.14);
-  --ring: rgba(183, 172, 232, 0.7);
-  --selection: rgba(183, 172, 232, 0.35);
-  --texture-dot: rgba(183, 172, 232, 0.28);
-  --chart-1: rgb(111 136 163);
-  --chart-2: rgb(0 167 181);
-  --chart-3: rgb(183 172 232);
-  --chart-4: rgb(214 210 196);
-  --chart-5: rgb(123 123 124);
-  --ambient-a: rgba(109, 40, 217, 0.24);
-  --ambient-b: rgba(183, 172, 232, 0.05);
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-
-/* ------- stellar black (data-theme="dark") — deepest black ------- */
-:root[data-theme="dark"] {
-  --background: rgb(10 10 10);
-  --foreground: rgb(246 247 248);
-  --surface: rgb(19 18 23);
-  --surface-elevated: rgb(26 25 32);
-  --card: rgb(19 18 23);
-  --card-foreground: rgb(246 247 248);
-  --popover: rgb(26 25 32);
-  --popover-foreground: rgb(246 247 248);
-  --primary: rgb(183 172 232);
-  --primary-2: rgb(183 172 232);
-  --primary-foreground: rgb(15 15 15);
-  --brand-navy: rgb(0 46 93);
-  --brand-navy-foreground: rgb(246 247 248);
-  --secondary: rgb(26 25 32);
-  --secondary-foreground: rgb(246 247 248);
-  --muted: rgb(26 25 32);
-  --muted-foreground: rgb(188 188 199);
-  --subtle-foreground: rgb(146 145 158);
-  --accent: rgb(26 25 32);
-  --accent-foreground: rgb(246 247 248);
-  --accent-teal: rgb(52 183 195);
-  --accent-warm: rgb(214 210 196);
-  --destructive: rgb(224 92 96);
-  --destructive-foreground: rgb(246 247 248);
-  --success: rgb(52 183 195);
-  --warning: rgb(214 210 196);
-  --border: rgba(246, 247, 248, 0.12);
-  --border-strong: rgba(246, 247, 248, 0.22);
-  --input: rgba(246, 247, 248, 0.14);
-  --ring: rgba(183, 172, 232, 0.7);
-  --selection: rgba(183, 172, 232, 0.35);
-  --texture-dot: rgba(183, 172, 232, 0.28);
-  --chart-1: rgb(111 136 163);
-  --chart-2: rgb(0 167 181);
-  --chart-3: rgb(183 172 232);
-  --chart-4: rgb(214 210 196);
-  --chart-5: rgb(123 123 124);
-  --ambient-a: rgba(109, 40, 217, 0.18);
-  --ambient-b: rgba(183, 172, 232, 0.04);
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-}
-
-/* ------- stellar day (data-theme="day") — off-white light ------- */
-:root[data-theme="day"] {
-  --background: rgb(246 247 248);
-  --foreground: rgb(15 15 15);
-  --surface: rgb(255 255 255);
-  --surface-elevated: rgb(238 235 248);
-  --card: rgb(255 255 255);
-  --card-foreground: rgb(15 15 15);
-  --popover: rgb(255 255 255);
-  --popover-foreground: rgb(15 15 15);
-  --primary: rgb(109 40 217);
-  --primary-2: rgb(109 40 217);
   --primary-foreground: rgb(246 247 248);
-  --brand-navy: rgb(0 46 93);
+  --brand-navy: rgb(11 11 13);
   --brand-navy-foreground: rgb(246 247 248);
-  --secondary: rgb(238 235 248);
-  --secondary-foreground: rgb(15 15 15);
-  --muted: rgb(238 235 248);
-  --muted-foreground: rgb(56 61 70);
-  --subtle-foreground: rgb(100 105 114);
-  --accent: rgb(238 235 248);
-  --accent-foreground: rgb(15 15 15);
-  --accent-teal: rgb(0 122 133);
-  --accent-warm: rgb(115 110 92);
-  --destructive: rgb(178 52 52);
+  --secondary: rgb(22 22 26);
+  --secondary-foreground: rgb(246 247 248);
+  --muted: rgb(28 28 33);
+  --muted-foreground: rgb(148 148 158);
+  --subtle-foreground: rgb(92 92 101);
+  --accent: rgb(22 22 26);
+  --accent-foreground: rgb(246 247 248);
+  --accent-teal: rgb(143 191 159);
+  --accent-warm: rgb(214 210 196);
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --destructive: rgb(224 90 71);
   --destructive-foreground: rgb(246 247 248);
-  --success: rgb(0 122 133);
-  --warning: rgb(115 110 92);
-  --border: rgb(206 199 235);
-  --border-strong: rgb(183 172 232);
-  --input: rgba(109, 40, 217, 0.3);
-  --ring: rgba(109, 40, 217, 0.45);
-  --selection: rgba(183, 172, 232, 0.45);
-  --texture-dot: rgba(15, 15, 15, 0.16);
+  --success: rgb(143 191 159);
+  --warning: rgb(214 210 196);
+  --border: rgb(32 32 39);
+  --border-strong: rgb(42 42 50);
+  --input: rgba(246, 247, 248, 0.12);
+  --ring: rgba(139, 92, 246, 0.55);
+  --selection: rgba(139, 92, 246, 0.28);
+  --texture-dot: rgba(183, 172, 232, 0.22);
+  --chart-1: rgb(111 136 163);
+  --chart-2: rgb(143 191 159);
+  --chart-3: rgb(139 92 246);
+  --chart-4: rgb(214 210 196);
+  --chart-5: rgb(92 92 101);
+  --ambient-a: rgba(139, 92, 246, 0.16);
+  --ambient-b: rgba(183, 172, 232, 0.07);
+  --card-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.85), 0 2px 0 0 rgba(255, 255, 255, 0.02) inset;
+  --btn-bg: rgb(246 247 248);
+  --btn-fg: rgb(15 15 15);
+}
+
+/* ------- deep night (data-theme="dark") ------- */
+:root[data-theme="dark"] {
+  --background: rgb(8 8 10);
+  --foreground: rgb(246 247 248);
+  --surface: rgb(14 14 18);
+  --surface-elevated: rgb(20 20 24);
+  --panel-3: rgb(24 24 28);
+  --card: rgb(14 14 18);
+  --card-foreground: rgb(246 247 248);
+  --popover: rgb(20 20 24);
+  --popover-foreground: rgb(246 247 248);
+  --primary: rgb(139 92 246);
+  --primary-2: rgb(183 172 232);
+  --primary-foreground: rgb(246 247 248);
+  --brand-navy: rgb(8 8 10);
+  --brand-navy-foreground: rgb(246 247 248);
+  --secondary: rgb(20 20 24);
+  --secondary-foreground: rgb(246 247 248);
+  --muted: rgb(24 24 28);
+  --muted-foreground: rgb(138 138 148);
+  --subtle-foreground: rgb(82 82 90);
+  --accent: rgb(20 20 24);
+  --accent-foreground: rgb(246 247 248);
+  --accent-teal: rgb(143 191 159);
+  --accent-warm: rgb(214 210 196);
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --destructive: rgb(224 90 71);
+  --destructive-foreground: rgb(246 247 248);
+  --success: rgb(143 191 159);
+  --warning: rgb(214 210 196);
+  --border: rgb(26 26 34);
+  --border-strong: rgb(36 36 44);
+  --input: rgba(246, 247, 248, 0.12);
+  --ring: rgba(139, 92, 246, 0.55);
+  --selection: rgba(139, 92, 246, 0.28);
+  --texture-dot: rgba(183, 172, 232, 0.2);
+  --chart-1: rgb(111 136 163);
+  --chart-2: rgb(143 191 159);
+  --chart-3: rgb(139 92 246);
+  --chart-4: rgb(214 210 196);
+  --chart-5: rgb(82 82 90);
+  --ambient-a: rgba(139, 92, 246, 0.14);
+  --ambient-b: rgba(183, 172, 232, 0.05);
+  --card-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.9), 0 2px 0 0 rgba(255, 255, 255, 0.02) inset;
+  --btn-bg: rgb(246 247 248);
+  --btn-fg: rgb(15 15 15);
+}
+
+/* ------- day paper (data-theme="day") — mock light ------- */
+:root[data-theme="day"] {
+  --background: rgb(239 239 236);
+  --foreground: rgb(17 17 18);
+  --surface: rgb(251 251 249);
+  --surface-elevated: rgb(255 255 255);
+  --panel-3: rgb(244 244 240);
+  --card: rgb(251 251 249);
+  --card-foreground: rgb(17 17 18);
+  --popover: rgb(255 255 255);
+  --popover-foreground: rgb(17 17 18);
+  --primary: rgb(109 40 217);
+  --primary-2: rgb(92 78 168);
+  --primary-foreground: rgb(250 250 248);
+  --brand-navy: rgb(17 17 18);
+  --brand-navy-foreground: rgb(250 250 248);
+  --secondary: rgb(244 244 240);
+  --secondary-foreground: rgb(17 17 18);
+  --muted: rgb(244 244 240);
+  --muted-foreground: rgb(102 102 95);
+  --subtle-foreground: rgb(154 154 146);
+  --accent: rgb(244 244 240);
+  --accent-foreground: rgb(17 17 18);
+  --accent-teal: rgb(63 122 85);
+  --accent-warm: rgb(169 163 146);
+  --accent-soft: rgba(109, 40, 217, 0.08);
+  --destructive: rgb(178 61 42);
+  --destructive-foreground: rgb(250 250 248);
+  --success: rgb(63 122 85);
+  --warning: rgb(169 163 146);
+  --border: rgb(228 227 220);
+  --border-strong: rgb(213 212 203);
+  --input: rgba(109, 40, 217, 0.22);
+  --ring: rgba(109, 40, 217, 0.4);
+  --selection: rgba(109, 40, 217, 0.16);
+  --texture-dot: rgba(17, 17, 18, 0.12);
   --chart-1: rgb(74 107 140);
-  --chart-2: rgb(0 147 159);
+  --chart-2: rgb(63 122 85);
   --chart-3: rgb(109 40 217);
-  --chart-4: rgb(117 115 107);
-  --chart-5: rgb(131 131 132);
-  --ambient-a: rgba(109, 40, 217, 0.08);
-  --ambient-b: rgba(183, 172, 232, 0.18);
-  --card-shadow: 0 1px 2px rgba(109, 40, 217, 0.1);
+  --chart-4: rgb(169 163 146);
+  --chart-5: rgb(154 154 146);
+  --ambient-a: rgba(109, 40, 217, 0.09);
+  --ambient-b: rgba(146, 134, 196, 0.07);
+  --card-shadow: 0 20px 44px -22px rgba(28, 28, 24, 0.24), 0 1px 2px rgba(28, 28, 24, 0.04);
+  --btn-bg: rgb(17 17 18);
+  --btn-fg: rgb(250 250 248);
 }
 
-/* motion language: one soft ease, no springs */
+/* motion language: one soft ease */
 :root {
-  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-/* theme-invariant Stellar brand constants — for flat brand blocks that keep
-   the same fill in every theme (avatars, hero panels) */
+/* brand constants */
 :root {
   --brand-lavender: rgb(183 172 232);
-  --brand-purple: rgb(109 40 217);
-  --brand-teal: rgb(0 167 181);
+  --brand-purple: rgb(139 92 246);
+  --brand-teal: rgb(143 191 159);
   --brand-sand: rgb(214 210 196);
   --brand-black: rgb(15 15 15);
   --brand-offwhite: rgb(246 247 248);
@@ -199,8 +210,8 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-sans: var(--font-archivo), "Helvetica Neue", Helvetica, ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-archivo), "Helvetica Neue", Helvetica, ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
 }
 
@@ -220,6 +231,7 @@
 
 html,
 body {
+  height: 100%;
   background: var(--background);
 }
 
@@ -276,28 +288,27 @@ svg.lucide {
 
 /* --------------------------- shared primitives --------------------------- */
 
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 11px;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-  font-family: var(--font-sans);
-}
-
-.eyebrow-dot {
-  color: var(--primary);
-  letter-spacing: 0;
-}
-
 .page-title {
   font-family: var(--font-display);
-  font-size: clamp(30px, 2rem + 1.1vw, 44px);
-  line-height: 1.08;
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  font-size: clamp(32px, 2rem + 1.4vw, 46px);
+  line-height: 1.14;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+/* Claude Design soft panel */
+.soft-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--card-shadow);
+}
+
+.soft-panel-lg {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
 }
 
 /* editorial card surface — flat, clear border; kept as a hook for Card */
@@ -325,32 +336,6 @@ svg.lucide {
   background-size: 12px 12px;
 }
 
-/* fade the dots out toward the bottom — for hero/empty-state backdrops */
-.texture-dots-fade {
-  -webkit-mask-image: radial-gradient(80% 90% at 50% 0%, black 30%, transparent 100%);
-  mask-image: radial-gradient(80% 90% at 50% 0%, black 30%, transparent 100%);
-}
-
-/* auth decorative panel — flat navy block with still brand gradients */
-.aurora-panel {
-  position: relative;
-  overflow: hidden;
-  background:
-    radial-gradient(90% 70% at 82% 6%, rgba(183, 172, 232, 0.22), transparent 62%),
-    radial-gradient(80% 62% at 12% 92%, rgba(0, 167, 181, 0.14), transparent 62%),
-    rgb(71 26 141);
-}
-.aurora-panel::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(rgba(183, 172, 232, 0.28) 1px, transparent 1px);
-  background-size: 12px 12px;
-  -webkit-mask-image: radial-gradient(70% 60% at 75% 20%, black, transparent 80%);
-  mask-image: radial-gradient(70% 60% at 75% 20%, black, transparent 80%);
-  pointer-events: none;
-}
-
 /* die-cut receipt notches — the hole is masked out of the strip, so the
    dialog backdrop really shows through and the border ring hugs the cut */
 .receipt-notch-left,
@@ -373,110 +358,19 @@ svg.lucide {
   font-variant-numeric: tabular-nums;
 }
 
-/* --------------------- premium primitives (design system) --------------------- */
-
-/* consistent small stat/section label */
-.stat-label {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--muted-foreground);
-}
-
-/* confident hero figures — balances, APY, yield, caps */
-.hero-number {
-  font-family: var(--font-sans);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  font-size: clamp(2rem, 1.5rem + 2vw, 2.75rem);
-}
-
-/* dominant focal number for a page's single hero block */
-.hero-number-lg {
-  font-family: var(--font-sans);
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  letter-spacing: -0.03em;
-  line-height: 0.95;
-  font-size: clamp(2.75rem, 1.9rem + 3.6vw, 4.25rem);
-}
-
-.hero-number-sm {
-  font-family: var(--font-sans);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  line-height: 1.05;
-  font-size: clamp(1.6rem, 1.3rem + 1vw, 2rem);
-}
-
-/* legacy hook: hero figures are flat foreground now — no text gradients */
-.hero-gradient {
-  color: var(--foreground);
-}
-
-/* directional delta pill (24h change, spend vs cap, …) */
-.delta-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  border-radius: 9999px;
-  padding: 0.12rem 0.5rem;
-  font-size: 12px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  border: 1px solid transparent;
-}
-.delta-up {
-  color: var(--success);
-  background: color-mix(in srgb, var(--success) 12%, transparent);
-  border-color: color-mix(in srgb, var(--success) 26%, transparent);
-}
-.delta-down {
-  color: var(--destructive);
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-  border-color: color-mix(in srgb, var(--destructive) 26%, transparent);
-}
-.delta-flat {
-  color: var(--muted-foreground);
-  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
-  border-color: var(--border);
-}
-
-/* section signature accent — set --section-accent on a wrapper */
-.section-accent-bar {
-  height: 3px;
-  width: 44px;
-  border-radius: 9999px;
-  background: var(--section-accent, var(--primary));
-}
-
-/* soft draw-in for charts / panels appearing after data loads */
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
+@keyframes nebula-pulse {
+  0%,
+  100% {
     opacity: 1;
-    transform: translateY(0);
   }
-}
-.rise-in {
-  animation: rise-in 0.5s var(--ease-out-soft) both;
+  50% {
+    opacity: 0.3;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise-in {
-    animation: none;
+  .soft-panel,
+  .soft-panel-lg {
+    transition: none;
   }
-}
-
-/* inset panel used inside cards for grouped rows / code / stats */
-.inset-panel {
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--surface-elevated) 55%, transparent);
 }
