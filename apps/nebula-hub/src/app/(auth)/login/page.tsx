@@ -15,12 +15,12 @@ import { z } from "zod";
 import { BadgeCheck, Github, Loader2, Wallet } from "lucide-react";
 
 import { AuthSplash } from "@/components/shared/auth-splash";
-import { fetchBetaStatus, redeemBetaCode } from "@/lib/beta";
-import { syncHubSession } from "@/lib/hub-session";
-import { applyPrivySession } from "@/lib/hub-session";
-import { signInWithFreighter, WalletConnectError } from "@/lib/wallet-connect";
+import { SectionRule } from "@/components/design/primitives";
+import { fetchBetaStatus, redeemBetaCode } from "@/lib/auth/beta";
+import { syncHubSession } from "@/lib/auth/session";
+import { applyPrivySession } from "@/lib/auth/session";
+import { signInWithFreighter, WalletConnectError } from "@/lib/wallet/connect";
 
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -296,14 +296,9 @@ function LoginForm() {
 
   return (
     <div>
-      <p className="eyebrow">
-        <span className="eyebrow-dot" aria-hidden>
-          •
-        </span>
-        welcome back
-      </p>
-      <h1 className="page-title mt-3">Sign in</h1>
-      <p className="mt-2 text-[15px] text-muted-foreground">
+      <SectionRule>WELCOME BACK</SectionRule>
+      <h1 className="page-title">Sign in</h1>
+      <p className="mt-3 max-w-sm text-[14px] text-pretty text-muted-foreground">
         Manage your agent&apos;s wallet, policy, and yield.
       </p>
 
@@ -318,12 +313,15 @@ function LoginForm() {
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+                  Email
+                </FormLabel>
                 <FormControl>
                   <Input
                     type="email"
                     autoComplete="email"
                     placeholder="you@company.dev"
+                    className="h-11 rounded-xl border-border bg-[var(--panel-3)] font-mono text-[13px]"
                     {...field}
                   />
                 </FormControl>
@@ -337,18 +335,20 @@ function LoginForm() {
             render={({ field }) => (
               <FormItem>
                 <div className="flex items-center justify-between">
-                  <FormLabel>Login code</FormLabel>
+                  <FormLabel className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+                    Login code
+                  </FormLabel>
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+                    className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground hover:text-foreground disabled:opacity-50"
                     disabled={sendingCode || emailBusy}
                     onClick={() => void onSendCode()}
                   >
                     {sendingCode
-                      ? "Sending…"
+                      ? "SENDING…"
                       : codeSent
-                        ? "Resend code"
-                        : "Send code"}
+                        ? "RESEND"
+                        : "SEND CODE"}
                   </button>
                 </div>
                 <FormControl>
@@ -356,10 +356,11 @@ function LoginForm() {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     placeholder="123456"
+                    className="h-11 rounded-xl border-border bg-[var(--panel-3)] font-mono text-[13px] tracking-[0.2em]"
                     {...field}
                   />
                 </FormControl>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[12px] text-muted-foreground">
                   Privy emails a one-time code — no password to remember.
                 </p>
                 <FormMessage />
@@ -367,7 +368,7 @@ function LoginForm() {
             )}
           />
           {betaGranted ? (
-            <p className="inline-flex items-center gap-1.5 text-xs text-success">
+            <p className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] text-success">
               <BadgeCheck className="size-3.5" aria-hidden /> Private beta
               access active on this browser
             </p>
@@ -377,20 +378,22 @@ function LoginForm() {
               name="invite"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Invite code</FormLabel>
+                  <FormLabel className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+                    Invite code
+                  </FormLabel>
                   <FormControl>
                     <Input
                       placeholder="NEBULA-XXXX"
                       autoComplete="off"
-                      className="font-mono uppercase"
+                      className="h-11 rounded-xl border-border bg-[var(--panel-3)] font-mono text-[13px] uppercase"
                       {...field}
                     />
                   </FormControl>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[12px] text-muted-foreground">
                     Nebula is in private beta. No code yet?{" "}
                     <Link
                       href="/"
-                      className="underline-offset-4 hover:text-foreground hover:underline"
+                      className="text-foreground underline-offset-4 hover:underline"
                     >
                       Join the waitlist
                     </Link>
@@ -401,26 +404,31 @@ function LoginForm() {
               )}
             />
           )}
-          <Button type="submit" className="w-full" disabled={emailBusy}>
+          <button
+            type="submit"
+            disabled={emailBusy}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full text-[13px] font-semibold disabled:opacity-60"
+            style={{ background: "var(--btn-bg)", color: "var(--btn-fg)" }}
+          >
             {emailBusy ? <Loader2 className="size-4 animate-spin" /> : null}
             {codeSent ? "Sign in" : "Send code & continue"}
-          </Button>
+          </button>
         </form>
       </Form>
 
-      <div className="my-6 flex items-center gap-3 text-xs text-subtle">
+      <div className="my-7 flex items-center gap-3 font-mono text-[10px] tracking-[0.14em] text-subtle">
         <span className="h-px flex-1 bg-border" />
-        or
+        OR
         <span className="h-px flex-1 bg-border" />
       </div>
 
       <div className="space-y-2.5">
-        <Button
-          variant="outline"
-          className="w-full"
+        <button
+          type="button"
           onClick={() => void oauth("google")}
           disabled={oauthLoading}
           aria-label="Continue with Google"
+          className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-border bg-transparent text-[13px] text-foreground hover:bg-elevated/60 disabled:opacity-60"
         >
           {oauthBusy === "google" ? (
             <Loader2 className="size-4 animate-spin" />
@@ -428,13 +436,13 @@ function LoginForm() {
             <GoogleMark />
           )}
           Continue with Google
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full"
+        </button>
+        <button
+          type="button"
           onClick={() => void oauth("github")}
           disabled={oauthLoading}
           aria-label="Continue with GitHub"
+          className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-border bg-transparent text-[13px] text-foreground hover:bg-elevated/60 disabled:opacity-60"
         >
           {oauthBusy === "github" ? (
             <Loader2 className="size-4 animate-spin" />
@@ -442,13 +450,13 @@ function LoginForm() {
             <Github className="size-4" />
           )}
           Continue with GitHub
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full"
+        </button>
+        <button
+          type="button"
           onClick={() => void connectWallet()}
           disabled={walletBusy || oauthLoading}
           aria-label="Continue with Freighter wallet"
+          className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-border bg-transparent text-[13px] text-foreground hover:bg-elevated/60 disabled:opacity-60"
         >
           {walletBusy ? (
             <Loader2 className="size-4 animate-spin" />
@@ -456,10 +464,10 @@ function LoginForm() {
             <Wallet className="size-4" />
           )}
           Continue with Freighter
-        </Button>
+        </button>
       </div>
 
-      <p className="mt-8 text-sm text-muted-foreground">
+      <p className="mt-8 text-[13px] text-muted-foreground">
         New to Nebula?{" "}
         <Link
           href="/signup"

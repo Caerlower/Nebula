@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePrivy } from "@privy-io/react-auth";
-import { Suspense } from "react";
 
 import { Wordmark } from "@/components/shell/wordmark";
-import { applyPrivySession } from "@/lib/hub-session";
+import { applyPrivySession } from "@/lib/auth/session";
 import { useAuthStore } from "@/stores/auth";
+import { useUIStore } from "@/stores/ui";
 
 const QUOTES = [
   {
@@ -39,25 +39,43 @@ function RotatingQuote() {
   const quote = QUOTES[index]!;
 
   return (
-    <div className="relative h-36" aria-live="polite">
+    <div className="relative min-h-[9.5rem]" aria-live="polite">
       <AnimatePresence mode="wait">
         <motion.figure
           key={index}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.5 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.45 }}
           className="absolute inset-0"
         >
-          <blockquote className="font-display text-xl leading-relaxed">
+          <blockquote className="text-[clamp(1.25rem,2.2vw,1.625rem)] font-semibold leading-[1.35] tracking-[-0.015em] text-pretty">
             “{quote.text}”
           </blockquote>
-          <figcaption className="mt-3 text-sm opacity-75">
-            {quote.author} <span className="opacity-80">— {quote.role}</span>
+          <figcaption className="mt-4 font-mono text-[11px] tracking-[0.08em] text-muted-foreground">
+            {quote.author.toUpperCase()}
+            <span className="text-subtle"> · {quote.role.toUpperCase()}</span>
           </figcaption>
         </motion.figure>
       </AnimatePresence>
     </div>
+  );
+}
+
+function ThemePill() {
+  const theme = useUIStore((s) => s.theme);
+  const toggleTheme = useUIStore((s) => s.toggleTheme);
+  const label = theme === "day" ? "DARK" : "LIGHT";
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className="inline-flex shrink-0 items-center rounded-full border border-border px-[13px] py-2 font-mono text-[10px] tracking-[0.12em] text-muted-foreground hover:text-foreground"
+      aria-label={`Switch to ${label.toLowerCase()} theme`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -83,11 +101,9 @@ function AuthRedirect() {
   useEffect(() => {
     if (!hydrated || oauthReturn) return;
 
-    // Preserve OAuth / approve returnTo so MCP consent isn't lost after login.
     const returnTo = safeReturnTo(searchParams.get("returnTo"));
     const home = onboarded ? "/agents" : "/onboarding";
 
-    // Wallet-native (Freighter) session — no Privy involved.
     if (walletAuthed) {
       router.replace(returnTo ?? home);
       return;
@@ -113,24 +129,51 @@ function AuthRedirect() {
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh">
-      <div className="flex flex-1 items-center justify-center px-6 py-12">
-        <div className="w-full max-w-[400px]">
-          <Suspense fallback={null}>
-            <AuthRedirect />
-          </Suspense>
-          {children}
+    <div className="flex min-h-dvh bg-background">
+      <div className="relative flex flex-1 flex-col px-6 py-8 sm:px-10">
+        <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col">
+          <div className="flex items-center justify-between">
+            <Wordmark />
+            <ThemePill />
+          </div>
+
+          <div className="flex flex-1 flex-col justify-center py-10">
+            <Suspense fallback={null}>
+              <AuthRedirect />
+            </Suspense>
+            {children}
+          </div>
+
+          <p className="font-mono text-[10px] tracking-[0.12em] text-subtle">
+            STELLAR · POLICY · YIELD
+          </p>
         </div>
       </div>
-      <div className="aurora-panel hidden w-[46%] flex-col justify-between border-l border-border p-12 text-[var(--brand-offwhite)] [--primary:var(--brand-lavender)] min-[900px]:flex">
-        <Wordmark className="relative z-10 text-[26px]" />
+
+      <aside className="relative hidden w-[min(48%,560px)] flex-col justify-between overflow-hidden border-l border-border bg-elevated p-10 lg:flex xl:p-12">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_55%_at_70%_15%,var(--ambient-a),transparent_70%)]"
+        />
+        <div
+          aria-hidden
+          className="texture-dots pointer-events-none absolute inset-0 opacity-40"
+        />
+
+        <div className="relative z-10">
+          <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+            NEBULA HUB
+          </span>
+        </div>
+
         <div className="relative z-10 max-w-md">
           <RotatingQuote />
         </div>
-        <p className="relative z-10 text-xs opacity-60">
+
+        <p className="relative z-10 max-w-sm font-mono text-[11px] leading-relaxed tracking-[0.04em] text-muted-foreground">
           A Stellar wallet your agent can hold. Policy on-chain, yield on idle.
         </p>
-      </div>
+      </aside>
     </div>
   );
 }
