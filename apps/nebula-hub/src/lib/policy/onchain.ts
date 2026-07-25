@@ -1,13 +1,7 @@
 /**
- * On-chain Nebula policy (Soroban) — shared multi-tenant contract.
- *
- * Env: POLICY_CONTRACT_ID = C… (deployed nebula-policy wasm).
- * Each user's G-address owns a policy slot (initialize once).
- * Categories: transfer / x402 / mpp (outbound spend). Blend is not capped.
- *
- * Spend limits use the same 7-decimal stroop scaler as native assets; the
- * unit is USDC for spend caps, category caps, check_spend, and the liquid band.
- * Hub converts band USDC → XLM via CoinGecko when comparing to Blend balances.
+ * On-chain Nebula policy — shared multi-tenant Soroban contract.
+ * Agent G-address is slot key + signer. Mutations are dashboard-only.
+ * Amounts are USDC (7 decimals); Hub converts XLM via oracle.
  */
 
 import {
@@ -20,7 +14,13 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 
-import { type HashSigner, privySigner } from "@/lib/signing";
+import {
+  policyContractConfiguredFor,
+  policyContractIdFor,
+  envHubNetwork,
+  type HubNetwork,
+} from "@/lib/network";
+import { privySigner } from "@/lib/signing";
 import { signAndSubmitSoroban } from "@/lib/stellar";
 
 export type SpendCategory = "transfer" | "x402" | "mpp";
@@ -31,54 +31,74 @@ export type CategoryLimitsXlm = {
   mpp: number;
 };
 
+type Network = HubNetwork;
+type AgentWallet = {
+  walletId: string;
+  stellarAddress: string;
+  network: Network;
+};
+
 const STROOP = 10_000_000n;
 
-function networkPassphrase(network: "testnet" | "mainnet"): string {
+type OkHash = { ok: true; hash: string };
+type OkMaybeHash = { ok: true; hash?: string };
+type Fail = { ok: false; error: string };
+
+function networkPassphrase(network: Network): string {
   return network === "mainnet"
     ? "Public Global Stellar Network ; September 2015"
     : "Test SDF Network ; September 2015";
 }
 
-function rpcUrl(network: "testnet" | "mainnet"): string {
+function rpcUrl(network: Network): string {
   return network === "mainnet"
     ? "https://mainnet.sorobanrpc.com"
     : "https://soroban-testnet.stellar.org";
 }
 
-export function policyContractConfigured(): boolean {
-  return Boolean(process.env.POLICY_CONTRACT_ID?.trim());
+export function policyContractConfigured(network?: Network): boolean {
+  return policyContractConfiguredFor(network ?? envHubNetwork());
 }
 
-export function policyContractId(): string {
-  const id = process.env.POLICY_CONTRACT_ID?.trim();
-  if (!id) throw new Error("POLICY_CONTRACT_ID is not set");
+export function policyContractId(network?: Network): string {
+  const net = network ?? envHubNetwork();
+  const id = policyContractIdFor(net);
+  if (!id) {
+    throw new Error(
+      net === "mainnet"
+        ? "POLICY_CONTRACT_ID_MAINNET is not set"
+        : "POLICY_CONTRACT_ID_TESTNET (or POLICY_CONTRACT_ID) is not set",
+    );
+  }
   return id;
 }
 
-export function toStroops(amountXlm: number): bigint {
-  return BigInt(Math.round(amountXlm * Number(STROOP)));
+function toStroops(amount: number): bigint {
+  return BigInt(Math.round(amount * Number(STROOP)));
+}
+
+function i128ScVal(amount: number | bigint): xdr.ScVal {
+  const v = typeof amount === "bigint" ? amount : toStroops(amount);
+  return nativeToScVal(v, { type: "i128" });
+}
+
+function addressScVal(address: string): xdr.ScVal {
+  return new Address(address).toScVal();
 }
 
 function categoryScVal(category: SpendCategory): xdr.ScVal {
-  // #[repr(u32)] contracttype enum — encoded as U32 discriminant, not Symbol vec.
-  const discriminant =
-    category === "transfer" ? 0 : category === "x402" ? 1 : 2;
-  return xdr.ScVal.scvU32(discriminant);
+  return xdr.ScVal.scvU32(
+    category === "transfer" ? 0 : category === "x402" ? 1 : 2,
+  );
 }
 
-function i128ScVal(amount: bigint): xdr.ScVal {
-  return nativeToScVal(amount, { type: "i128" });
-}
-
-/** Soroban contract struct → sorted ScMap (symbol keys). */
 function categoryLimitsScVal(limits: CategoryLimitsXlm): xdr.ScVal {
-  const entries: Array<[string, bigint]> = [
-    ["mpp", toStroops(limits.mpp)],
-    ["transfer", toStroops(limits.transfer)],
-    ["x402", toStroops(limits.x402)],
+  const entries: Array<[string, number]> = [
+    ["mpp", limits.mpp],
+    ["transfer", limits.transfer],
+    ["x402", limits.x402],
   ];
-  // ScMap keys must be in ascending XDR order.
-  entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  entries.sort(([a], [b]) => a.localeCompare(b));
   return xdr.ScVal.scvMap(
     entries.map(
       ([key, value]) =>
@@ -90,75 +110,81 @@ function categoryLimitsScVal(limits: CategoryLimitsXlm): xdr.ScVal {
   );
 }
 
-async function invokePolicy(params: {
-  signer: HashSigner;
-  sourceAddress: string;
-  network: "testnet" | "mainnet";
-  method: string;
-  args: xdr.ScVal[];
-}): Promise<string> {
-  const contract = new Contract(policyContractId());
-  const server = new rpc.Server(rpcUrl(params.network));
-  const account = await server.getAccount(params.sourceAddress);
-
+async function invokePolicy(
+  wallet: AgentWallet,
+  method: string,
+  args: xdr.ScVal[],
+): Promise<string> {
+  const contract = new Contract(policyContractId(wallet.network));
+  const server = new rpc.Server(rpcUrl(wallet.network));
+  const account = await server.getAccount(wallet.stellarAddress);
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
-    networkPassphrase: networkPassphrase(params.network),
+    networkPassphrase: networkPassphrase(wallet.network),
   })
-    .addOperation(contract.call(params.method, ...params.args))
+    .addOperation(contract.call(method, ...args))
     .setTimeout(60)
     .build();
-
   const prepared = await server.prepareTransaction(tx);
   return signAndSubmitSoroban({
     preparedTx: prepared,
-    signer: params.signer,
-    sourceAddress: params.sourceAddress,
-    network: params.network,
+    signer: privySigner(wallet.walletId, wallet.stellarAddress),
+    sourceAddress: wallet.stellarAddress,
+    network: wallet.network,
   });
 }
 
-function ownerScVal(address: string): xdr.ScVal {
-  return new Address(address).toScVal();
-}
-
-/** Ensure the user's policy slot exists (idempotent: ignore AlreadyInitialized). */
-export async function ensurePolicyInitialized(params: {
-  walletId: string;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-  maxPerCallXlm: number;
-  maxPerDayXlm: number;
-  categories: CategoryLimitsXlm;
-  liquidLowXlm?: number;
-  liquidHighXlm?: number;
-  autoYield?: boolean;
-}): Promise<{ ok: true; hash?: string } | { ok: false; error: string }> {
-  if (!policyContractConfigured()) {
-    return { ok: false, error: "POLICY_CONTRACT_ID not configured" };
+async function mutatePolicy(
+  wallet: AgentWallet,
+  method: string,
+  args: xdr.ScVal[],
+): Promise<OkHash | Fail> {
+  if (!policyContractConfigured(wallet.network)) {
+    return { ok: false, error: "POLICY_CONTRACT_ID not configured for this network" };
   }
   try {
-    const hash = await invokePolicy({
-      signer: privySigner(params.walletId, params.stellarAddress),
-      sourceAddress: params.stellarAddress,
-      network: params.network,
-      method: "initialize",
-      args: [
-        ownerScVal(params.stellarAddress),
-        nativeToScVal(toStroops(params.maxPerCallXlm), { type: "i128" }),
-        nativeToScVal(toStroops(params.maxPerDayXlm), { type: "i128" }),
-        categoryLimitsScVal(params.categories),
-        nativeToScVal(toStroops(params.liquidLowXlm ?? 2), { type: "i128" }),
-        nativeToScVal(toStroops(params.liquidHighXlm ?? 10), {
-          type: "i128",
-        }),
-        xdr.ScVal.scvBool(params.autoYield ?? true),
-      ],
-    });
+    const hash = await invokePolicy(wallet, method, args);
+    return { ok: true, hash };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function ownerArg(address: string): xdr.ScVal {
+  return addressScVal(address);
+}
+
+/** Ensure the agent's policy slot exists. */
+export async function ensurePolicyInitialized(
+  params: AgentWallet & {
+    maxPerCallXlm: number;
+    maxPerDayXlm: number;
+    categories: CategoryLimitsXlm;
+    liquidLowXlm?: number;
+    liquidHighXlm?: number;
+    autoYield?: boolean;
+  },
+): Promise<OkMaybeHash | Fail> {
+  if (!policyContractConfigured(params.network)) {
+    return { ok: false, error: "POLICY_CONTRACT_ID not configured for this network" };
+  }
+  const { stellarAddress: a } = params;
+  try {
+    const hash = await invokePolicy(params, "initialize", [
+      ownerArg(a),
+      i128ScVal(params.maxPerCallXlm),
+      i128ScVal(params.maxPerDayXlm),
+      categoryLimitsScVal(params.categories),
+      i128ScVal(params.liquidLowXlm ?? 2),
+      i128ScVal(params.liquidHighXlm ?? 10),
+      xdr.ScVal.scvBool(params.autoYield ?? true),
+    ]);
     return { ok: true, hash };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // Already initialized is fine.
     if (/AlreadyInitialized|#2|error.*?2\b/i.test(message)) {
       return { ok: true };
     }
@@ -166,151 +192,87 @@ export async function ensurePolicyInitialized(params: {
   }
 }
 
-export async function onchainSetLimits(params: {
-  walletId: string;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-  maxPerCallXlm: number;
-  maxPerDayXlm: number;
-}): Promise<{ ok: true; hash: string } | { ok: false; error: string }> {
-  if (!policyContractConfigured()) {
-    return { ok: false, error: "POLICY_CONTRACT_ID not configured" };
-  }
-  try {
-    const hash = await invokePolicy({
-      signer: privySigner(params.walletId, params.stellarAddress),
-      sourceAddress: params.stellarAddress,
-      network: params.network,
-      method: "set_limits",
-      args: [
-        ownerScVal(params.stellarAddress),
-        nativeToScVal(toStroops(params.maxPerCallXlm), { type: "i128" }),
-        nativeToScVal(toStroops(params.maxPerDayXlm), { type: "i128" }),
-      ],
-    });
-    return { ok: true, hash };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+export async function onchainSetLimits(
+  params: AgentWallet & { maxPerCallXlm: number; maxPerDayXlm: number },
+): Promise<OkHash | Fail> {
+  return mutatePolicy(params, "set_limits", [
+    ownerArg(params.stellarAddress),
+    i128ScVal(params.maxPerCallXlm),
+    i128ScVal(params.maxPerDayXlm),
+  ]);
 }
 
-export async function onchainSetCategoryLimits(params: {
-  walletId: string;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-  categories: CategoryLimitsXlm;
-}): Promise<{ ok: true; hash: string } | { ok: false; error: string }> {
-  if (!policyContractConfigured()) {
-    return { ok: false, error: "POLICY_CONTRACT_ID not configured" };
-  }
-  try {
-    const hash = await invokePolicy({
-      signer: privySigner(params.walletId, params.stellarAddress),
-      sourceAddress: params.stellarAddress,
-      network: params.network,
-      method: "set_category_limits",
-      args: [
-        ownerScVal(params.stellarAddress),
-        categoryLimitsScVal(params.categories),
-      ],
-    });
-    return { ok: true, hash };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+export async function onchainSetCategoryLimits(
+  params: AgentWallet & { categories: CategoryLimitsXlm },
+): Promise<OkHash | Fail> {
+  return mutatePolicy(params, "set_category_limits", [
+    ownerArg(params.stellarAddress),
+    categoryLimitsScVal(params.categories),
+  ]);
 }
 
-export async function onchainSetTreasuryBand(params: {
-  walletId: string;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-  liquidLowXlm: number;
-  liquidHighXlm: number;
-  autoYield: boolean;
-}): Promise<{ ok: true; hash: string } | { ok: false; error: string }> {
-  if (!policyContractConfigured()) {
-    return { ok: false, error: "POLICY_CONTRACT_ID not configured" };
-  }
-  try {
-    const hash = await invokePolicy({
-      signer: privySigner(params.walletId, params.stellarAddress),
-      sourceAddress: params.stellarAddress,
-      network: params.network,
-      method: "set_treasury_band",
-      args: [
-        ownerScVal(params.stellarAddress),
-        nativeToScVal(toStroops(params.liquidLowXlm), { type: "i128" }),
-        nativeToScVal(toStroops(params.liquidHighXlm), { type: "i128" }),
-        xdr.ScVal.scvBool(params.autoYield),
-      ],
-    });
-    return { ok: true, hash };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+export async function onchainSetTreasuryBand(
+  params: AgentWallet & {
+    liquidLowXlm: number;
+    liquidHighXlm: number;
+    autoYield: boolean;
+  },
+): Promise<OkHash | Fail> {
+  return mutatePolicy(params, "set_treasury_band", [
+    ownerArg(params.stellarAddress),
+    i128ScVal(params.liquidLowXlm),
+    i128ScVal(params.liquidHighXlm),
+    xdr.ScVal.scvBool(params.autoYield),
+  ]);
 }
 
-/** Record + enforce on-chain spend for a category. Soft-skip if contract unset. */
-export async function onchainCheckSpend(params: {
-  walletId: string;
-  stellarAddress: string;
-  network: "testnet" | "mainnet";
-  category: SpendCategory;
-  amountXlm: number;
-  /** Used only if the owner's policy slot was never initialized. */
-  init?: {
-    maxPerCallXlm: number;
-    maxPerDayXlm: number;
-    categories: CategoryLimitsXlm;
-    liquidLowXlm?: number;
-    liquidHighXlm?: number;
-    autoYield?: boolean;
-  };
-}): Promise<
-  | { ok: true; hash: string | null; skipped: boolean }
-  | { ok: false; error: string }
-> {
-  if (!policyContractConfigured()) {
-    return { ok: true, hash: null, skipped: true };
+export async function onchainSetPaused(
+  params: AgentWallet & { paused: boolean },
+): Promise<OkHash | Fail> {
+  return mutatePolicy(params, "set_paused", [
+    ownerArg(params.stellarAddress),
+    xdr.ScVal.scvBool(params.paused),
+  ]);
+}
+
+/**
+ * On-chain spend gate when a policy contract is configured for this network.
+ * Fail-closed when configured (invoke must succeed). When unset (e.g. mainnet
+ * before pubnet deploy), skip — Hub off-chain caps still apply.
+ */
+export async function onchainCheckSpend(
+  params: AgentWallet & {
+    category: SpendCategory;
+    amountXlm: number;
+    init?: {
+      maxPerCallXlm: number;
+      maxPerDayXlm: number;
+      categories: CategoryLimitsXlm;
+      liquidLowXlm?: number;
+      liquidHighXlm?: number;
+      autoYield?: boolean;
+    };
+  },
+): Promise<OkMaybeHash | Fail> {
+  if (!policyContractConfigured(params.network)) {
+    return { ok: true };
   }
   try {
-    const init = params.init ?? {
-      maxPerCallXlm: Math.max(params.amountXlm, 5),
-      maxPerDayXlm: Math.max(params.amountXlm * 10, 20),
-      categories: {
-        transfer: 20,
-        x402: 5,
-        mpp: 5,
-      },
-    };
-    await ensurePolicyInitialized({
-      walletId: params.walletId,
-      stellarAddress: params.stellarAddress,
-      network: params.network,
-      ...init,
-    });
-
-    const hash = await invokePolicy({
-      signer: privySigner(params.walletId, params.stellarAddress),
-      sourceAddress: params.stellarAddress,
-      network: params.network,
-      method: "check_spend",
-      args: [
-        ownerScVal(params.stellarAddress),
-        categoryScVal(params.category),
-        nativeToScVal(toStroops(params.amountXlm), { type: "i128" }),
-      ],
-    });
-    return { ok: true, hash, skipped: false };
+    if (params.init) {
+      const ensured = await ensurePolicyInitialized({
+        ...params,
+        ...params.init,
+      });
+      if (!ensured.ok) {
+        return { ok: false, error: `policy_init:${ensured.error}` };
+      }
+    }
+    const hash = await invokePolicy(params, "check_spend", [
+      ownerArg(params.stellarAddress),
+      categoryScVal(params.category),
+      i128ScVal(params.amountXlm),
+    ]);
+    return { ok: true, hash };
   } catch (error) {
     return {
       ok: false,
