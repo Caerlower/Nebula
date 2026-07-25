@@ -3,36 +3,26 @@
 mod limits;
 
 use limits::{
-    build_status, default_category_limits, enforce_amount, get_state, has_policy, record_spend,
-    set_state, validate_category_limits, validate_limits, validate_treasury_band, CategoryLimits,
-    DAY_IN_LEDGERS, SpendCategory, Status,
+    build_status, empty_buckets, enforce_amount, get_state, has_policy, record_spend, set_state,
+    validate_category_limits, validate_limits, validate_treasury_band, CategoryLimits,
+    DAY_IN_LEDGERS, Error, SpendCategory, Status,
 };
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, symbol_short, Address, Env};
 
 /// Nebula on-chain spending + treasury policy (multi-tenant).
 ///
-/// Hub deploys **one** shared instance. Each user's Stellar address owns a
-/// policy slot: outbound spend caps (Transfer / X402 / MPP) plus the liquid
-/// band that drives Blend auto-yield.
+/// One shared deploy. Each agent `G…` owns a slot and signs initialize / set_* /
+/// pause / check_spend. Hub dashboard gates mutations (no MCP policy tools).
 ///
-/// Units (same 7-decimal stroop scaler):
-/// - `max_per_call` / `max_per_day` / category caps / `check_spend` → **USDC**
-/// - `liquid_low` / `liquid_high` → **USDC** (Hub converts to XLM via CoinGecko
-///   when comparing against native Blend balances)
-/// Hub converts XLM transfers to USDC via CoinGecko before `check_spend`.
+/// Units: USDC stroops (`10_000_000` = 1 USDC) for caps, categories, check_spend,
+/// and the liquid band (band is published config only — Hub enforces Blend).
 #[contract]
 pub struct NebulaPolicyContract;
 
 #[contractimpl]
+#[allow(deprecated)] // events().publish → #[contractevent] later; Hub does not index yet
 impl NebulaPolicyContract {
-    /// One-time setup for `owner`.
-    ///
-    /// All amount fields are **USDC** stroops (1 USDC = 10_000_000), including
-    /// the liquid band. Hub converts the band to XLM when rebalancing Blend.
-    ///
-    /// If `category_daily` fields are all zero, each category defaults to
-    /// `max_per_day`. Treasury band defaults: low=$2, high=$10, auto_yield=true
-    /// when `liquid_low` and `liquid_high` are both zero.
+    /// One-time setup. Zero category = block; zero band floor is allowed.
     pub fn initialize(
         env: Env,
         owner: Address,
@@ -43,73 +33,59 @@ impl NebulaPolicyContract {
         liquid_high: i128,
         auto_yield: bool,
     ) {
-        if has_policy(&env, &owner) {
-            soroban_sdk::panic_with_error!(&env, limits::Error::AlreadyInitialized);
-        }
-
         owner.require_auth();
+        if has_policy(&env, &owner) {
+            panic_with_error!(&env, Error::AlreadyInitialized);
+        }
         validate_limits(&env, max_per_call, max_per_day);
+        validate_category_limits(&env, &category_daily);
+        validate_treasury_band(&env, liquid_low, liquid_high);
 
-        let cats = if category_daily.transfer == 0
-            && category_daily.x402 == 0
-            && category_daily.mpp == 0
-        {
-            default_category_limits(max_per_day)
-        } else {
-            validate_category_limits(&env, &category_daily);
-            category_daily
-        };
-
-        let (low, high) = if liquid_low == 0 && liquid_high == 0 {
-            (20_000_000, 100_000_000) // $2 / $10 USDC
-        } else {
-            validate_treasury_band(&env, liquid_low, liquid_high);
-            (liquid_low, liquid_high)
-        };
-
-        let state = limits::PolicyState {
-            owner: owner.clone(),
-            max_per_call,
-            max_per_day,
-            category_daily: cats,
-            liquid_low: low,
-            liquid_high: high,
-            auto_yield,
-            period_ledgers: DAY_IN_LEDGERS,
-            spending_history: Vec::new(&env),
-            cached_daily_spent: 0,
-        };
-
-        set_state(&env, &state);
+        set_state(
+            &env,
+            &limits::PolicyState {
+                owner: owner.clone(),
+                paused: false,
+                max_per_call,
+                max_per_day,
+                category_daily,
+                liquid_low,
+                liquid_high,
+                auto_yield,
+                period_ledgers: DAY_IN_LEDGERS,
+                buckets: empty_buckets(&env),
+            },
+        );
+        env.events()
+            .publish((symbol_short!("init"), owner), (max_per_call, max_per_day));
     }
 
-    /// Owner-only global spend limit update (USDC stroops).
     pub fn set_limits(env: Env, owner: Address, max_per_call: i128, max_per_day: i128) {
         owner.require_auth();
         let mut state = get_state(&env, &owner);
-        if state.owner != owner {
-            soroban_sdk::panic_with_error!(&env, limits::Error::Unauthorized);
-        }
         validate_limits(&env, max_per_call, max_per_day);
-
+        let old = (state.max_per_call, state.max_per_day);
         state.max_per_call = max_per_call;
         state.max_per_day = max_per_day;
         set_state(&env, &state);
+        env.events()
+            .publish((symbol_short!("limits"), owner), (old, (max_per_call, max_per_day)));
     }
 
-    /// Owner-only per-category daily caps (USDC stroops).
+    /// Zero = block that category.
     pub fn set_category_limits(env: Env, owner: Address, category_daily: CategoryLimits) {
         owner.require_auth();
         let mut state = get_state(&env, &owner);
-        if state.owner != owner {
-            soroban_sdk::panic_with_error!(&env, limits::Error::Unauthorized);
-        }
         validate_category_limits(&env, &category_daily);
-        state.category_daily = category_daily;
+        state.category_daily = category_daily.clone();
         set_state(&env, &state);
+        env.events().publish(
+            (symbol_short!("cats"), owner),
+            (category_daily.transfer, category_daily.x402, category_daily.mpp),
+        );
     }
 
-    /// Owner-only liquid band + auto-yield (USDC stroops).
+    /// Liquid band + auto-yield (published for Hub; not enforced here).
     pub fn set_treasury_band(
         env: Env,
         owner: Address,
@@ -119,36 +95,42 @@ impl NebulaPolicyContract {
     ) {
         owner.require_auth();
         let mut state = get_state(&env, &owner);
-        if state.owner != owner {
-            soroban_sdk::panic_with_error!(&env, limits::Error::Unauthorized);
-        }
         validate_treasury_band(&env, liquid_low, liquid_high);
         state.liquid_low = liquid_low;
         state.liquid_high = liquid_high;
         state.auto_yield = auto_yield;
         set_state(&env, &state);
+        env.events()
+            .publish((symbol_short!("band"), owner), (liquid_low, liquid_high, auto_yield));
     }
 
-    /// Read current limits, treasury band, and rolling-window spend.
+    /// Blocks `check_spend` only — `set_paused` still works while paused.
+    pub fn set_paused(env: Env, owner: Address, paused: bool) {
+        owner.require_auth();
+        let mut state = get_state(&env, &owner);
+        state.paused = paused;
+        set_state(&env, &state);
+        env.events()
+            .publish((symbol_short!("pause"), owner), paused);
+    }
+
     pub fn get_status(env: Env, owner: Address) -> Status {
-        let state = get_state(&env, &owner);
-        build_status(&env, &state)
+        build_status(&env, &get_state(&env, &owner))
     }
 
-    /// Enforce global + category USDC limits and record spend. Requires owner auth.
-    /// `amount` is USDC stroops (Hub converts XLM transfers before calling).
+    /// Enforce + record USDC spend (Hub converts XLM before calling).
     pub fn check_spend(env: Env, owner: Address, category: SpendCategory, amount: i128) {
         owner.require_auth();
         let mut state = get_state(&env, &owner);
-        if state.owner != owner {
-            soroban_sdk::panic_with_error!(&env, limits::Error::Unauthorized);
-        }
-
-        enforce_amount(&env, &mut state, category, amount);
-
+        enforce_amount(&env, &state, category, amount);
         if amount > 0 {
             record_spend(&env, &mut state, category, amount);
             set_state(&env, &state);
+            let (total, _, _, _) = limits::window_totals(&env, &state, env.ledger().sequence());
+            env.events().publish(
+                (symbol_short!("spend"), owner, category as u32),
+                (amount, total),
+            );
         }
     }
 }
