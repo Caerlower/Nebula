@@ -61,7 +61,7 @@ flowchart LR
 | x402 tools | Done |
 | MPP session tools + Hub demo merchant | Done |
 | Stellar8004 reputation (Hub provision) | Done — on-chain sync still pending |
-| Publish `nebulamcp-stdio` / `nebulamcp-core` | Core published; stdio pending |
+| Publish `nebulamcp-stdio` / `nebulamcp-core` | Both published (`0.1.1`) |
 | Blend USDC + background yield loop | Pending |
 | Approval inbox / notify polish | Partial (`await_confirmation` works) |
 
