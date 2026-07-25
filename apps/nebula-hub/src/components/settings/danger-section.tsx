@@ -1,11 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { toast } from "sonner";
-
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { SettingsPanel, SettingsRow } from "@/components/settings/settings-panel";
 import * as api from "@/lib/api";
 import { useLoad } from "@/hooks/use-load";
 import { useNebulaSignOut } from "@/hooks/use-nebula-sign-out";
@@ -13,47 +8,21 @@ import { useNebulaSignOut } from "@/hooks/use-nebula-sign-out";
 export function DangerSection() {
   const signOut = useNebulaSignOut();
   const { data: workspace } = useLoad(() => api.getWorkspace(), []);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const destroy = async () => {
-    await api.deleteWorkspace();
-    toast.success("Workspace deleted", {
-      description: "Everything is gone. Fresh skies.",
-    });
-    await signOut();
-  };
 
   return (
-    <Card className="border-destructive/40 p-5">
-      <p className="text-[13px] font-medium text-destructive">Danger zone</p>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-sm">Delete this workspace</p>
-          <p className="max-w-md text-[13px] text-muted-foreground">
-            Permanently removes agents, keys, policies, and history for{" "}
-            <span className="text-foreground">
-              {workspace?.name ?? "this workspace"}
-            </span>
-            . Funds remain on-chain at your addresses.
-          </p>
-        </div>
-        <Button
-          variant="destructive"
-          onClick={() => setConfirmOpen(true)}
-          disabled={!workspace}
-        >
-          Delete workspace
-        </Button>
-      </div>
-      <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title="Delete workspace?"
-        description="This cannot be undone."
-        confirmLabel="Delete forever"
-        destructive
-        onConfirm={() => void destroy()}
-      />
-    </Card>
+    <SettingsPanel id="danger" title="DANGER ZONE" className="border-destructive/35">
+      <SettingsRow label="Workspace" value={workspace?.name ?? "…"} />
+      <p className="mt-3 max-w-md text-[12px] text-muted-foreground">
+        Workspace deletion is not available yet. Signing out clears this device
+        session; agents, keys, and on-chain funds are unchanged.
+      </p>
+      <button
+        type="button"
+        onClick={() => void signOut()}
+        className="mt-[18px] inline-flex rounded-full border border-destructive/40 px-[18px] py-2 text-[12px] text-destructive hover:bg-destructive/5"
+      >
+        Sign out
+      </button>
+    </SettingsPanel>
   );
 }
