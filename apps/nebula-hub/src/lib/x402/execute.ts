@@ -14,10 +14,7 @@ import {
 import { scheduleParkExcessAfterActivity } from "@/lib/hub-tools/treasury";
 
 import { fetchUsdcBalance, payX402Challenge, probeX402Url } from "./fetch";
-
-const APP_URL = (
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://nebulaonchain.xyz"
-).replace(/\/$/, "");
+import { appUrl } from "@/lib/hub-tools/context";
 
 export type X402ToolInput = {
   url: string;
@@ -77,7 +74,11 @@ export async function executeX402Tool(params: {
 
   const amountUsdc = probe.amountUsdc;
   const payTo = probe.payTo;
-  const caps = await loadEffectiveCaps(principal.userId, principal.agentId);
+  const caps = await loadEffectiveCaps(
+    principal.userId,
+    principal.network,
+    principal.agentId,
+  );
   const policyMax = Math.min(caps.perTxCap, caps.catX402);
 
   if (toolName === "x402_pay" && amountUsdcExpected !== undefined) {
@@ -102,6 +103,7 @@ export async function executeX402Tool(params: {
   const catSpentAgg = await prisma.transaction.aggregate({
     where: {
       userId: principal.userId,
+      network: principal.network,
       ...(principal.agentId ? { agentId: principal.agentId } : {}),
       type: "x402",
       status: "confirmed",
@@ -111,7 +113,7 @@ export async function executeX402Tool(params: {
   });
   const catSpent = Number(catSpentAgg._sum.amountXlm ?? 0);
   const catRemaining = Math.max(caps.catX402 - catSpent, 0);
-  // Soft Hub gate before paying (on-chain check_spend only after success).
+  // Hub mirrors caps for UX; on-chain check_spend is the agent enforcement gate.
   if (policy.dailySpentUsdc + amountUsdc > policy.dailyCap + 1e-9) {
     return {
       status: "rejected",
@@ -131,6 +133,28 @@ export async function executeX402Tool(params: {
     };
   }
 
+  // On-chain primary gate for custodial agents — before any payment leaves the wallet.
+  if (principal.signerStrategy === "privy") {
+    const chain = await onchainCheckSpend({
+      walletId: ctx.privyWalletId,
+      stellarAddress: ctx.stellarAddress,
+      network: ctx.network,
+      category: "x402",
+      amountXlm: amountUsdc,
+      init: await loadOnchainPolicyInit(
+        principal.userId,
+        principal.network,
+        principal.agentId,
+      ),
+    });
+    if (!chain.ok) {
+      return {
+        status: "rejected",
+        reason: `onchain_policy:${chain.error}`,
+      };
+    }
+  }
+
   const decision = evaluateConfirmation({
     destination: payTo,
     amountUsdc,
@@ -142,6 +166,7 @@ export async function executeX402Tool(params: {
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "x402",
         destination: payTo,
         amountXlm: amountUsdc,
@@ -157,12 +182,14 @@ export async function executeX402Tool(params: {
     const conf = await prisma.confirmation.create({
       data: {
         userId: principal.userId,
+        network: principal.network,
         toolName,
         input: {
           url: input.url,
           max_amount_usdc: maxAmountUsdc,
           amount_usdc: amountUsdcExpected ?? amountUsdc,
           pay_to: payTo,
+          _agentId: principal.agentId,
         },
         summary: `x402 pay ${amountUsdc} USDC to ${payTo.slice(0, 4)}…${payTo.slice(-4)} for ${input.url} (${decision.reason})`,
         status: "pending",
@@ -172,7 +199,7 @@ export async function executeX402Tool(params: {
     return {
       status: "confirmation_required",
       confirmation_id: conf.id,
-      approve_url: `${APP_URL}/approve/${conf.id}`,
+      approve_url: `${appUrl()}/approve/${conf.id}`,
       expires_in: 15 * 60,
       summary: conf.summary,
     };
@@ -209,30 +236,12 @@ export async function executeX402Tool(params: {
     };
   }
 
-  // Record on-chain spend only after a successful payment. Custodial (Privy)
-  // accounts only — partner cards enforce caps on their side.
-  if (principal.signerStrategy === "privy") {
-    const chain = await onchainCheckSpend({
-      walletId: ctx.privyWalletId,
-      stellarAddress: ctx.stellarAddress,
-      network: ctx.network,
-      category: "x402",
-      amountXlm: paid.amountUsdc,
-      init: await loadOnchainPolicyInit(principal.userId, principal.agentId),
-    });
-    if (!chain.ok) {
-      console.error(
-        "[x402] payment succeeded but onchain check_spend failed",
-        chain.error,
-      );
-    }
-  }
-
   const txHash = paid.settlementTx ?? `x402_${Date.now().toString(16)}`;
   await prisma.transaction.create({
     data: {
       userId: principal.userId,
       agentId: principal.agentId,
+      network: principal.network,
       type: "x402",
       destination: paid.payTo || payTo,
       amountXlm: paid.amountUsdc,
