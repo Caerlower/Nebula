@@ -1,146 +1,199 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
-import type { DateRange } from "react-day-picker";
-import { FixedSizeList } from "react-window";
-import {
-  CalendarIcon,
-  Check,
-  ChevronDown,
-  Download,
-  Receipt as ReceiptIcon,
-} from "lucide-react";
+import { Download, ExternalLink, Receipt } from "lucide-react";
 
-import { PageHeader } from "@/components/shared/page-header";
+import { SectionRule } from "@/components/design/primitives";
 import { EmptyState } from "@/components/shared/empty-state";
-import { TableSkeleton } from "@/components/shared/skeletons";
 import { TransactionReceipt } from "@/components/shared/transaction-receipt";
-import {
-  TX_STATUS_META,
-  TX_TYPE_META,
-  TxStatusBadge,
-  TxTypeLabel,
-} from "@/components/shared/status-badges";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import * as api from "@/lib/api";
-import { fmtAmount, fmtDateTime, truncMiddle } from "@/lib/utils";
+import { fmtAmount, truncMiddle, cn } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
+import { useUIStore } from "@/stores/ui";
 import type { Transaction, TxStatus, TxType } from "@/types/domain";
 
-const ALL_TYPES = Object.keys(TX_TYPE_META) as TxType[];
-const ALL_STATUSES = Object.keys(TX_STATUS_META) as TxStatus[];
+type FilterType =
+  | "ALL"
+  | "TRANSFER"
+  | "SWAP"
+  | "X402"
+  | "MPP"
+  | "POLICY CHANGE";
 
-function MultiSelect<T extends string>({
-  label,
-  options,
-  selected,
-  onToggle,
-  renderOption,
+const FILTERS: FilterType[] = [
+  "ALL",
+  "TRANSFER",
+  "SWAP",
+  "X402",
+  "MPP",
+  "POLICY CHANGE",
+];
+
+/** TIMESTAMP | RAIL | COUNTERPARTY | AMOUNT | POLICY | STATUS | RECEIPT */
+const GRID_COLS = "118px 110px minmax(0,1fr) 140px 120px 88px 72px";
+
+function matchesFilter(tx: Transaction, filter: FilterType): boolean {
+  if (filter === "ALL") return true;
+  if (filter === "TRANSFER") return tx.type === "transfer";
+  if (filter === "SWAP")
+    return (
+      tx.type === "swap" ||
+      tx.type === "blend_deposit" ||
+      tx.type === "blend_withdraw"
+    );
+  if (filter === "X402") return tx.type === "x402";
+  if (filter === "MPP") return tx.type === "mpp";
+  if (filter === "POLICY CHANGE") return tx.type === "policy_change";
+  return true;
+}
+
+function railLabel(type: TxType): string {
+  switch (type) {
+    case "x402":
+      return "X402";
+    case "mpp":
+      return "MPP";
+    case "transfer":
+      return "TRANSFER";
+    case "swap":
+      return "SWAP";
+    case "blend_deposit":
+    case "blend_withdraw":
+      return "YIELD";
+    case "policy_change":
+      return "POLICY CHANGE";
+  }
+}
+
+function railColor(type: TxType): string {
+  switch (type) {
+    case "x402":
+    case "mpp":
+      return "text-primary";
+    case "transfer":
+      return "text-primary-2";
+    case "blend_deposit":
+    case "blend_withdraw":
+    case "swap":
+      return "text-success";
+    case "policy_change":
+      return "text-muted-foreground";
+    default:
+      return "text-foreground";
+  }
+}
+
+function formatTimestamp(isoTime: string) {
+  const date = new Date(isoTime);
+  if (Number.isNaN(date.getTime())) return "—";
+  const time = date.toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const dateStr = date
+    .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    .toUpperCase();
+  return `${time} ${dateStr}`;
+}
+
+function policyText(status: TxStatus) {
+  if (status === "confirmed") return "WITHIN CAPS";
+  if (status === "pending") return "COMMITTED";
+  if (status === "failed") return "REJECTED";
+  return "—";
+}
+
+function statusText(status: TxStatus) {
+  if (status === "confirmed") return "SETTLED";
+  if (status === "pending") return "OPEN";
+  if (status === "failed") return "REJECTED";
+  return "—";
+}
+
+function TxRow({
+  tx,
+  last,
+  onReceipt,
 }: {
-  label: string;
-  options: T[];
-  selected: T[];
-  onToggle: (option: T) => void;
-  renderOption: (option: T) => string;
+  tx: Transaction;
+  last: boolean;
+  onReceipt: () => void;
 }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 font-normal"
-          aria-label={`Filter by ${label}`}
+    <div
+      className={cn(
+        "grid h-[52px] items-center gap-4 px-5 font-mono text-[11px]",
+        !last && "border-b border-border",
+      )}
+      style={{ gridTemplateColumns: GRID_COLS }}
+    >
+      <span className="truncate text-subtle">{formatTimestamp(tx.time)}</span>
+      <span
+        className={cn(
+          "truncate text-[10px] tracking-[0.1em]",
+          railColor(tx.type),
+        )}
+      >
+        {railLabel(tx.type)}
+      </span>
+      <div className="min-w-0">
+        <p className="truncate">{truncMiddle(tx.to, 4, 4)}</p>
+        {tx.memo ? (
+          <p className="truncate text-[10px] text-subtle">{tx.memo}</p>
+        ) : null}
+      </div>
+      <span className="text-right text-[13px] tabular-nums">
+        {fmtAmount(Math.abs(tx.amount), tx.asset)}
+      </span>
+      <span
+        className={cn(
+          "text-[10px] tracking-[0.08em]",
+          tx.status === "failed" ? "text-destructive" : "text-muted-foreground",
+        )}
+      >
+        {policyText(tx.status)}
+      </span>
+      <span className="text-right text-[9px] tracking-[0.12em] text-subtle">
+        {statusText(tx.status)}
+      </span>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onReceipt}
+          className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[9px] tracking-[0.1em] text-muted-foreground hover:border-border-strong hover:text-foreground"
+          aria-label={`Open receipt for ${truncMiddle(tx.hash)}`}
         >
-          {label}
-          {selected.length > 0 ? (
-            <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
-              {selected.length}
-            </span>
-          ) : null}
-          <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-52 p-1.5">
-        {options.map((option) => {
-          const active = selected.includes(option);
-          return (
-            <button
-              key={option}
-              type="button"
-              className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm hover:bg-elevated"
-              onClick={() => onToggle(option)}
-              aria-pressed={active}
-            >
-              {renderOption(option)}
-              {active ? (
-                <Check className="size-3.5 text-primary" aria-hidden />
-              ) : null}
-            </button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
+          <Receipt className="size-3" aria-hidden />
+          RECEIPT
+        </button>
+      </div>
+    </div>
   );
 }
 
-const GRID_COLS =
-  "minmax(120px,1fr) minmax(130px,1fr) minmax(200px,1.6fr) minmax(120px,1fr) minmax(110px,0.9fr) minmax(104px,0.7fr)";
-
 export default function TransactionsPage() {
-  const [search, setSearch] = useState("");
-  const [types, setTypes] = useState<TxType[]>([]);
-  const [statuses, setStatuses] = useState<TxStatus[]>([]);
-  const [range, setRange] = useState<DateRange | undefined>();
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>("ALL");
   const [selected, setSelected] = useState<Transaction | null>(null);
 
   const { selectedAgentId, selectedAgent } = useAgentScope();
+  const network = useUIStore((s) => s.network);
 
-  const filter: api.TxFilter = useMemo(
-    () => ({
-      search: search || undefined,
-      types: types.length ? types : undefined,
-      statuses: statuses.length ? statuses : undefined,
-      from: range?.from?.toISOString(),
-      to: range?.to
-        ? new Date(range.to.getTime() + 86_399_000).toISOString()
-        : undefined,
-    }),
-    [search, types, statuses, range],
+  const { data: allTxs } = useLoad(
+    () => api.getTransactions({}),
+    [selectedAgentId],
   );
 
-  const { data: txs, loading } = useLoad(
-    () => api.getTransactions(filter),
-    [search, types, statuses, range, selectedAgentId],
-  );
-
-  const hasFilters =
-    search !== "" || types.length > 0 || statuses.length > 0 || range != null;
-
-  const clearFilters = () => {
-    setSearch("");
-    setTypes([]);
-    setStatuses([]);
-    setRange(undefined);
-  };
-
-  const toggle = <T,>(list: T[], setList: (next: T[]) => void, item: T) => {
-    setList(
-      list.includes(item) ? list.filter((x) => x !== item) : [...list, item],
-    );
-  };
+  const txs = useMemo(() => {
+    if (!allTxs) return [];
+    return allTxs.filter((tx) => matchesFilter(tx, selectedFilter));
+  }, [allTxs, selectedFilter]);
 
   const exportCsv = () => {
-    const rows = txs ?? [];
     const header = "time,type,from,to,amount,asset,status,hash";
-    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-    const body = rows.map((tx) =>
+    const body = txs.map((tx) =>
       [
         tx.time,
         tx.type,
@@ -163,200 +216,141 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const Row = ({
-    index,
-    style,
-  }: {
-    index: number;
-    style: React.CSSProperties;
-  }) => {
-    const tx = (txs ?? [])[index]!;
-    return (
-      <div style={style}>
-        <div
-          className="grid h-full w-full items-center gap-3 border-b border-border px-4 text-left text-[13px] transition-colors hover:bg-elevated/40"
-          style={{ gridTemplateColumns: GRID_COLS }}
-        >
-          <span className="truncate text-muted-foreground">
-            {fmtDateTime(tx.time)}
-          </span>
-          <TxTypeLabel type={tx.type} />
-          <span className="truncate font-mono text-xs text-muted-foreground">
-            {truncMiddle(tx.from)} → {truncMiddle(tx.to)}
-          </span>
-          <span className="text-right font-mono tabular">
-            {fmtAmount(tx.amount, tx.asset)}
-          </span>
-          <span>
-            <TxStatusBadge status={tx.status} />
-          </span>
-          <span className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1.5 px-2.5 text-xs font-normal"
-              onClick={() => setSelected(tx)}
-              aria-label={`Open receipt for ${truncMiddle(tx.hash)}`}
-            >
-              <ReceiptIcon className="size-3.5" aria-hidden />
-              Receipt
-            </Button>
-          </span>
-        </div>
-      </div>
-    );
-  };
+  const explorerUrl = (() => {
+    if (!selectedAgent?.address || selectedAgent.address === "—") return "";
+    const segment = network === "mainnet" ? "public" : "testnet";
+    return `https://stellar.expert/explorer/${segment}/account/${selectedAgent.address}`;
+  })();
 
   return (
     <div>
-      <PageHeader
-        eyebrow="wallet"
-        title="Transactions"
-        subtitle={
-          selectedAgent
-            ? `Everything ${selectedAgent.name} has signed, newest first.`
-            : "Everything this agent has signed, newest first."
-        }
-        actions={
-          <Button variant="outline" onClick={exportCsv} disabled={!txs?.length}>
-            <Download className="size-4" /> Export CSV
-          </Button>
-        }
-      />
-
-      <Card className="overflow-hidden">
-        {/* filter bar */}
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-card px-4 py-3">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search hash or address…"
-            className="h-8 w-56"
-            aria-label="Search by hash or address"
-          />
-          <MultiSelect
-            label="Type"
-            options={ALL_TYPES}
-            selected={types}
-            onToggle={(t) => toggle(types, setTypes, t)}
-            renderOption={(t) => TX_TYPE_META[t].label}
-          />
-          <MultiSelect
-            label="Status"
-            options={ALL_STATUSES}
-            selected={statuses}
-            onToggle={(s) => toggle(statuses, setStatuses, s)}
-            renderOption={(s) => TX_STATUS_META[s].label}
-          />
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 font-normal"
-                aria-label="Filter by date range"
-              >
-                <CalendarIcon
-                  className="size-3.5 text-muted-foreground"
-                  aria-hidden
-                />
-                {range?.from
-                  ? `${format(range.from, "MMM d")} – ${range.to ? format(range.to, "MMM d") : "…"}`
-                  : "Date range"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
-              <Calendar
-                mode="range"
-                selected={range}
-                onSelect={setRange}
-                numberOfMonths={1}
-              />
-            </PopoverContent>
-          </Popover>
-          {hasFilters ? (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              Clear filters
-            </Button>
+      <div className="flex items-end justify-between gap-4 pb-6">
+        <div>
+          <SectionRule>
+            ACTIVITY · {selectedAgent?.name?.toUpperCase() ?? "AGENT"}
+          </SectionRule>
+          <h1 className="page-title">{txs.length} payments</h1>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 pb-1">
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={!txs.length}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border-strong px-[18px] py-2 text-[12px] text-muted-foreground disabled:opacity-50"
+          >
+            <Download className="size-3.5" aria-hidden />
+            Export CSV
+          </button>
+          {explorerUrl ? (
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border-strong px-[18px] py-2 text-[12px] text-muted-foreground"
+            >
+              Stellar Explorer
+              <ExternalLink className="size-3.5" aria-hidden />
+            </a>
           ) : null}
-          <span className="ml-auto hidden text-xs text-muted-foreground sm:block">
-            {txs ? `${txs.length} transactions` : ""}
+        </div>
+      </div>
+
+      <div className="soft-panel-lg overflow-hidden">
+        <div className="flex items-center gap-1.5 border-b border-border bg-elevated px-5 py-3.5">
+          {FILTERS.map((filterType) => {
+            const on = selectedFilter === filterType;
+            return (
+              <button
+                key={filterType}
+                type="button"
+                onClick={() => setSelectedFilter(filterType)}
+                className={cn(
+                  "rounded-[10px] border px-[13px] py-[7px] font-mono text-[10px] tracking-[0.1em] transition-colors",
+                  on
+                    ? "border-transparent"
+                    : "border-border bg-transparent text-muted-foreground hover:text-foreground",
+                )}
+                style={
+                  on
+                    ? { background: "var(--btn-bg)", color: "var(--btn-fg)" }
+                    : undefined
+                }
+              >
+                {filterType}
+              </button>
+            );
+          })}
+          <div className="flex-1" />
+          <span className="font-mono text-[10px] tracking-[0.1em] text-subtle">
+            {txs.length} OF {allTxs?.length ?? 0} ROWS
           </span>
         </div>
 
-        {loading || !txs ? (
-          <TableSkeleton rows={10} cols={6} className="p-5" />
-        ) : txs.length === 0 ? (
+        {allTxs && txs.length === 0 ? (
           <EmptyState
-            title="No matching transactions"
-            subtitle={
-              hasFilters
-                ? "Nothing matches these filters. Widen the range or clear them."
-                : "Once your agent starts paying for things, activity lands here."
-            }
-            actionLabel={hasFilters ? "Clear filters" : undefined}
-            onAction={hasFilters ? clearFilters : undefined}
+            title="No transactions found"
+            subtitle="Once your agent starts making payments, activity will appear here."
           />
-        ) : (
+        ) : txs.length > 0 ? (
           <>
-            {/* desktop virtualized table */}
-            <div className="hidden sm:block">
-              <div
-                className="grid gap-3 border-b border-border px-4 py-2.5 text-xs font-medium text-muted-foreground"
-                style={{ gridTemplateColumns: GRID_COLS }}
-                role="row"
-              >
-                <span>Time</span>
-                <span>Type</span>
-                <span>From → to</span>
-                <span className="text-right">Amount</span>
-                <span>Status</span>
-                <span className="text-right">Receipt</span>
-              </div>
-              <FixedSizeList
-                height={Math.min(560, Math.max(160, txs.length * 52))}
-                width="100%"
-                itemCount={txs.length}
-                itemSize={52}
-              >
-                {Row}
-              </FixedSizeList>
+            <div
+              className="hidden gap-4 border-b border-border px-5 py-2.5 font-mono text-[9px] tracking-[0.16em] text-subtle sm:grid"
+              style={{ gridTemplateColumns: GRID_COLS }}
+            >
+              <span>TIMESTAMP</span>
+              <span>RAIL</span>
+              <span>COUNTERPARTY</span>
+              <span className="text-right">AMOUNT</span>
+              <span>POLICY</span>
+              <span className="text-right">STATUS</span>
+              <span className="text-right"> </span>
             </div>
-            {/* mobile card list */}
+
+            <div className="hidden max-h-[560px] overflow-y-auto sm:block">
+              {txs.map((tx, i) => (
+                <TxRow
+                  key={tx.id}
+                  tx={tx}
+                  last={i === txs.length - 1}
+                  onReceipt={() => setSelected(tx)}
+                />
+              ))}
+            </div>
+
             <ul className="divide-y divide-border sm:hidden">
               {txs.slice(0, 40).map((tx) => (
-                <li key={tx.id}>
+                <li key={tx.id} className="px-5 py-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        "font-mono text-[11px] tracking-[0.1em]",
+                        railColor(tx.type),
+                      )}
+                    >
+                      {railLabel(tx.type)}
+                    </span>
+                    <span className="font-mono text-[13px] tabular-nums">
+                      {fmtAmount(Math.abs(tx.amount), tx.asset)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[10px] text-muted-foreground">
+                    <span>{formatTimestamp(tx.time)}</span>
+                    <span>{statusText(tx.status)}</span>
+                  </div>
                   <button
                     type="button"
-                    className="w-full px-4 py-3.5 text-left"
                     onClick={() => setSelected(tx)}
-                    aria-label={`Open receipt for ${truncMiddle(tx.hash)}`}
+                    className="mt-2.5 inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 font-mono text-[9px] tracking-[0.1em] text-muted-foreground"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <TxTypeLabel type={tx.type} />
-                      <span className="font-mono text-[13px] tabular">
-                        {fmtAmount(tx.amount, tx.asset)}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span>{fmtDateTime(tx.time)}</span>
-                      <span className="inline-flex items-center gap-2">
-                        <TxStatusBadge status={tx.status} />
-                        <ReceiptIcon className="size-3.5" aria-hidden />
-                      </span>
-                    </div>
+                    <Receipt className="size-3" aria-hidden />
+                    RECEIPT
                   </button>
                 </li>
               ))}
-              {txs.length > 40 ? (
-                <li className="px-4 py-3 text-center text-xs text-muted-foreground">
-                  Showing first 40 — refine filters to narrow down.
-                </li>
-              ) : null}
             </ul>
           </>
-        )}
-      </Card>
+        ) : null}
+      </div>
 
       <TransactionReceipt
         tx={selected}
