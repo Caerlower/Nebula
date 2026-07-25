@@ -16,14 +16,8 @@ import {
 } from "@/components/ui/popover";
 import { useLoad } from "@/hooks/use-load";
 import * as api from "@/lib/api";
-import { cn, fmtXLM, truncMiddle } from "@/lib/utils";
+import { cn, fmtUsdc, fmtXLM, truncMiddle } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
-
-const fmtUsdc = (n: number) =>
-  n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 
 /**
  * Workspace switcher — Claude Design dropdown with fleet split bars.
