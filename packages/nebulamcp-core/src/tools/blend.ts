@@ -3,14 +3,33 @@ import { z } from "zod";
 import type { ToolContext, ToolResult } from "../types/context.js";
 
 export const blendCheckRatesSchema = z.object({});
-export const blendDepositSchema = z.object({
-  amount_xlm: z.number().positive().finite(),
+
+const blendMoveBase = z.object({
+  /** Preferred amount field (XLM or USDC depending on `asset`). */
+  amount: z.number().positive().finite().optional(),
+  /** @deprecated use `amount` + `asset` — kept for older MCP clients. */
+  amount_xlm: z.number().positive().finite().optional(),
+  /** Mainnet supports XLM + USDC; testnet is XLM-only. Default XLM. */
+  asset: z.enum(["XLM", "USDC"]).optional(),
   pool_id: z.string().min(1).optional(),
 });
-export const blendWithdrawSchema = z.object({
-  amount_xlm: z.number().positive().finite(),
-  pool_id: z.string().min(1).optional(),
-});
+
+function refineBlendMove(
+  value: z.infer<typeof blendMoveBase>,
+  ctx: z.RefinementCtx,
+) {
+  if (value.amount == null && value.amount_xlm == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "amount (or amount_xlm) is required",
+      path: ["amount"],
+    });
+  }
+}
+
+export const blendDepositSchema = blendMoveBase.superRefine(refineBlendMove);
+export const blendWithdrawSchema = blendMoveBase.superRefine(refineBlendMove);
+
 export const getTreasuryStatusSchema = z.object({});
 export const setLiquidityThresholdSchema = z.object({
   threshold: z.number().nonnegative().finite(),
@@ -26,7 +45,8 @@ async function hubOnly(name: string): Promise<ToolResult> {
 
 export const blendCheckRatesTool = {
   name: "blend_check_rates" as const,
-  description: "Read-only Blend supply APY for configured pools.",
+  description:
+    "Read-only Blend supply APY for configured pools (testnet: TestnetV2; mainnet: Fixed + YieldBlox).",
   schema: blendCheckRatesSchema,
   handler: async (
     _i: z.infer<typeof blendCheckRatesSchema>,
@@ -36,7 +56,8 @@ export const blendCheckRatesTool = {
 
 export const blendDepositTool = {
   name: "blend_deposit" as const,
-  description: "Deposit XLM into a Blend pool (treasury).",
+  description:
+    "Deposit into a Blend pool as collateral. Testnet: XLM only. Mainnet: XLM or USDC into Fixed (default) or YieldBlox (pool_id).",
   schema: blendDepositSchema,
   handler: async (
     _i: z.infer<typeof blendDepositSchema>,
@@ -46,7 +67,8 @@ export const blendDepositTool = {
 
 export const blendWithdrawTool = {
   name: "blend_withdraw" as const,
-  description: "Withdraw XLM from a Blend pool (treasury).",
+  description:
+    "Withdraw collateral from a Blend pool. Testnet: XLM only. Mainnet: XLM or USDC.",
   schema: blendWithdrawSchema,
   handler: async (
     _i: z.infer<typeof blendWithdrawSchema>,
