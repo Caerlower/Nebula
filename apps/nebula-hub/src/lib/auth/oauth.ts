@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import type { AuthPrincipal } from "@/lib/auth";
+import { appBaseUrl } from "@/lib/app-url";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
 import { runHubTool } from "@/lib/hub-tools";
 import { formatToolResultForMcp, listToolsForMcp } from "nebulamcp-core";
@@ -11,13 +12,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-export function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.APP_BASE_URL ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
-}
+export { appBaseUrl } from "@/lib/app-url";
 
 export function hashOpaque(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -57,7 +52,7 @@ export async function mintOAuthAccessToken(
   );
   const agent = await prisma.agent.findFirst({
     where: { id: agentId, userId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, network: true },
   });
   if (!agent) {
     throw new Error("oauth_agent_not_found");
@@ -93,7 +88,7 @@ export async function handleMcpHttpRequest(
   });
 
   const server = new Server(
-    { name: "nebula", version: "0.1.0" },
+    { name: "nebula", version: "0.1.1" },
     { capabilities: { tools: {} } },
   );
 
