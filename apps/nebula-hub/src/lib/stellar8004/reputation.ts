@@ -56,11 +56,6 @@ export function hubScoreFrom8004(params: {
   return { score, confidence, scale: 100 };
 }
 
-/** @deprecated use confidence; kept for DB column name compatibility */
-export function tierFromConfidence(confidence: ReputationConfidence): string {
-  return confidence;
-}
-
 export type MyReputationResult =
   | {
       ok: true;
