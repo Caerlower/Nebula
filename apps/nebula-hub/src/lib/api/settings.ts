@@ -27,6 +27,14 @@ export async function getTeam(): Promise<TeamMember[]> {
 /* ------------------------------ workspace ------------------------------ */
 
 export async function getWorkspace(): Promise<Workspace> {
+  try {
+    const me = await hubJson<{ network?: string }>("/api/me");
+    if (me.network === "mainnet" || me.network === "testnet") {
+      return { name: "Nebula", network: me.network };
+    }
+  } catch {
+    /* fall through to wallet */
+  }
   const wallet = await hubJson<HubWallet>("/api/wallet");
   return {
     name: "Nebula",
@@ -34,11 +42,18 @@ export async function getWorkspace(): Promise<Workspace> {
   };
 }
 
+/** Persist preferred Stellar network for this account (drives Hub + MCP). */
 export async function setNetwork(
   network: Workspace["network"],
 ): Promise<Workspace> {
-  // Network is env-driven on the Hub today.
-  return { name: "Nebula", network };
+  const res = await hubJson<{ ok: true; network: string }>("/api/me", {
+    method: "PATCH",
+    body: JSON.stringify({ network }),
+  });
+  return {
+    name: "Nebula",
+    network: res.network === "mainnet" ? "mainnet" : "testnet",
+  };
 }
 
 export async function updateAccount(patch: {
