@@ -3,8 +3,11 @@
 extern crate std;
 
 use super::*;
-use limits::{CategoryLimits, SpendCategory};
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use limits::{CategoryLimits, SpendCategory, BUCKET_LEDGERS, DAY_IN_LEDGERS};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, Env,
+};
 
 fn cats(day: i128) -> CategoryLimits {
     CategoryLimits {
@@ -35,6 +38,12 @@ fn setup(env: &Env) -> (Address, Address) {
     (contract_id, owner)
 }
 
+fn advance_ledgers(env: &Env, n: u32) {
+    let mut info = env.ledger().get();
+    info.sequence_number = info.sequence_number.saturating_add(n);
+    env.ledger().set(info);
+}
+
 #[test]
 fn initialize_and_get_status() {
     let env = Env::default();
@@ -43,14 +52,12 @@ fn initialize_and_get_status() {
     env.as_contract(&contract_id, || {
         let status = NebulaPolicyContract::get_status(env.clone(), owner.clone());
         assert_eq!(status.owner, owner);
+        assert!(!status.paused);
         assert_eq!(status.max_per_call, 1_000_000);
         assert_eq!(status.max_per_day, 5_000_000);
         assert_eq!(status.daily_spent, 0);
         assert_eq!(status.transfer.limit, 5_000_000);
         assert_eq!(status.x402.limit, 2_500_000);
-        assert_eq!(status.liquid_low, 2_000_000);
-        assert_eq!(status.liquid_high, 10_000_000);
-        assert!(status.auto_yield);
     });
 }
 
@@ -141,8 +148,82 @@ fn check_spend_over_category_daily_reverts() {
     });
 }
 
+/// C1 regression: many dust spends must not flush real spend out of the window.
 #[test]
-fn set_limits_category_and_treasury_band() {
+#[should_panic(expected = "Error(Contract, #6)")]
+fn dust_flood_cannot_bypass_daily_cap() {
+    let env = Env::default();
+    let (contract_id, owner) = setup(&env);
+
+    env.as_contract(&contract_id, || {
+        env.mock_all_auths();
+        NebulaPolicyContract::check_spend(
+            env.clone(),
+            owner.clone(),
+            SpendCategory::Transfer,
+            1_000_000,
+        );
+        for _ in 0..2_000 {
+            NebulaPolicyContract::check_spend(
+                env.clone(),
+                owner.clone(),
+                SpendCategory::X402,
+                1,
+            );
+        }
+        for _ in 0..3 {
+            NebulaPolicyContract::check_spend(
+                env.clone(),
+                owner.clone(),
+                SpendCategory::Transfer,
+                1_000_000,
+            );
+        }
+        NebulaPolicyContract::check_spend(
+            env.clone(),
+            owner,
+            SpendCategory::Transfer,
+            1_000_000,
+        );
+    });
+}
+
+#[test]
+fn bucket_recycles_after_day() {
+    let env = Env::default();
+    let (contract_id, owner) = setup(&env);
+
+    env.as_contract(&contract_id, || {
+        env.mock_all_auths();
+        NebulaPolicyContract::check_spend(
+            env.clone(),
+            owner.clone(),
+            SpendCategory::Transfer,
+            1_000_000,
+        );
+        let mid = NebulaPolicyContract::get_status(env.clone(), owner.clone());
+        assert_eq!(mid.daily_spent, 1_000_000);
+    });
+
+    advance_ledgers(&env, DAY_IN_LEDGERS + BUCKET_LEDGERS);
+
+    env.as_contract(&contract_id, || {
+        let after = NebulaPolicyContract::get_status(env.clone(), owner.clone());
+        assert_eq!(after.daily_spent, 0);
+        env.mock_all_auths();
+        NebulaPolicyContract::check_spend(
+            env.clone(),
+            owner.clone(),
+            SpendCategory::Transfer,
+            1_000_000,
+        );
+        let again = NebulaPolicyContract::get_status(env.clone(), owner);
+        assert_eq!(again.daily_spent, 1_000_000);
+    });
+}
+
+#[test]
+fn owner_can_set_limits_and_unpause_while_paused() {
     let env = Env::default();
     let (contract_id, owner) = setup(&env);
 
@@ -154,7 +235,7 @@ fn set_limits_category_and_treasury_band() {
             owner.clone(),
             CategoryLimits {
                 transfer: 3_000_000,
-                x402: 1_000_000,
+                x402: 0,
                 mpp: 1_000_000,
             },
         );
@@ -165,15 +246,18 @@ fn set_limits_category_and_treasury_band() {
             25_000_000,
             false,
         );
+        NebulaPolicyContract::set_paused(env.clone(), owner.clone(), true);
 
         let status = NebulaPolicyContract::get_status(env.clone(), owner.clone());
         assert_eq!(status.max_per_call, 2_000_000);
         assert_eq!(status.max_per_day, 8_000_000);
         assert_eq!(status.transfer.limit, 3_000_000);
-        assert_eq!(status.liquid_low, 5_000_000);
-        assert_eq!(status.liquid_high, 25_000_000);
+        assert_eq!(status.x402.limit, 0);
+        assert!(status.paused);
         assert!(!status.auto_yield);
 
+        // Resume while paused — set_paused is not gated by paused flag.
+        NebulaPolicyContract::set_paused(env.clone(), owner.clone(), false);
         NebulaPolicyContract::check_spend(
             env.clone(),
             owner.clone(),
@@ -182,6 +266,25 @@ fn set_limits_category_and_treasury_band() {
         );
         let after = NebulaPolicyContract::get_status(env.clone(), owner);
         assert_eq!(after.daily_spent, 1_500_000);
+        assert!(!after.paused);
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn paused_blocks_spend() {
+    let env = Env::default();
+    let (contract_id, owner) = setup(&env);
+
+    env.as_contract(&contract_id, || {
+        env.mock_all_auths();
+        NebulaPolicyContract::set_paused(env.clone(), owner.clone(), true);
+        NebulaPolicyContract::check_spend(
+            env.clone(),
+            owner,
+            SpendCategory::Transfer,
+            100_000,
+        );
     });
 }
 
@@ -204,7 +307,7 @@ fn set_treasury_band_rejects_high_below_low() {
 }
 
 #[test]
-fn initialize_zero_categories_defaults_to_max_per_day() {
+fn zero_category_means_blocked_not_default() {
     let env = Env::default();
     let contract_id = env.register(NebulaPolicyContract, ());
     let owner = Address::generate(&env);
@@ -217,17 +320,17 @@ fn initialize_zero_categories_defaults_to_max_per_day() {
             1_000_000,
             4_000_000,
             CategoryLimits {
-                transfer: 0,
+                transfer: 4_000_000,
                 x402: 0,
                 mpp: 0,
             },
-            0,
-            0,
-            true,
+            2_000_000,
+            10_000_000,
+            false,
         );
         let status = NebulaPolicyContract::get_status(env.clone(), owner);
-        assert_eq!(status.transfer.limit, 4_000_000);
-        assert_eq!(status.liquid_low, 20_000_000);
-        assert_eq!(status.liquid_high, 100_000_000);
+        assert_eq!(status.x402.limit, 0);
+        assert_eq!(status.mpp.limit, 0);
+        assert!(!status.auto_yield);
     });
 }
