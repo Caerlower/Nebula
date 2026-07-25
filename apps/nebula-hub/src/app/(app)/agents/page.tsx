@@ -1,31 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { MoreHorizontal, Plus, Search } from "lucide-react";
 
-import { PageHeader } from "@/components/shared/page-header";
-import { EmptyState } from "@/components/shared/empty-state";
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { CopyButton } from "@/components/shared/copy-button";
-import {
-  AgentStatusBadge,
-  FrameworkLabel,
-} from "@/components/shared/status-badges";
-import { AgentAvatar } from "@/components/agent-scope/agent-avatar";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import * as api from "@/lib/api";
-import { cn, fmtXLM, timeAgo, truncMiddle } from "@/lib/utils";
-import { useLoad } from "@/hooks/use-load";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
+import { PageEcho, SectionRule, SplitBar } from "@/components/design/primitives";
+import { agentAttribution } from "@/components/shared/status-badges";
+import { useLoad } from "@/hooks/use-load";
+import * as api from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth";
+import { useUIStore } from "@/stores/ui";
 import type { Agent } from "@/types/domain";
 
 const fmtUsdc = (n: number) =>
@@ -34,255 +19,244 @@ const fmtUsdc = (n: number) =>
     maximumFractionDigits: 2,
   });
 
-function AgentCard({
-  agent,
-  onEnter,
-  onTogglePause,
-  onDelete,
-}: {
-  agent: Agent;
-  onEnter: () => void;
-  onTogglePause: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onEnter}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onEnter();
-        }
-      }}
-      aria-label={`Open ${agent.name} workspace`}
-      className="pressable group flex cursor-pointer flex-col gap-4 rounded-2xl border border-border bg-card p-5 text-left shadow-[var(--card-shadow)] transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    >
-      <div className="flex items-start gap-3">
-        <AgentAvatar name={agent.name} seed={agent.id} color={agent.avatarColor} size="lg" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{agent.name}</p>
-          <div className="mt-1">
-            <FrameworkLabel framework={agent.framework} />
-          </div>
-        </div>
-        <div onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground"
-                aria-label={`Actions for ${agent.name}`}
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={onEnter}>Open workspace</DropdownMenuItem>
-              <DropdownMenuItem onSelect={onTogglePause}>
-                {agent.status === "paused" ? "Resume" : "Pause"}
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive" onSelect={onDelete}>
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+const fmtCap = (n: number) =>
+  n.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 
-      <p
-        className={cn(
-          "line-clamp-2 min-h-[2.75rem] text-[13px] leading-relaxed",
-          agent.description ? "text-muted-foreground" : "text-subtle",
-        )}
-      >
-        {agent.description || "No description"}
-      </p>
+const ROW_COLS =
+  "md:grid-cols-[16px_minmax(0,1.4fr)_150px_minmax(0,1fr)_140px_72px_28px]";
 
-      {/* footer block — anchored to the bottom so stats align across all cards */}
-      <div className="mt-auto flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2">
-          <AgentStatusBadge status={agent.status} />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-0.5 font-mono text-xs text-muted-foreground"
-          >
-            {agent.address !== "—" ? (
-              <>
-                {truncMiddle(agent.address, 4, 4)}
-                <CopyButton value={agent.address} label="Copy agent address" />
-              </>
-            ) : (
-              <span>provisioning…</span>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
-          <div>
-            <p className="stat-label text-[11px]">Balance</p>
-            <p className="mt-1 flex items-baseline gap-1">
-              <span className="hero-number-sm tabular">
-                {fmtUsdc(agent.balanceUSDC)}
-              </span>
-              <span className="text-xs text-muted-foreground">USDC</span>
-            </p>
-            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-              {fmtXLM(agent.balanceXLM)} XLM
-            </p>
-          </div>
-          <div>
-            <p className="stat-label text-[11px]">Txs today</p>
-            <p className="mt-1 hero-number-sm tabular">{agent.txToday}</p>
-          </div>
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          Active {timeAgo(agent.lastActive)}
-        </p>
-      </div>
-    </div>
-  );
+function statusDotClass(status: Agent["status"]): string {
+  if (status === "active") return "bg-success";
+  if (status === "paused") return "bg-warning";
+  return "bg-subtle";
 }
 
 export default function AgentsPage() {
   const router = useRouter();
-  const { data: agents, loading, setData } = useLoad(() => api.getAgents(), []);
-  const { reloadAgents, setSelectedAgentId } = useAgentScope();
-  const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
-  const [query, setQuery] = useState("");
+  const user = useAuthStore((s) => s.user);
+  const { data: agents, loading } = useLoad(() => api.getAgents(), []);
+  const { setSelectedAgentId } = useAgentScope();
+  const setCreateAgentOpen = useUIStore((s) => s.setCreateAgentOpen);
 
-  const newAgent = () => router.push("/agents/new");
+  const newAgent = () => setCreateAgentOpen(true);
 
-  const filtered = (agents ?? []).filter((a) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      a.name.toLowerCase().includes(q) || a.address.toLowerCase().includes(q)
-    );
-  });
+  const filtered = agents ?? [];
+
+  const fleetTotal = useMemo(() => {
+    const usdc = (agents ?? []).reduce((s, a) => s + a.balanceUSDC, 0);
+    return fmtUsdc(usdc);
+  }, [agents]);
+
+  const fleetExposed = useMemo(() => {
+    const usdc = (agents ?? []).reduce((s, a) => s + a.spendTodayUSD, 0);
+    return fmtUsdc(usdc);
+  }, [agents]);
+
+  const fleetYield = useMemo(() => {
+    // Per-agent Blend positions are not on the fleet list yet.
+    return fmtUsdc(0);
+  }, []);
 
   const enterWorkspace = (agent: Agent) => {
     setSelectedAgentId(agent.id);
     router.push("/dashboard");
   };
 
-  const togglePause = async (agent: Agent) => {
-    const nextStatus = agent.status === "paused" ? "active" : "paused";
-    const previous = agents ?? [];
-    setData(previous.map((a) => (a.id === agent.id ? { ...a, status: nextStatus } : a)));
-    try {
-      await api.updateAgent(agent.id, { status: nextStatus });
-      toast.success(`${agent.name} ${nextStatus === "paused" ? "paused" : "resumed"}`);
-    } catch {
-      setData(previous);
-      toast.error(`Couldn't update ${agent.name}`, {
-        action: { label: "Retry", onClick: () => void togglePause(agent) },
-      });
-    }
-  };
-
-  const remove = async (agent: Agent) => {
-    await api.deleteAgent(agent.id);
-    setData((agents ?? []).filter((a) => a.id !== agent.id));
-    reloadAgents();
-    toast.success(`${agent.name} deleted`);
-  };
+  const accountLabel = user?.name
+    ? `ACCOUNT · ${user.name.toUpperCase()}`
+    : "ACCOUNT";
 
   return (
     <div>
-      <PageHeader
-        eyebrow="account home"
-        title="Agents"
-        subtitle="Pick an agent to open its workspace, or spin up a new one. Each agent has its own wallet, treasury, caps, and reputation."
-        actions={
-          <Button onClick={newAgent}>
-            <Plus className="size-4" /> Create agent
-          </Button>
-        }
-      />
-
-      {agents && agents.length > 0 ? (
-        <div className="mb-5 max-w-sm">
-          <div className="flex h-9 items-center gap-2 rounded-full border border-border bg-surface px-3.5 text-sm shadow-[var(--card-shadow)] focus-within:border-border-strong">
-            <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search agents by name or address…"
-              aria-label="Search agents"
-              className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-        </div>
-      ) : null}
+      <div className="relative overflow-hidden pb-6">
+        <PageEcho>FLEET</PageEcho>
+        <SectionRule>{accountLabel}</SectionRule>
+        <h1 className="page-title relative">All agents</h1>
+      </div>
 
       {loading || !agents ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-44 animate-pulse rounded-2xl border border-border bg-elevated/40"
-            />
-          ))}
-        </div>
+        <div className="soft-panel-lg h-40 animate-pulse" />
       ) : agents.length === 0 ? (
-        <Card className="overflow-hidden">
-          <EmptyState
-            title="No agents yet"
-            subtitle="Create your first agent — it gets its own Stellar wallet, balance, treasury, caps, and reputation. Plug it into Claude or any MCP client."
-            actionLabel="Create agent"
-            onAction={newAgent}
-          />
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              onEnter={() => enterWorkspace(agent)}
-              onTogglePause={() => void togglePause(agent)}
-              onDelete={() => setDeleteTarget(agent)}
-            />
-          ))}
-          {query.trim() && filtered.length === 0 ? (
-            <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-              No agents match “{query.trim()}”.
-            </p>
-          ) : null}
+        <div className="soft-panel-lg px-10 py-24 text-center">
+          <p className="text-[clamp(2.5rem,8vw,5.5rem)] font-semibold tracking-[-0.022em] leading-[1.1] text-subtle">
+            No agents
+          </p>
+          <p className="mx-auto mt-5 max-w-md text-[15px] text-pretty text-muted-foreground">
+            Every agent gets its own custodial Stellar wallet, a spending band you set,
+            and policy it can&apos;t bypass. Nothing moves until you fund it.
+          </p>
           <button
             type="button"
             onClick={newAgent}
-            className="pressable flex min-h-[11rem] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+            className="mt-7 inline-flex rounded-full px-[26px] py-3 text-[13px] font-semibold"
+            style={{ background: "var(--btn-bg)", color: "var(--btn-fg)" }}
           >
-            <span className="flex size-10 items-center justify-center rounded-full border border-dashed border-border">
-              <Plus className="size-5" aria-hidden />
-            </span>
-            <span className="text-sm font-medium">New agent</span>
+            Create your first agent
           </button>
         </div>
-      )}
+      ) : (
+        <div>
+          <div className="soft-panel-lg grid items-end gap-8 px-8 py-7 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                TOTAL UNDER MANAGEMENT
+              </p>
+              <p className="mt-2.5 font-mono text-[clamp(1.75rem,3vw,2.375rem)] tracking-[-0.03em] tabular-nums">
+                {fleetTotal}
+              </p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                EXPOSED TODAY
+              </p>
+              <p className="mt-3 font-mono text-[22px] text-primary-2 tabular-nums">
+                {fleetExposed}
+              </p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                IN YIELD
+              </p>
+              <p className="mt-3 font-mono text-[22px] tabular-nums">{fleetYield}</p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={newAgent}
+                className="inline-flex shrink-0 items-center justify-center rounded-full px-[22px] py-[11px] text-[13px] font-semibold"
+                style={{ background: "var(--btn-bg)", color: "var(--btn-fg)" }}
+              >
+                New agent
+              </button>
+            </div>
+          </div>
 
-      <ConfirmDialog
-        open={deleteTarget != null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={`Delete ${deleteTarget?.name ?? "agent"}?`}
-        description="Its keys stop working immediately. Transaction history is retained."
-        confirmLabel="Delete agent"
-        destructive
-        typeToConfirm={deleteTarget?.name}
-        onConfirm={async () => {
-          if (!deleteTarget) return;
-          try {
-            await remove(deleteTarget);
-          } catch {
-            toast.error(`Couldn't delete ${deleteTarget.name}`);
-          }
-        }}
-      />
+          <div className="soft-panel-lg mt-4 overflow-hidden">
+            <div
+              className={cn(
+                "hidden items-center gap-[18px] border-b border-border px-6 py-2.5 font-mono text-[9px] tracking-[0.16em] text-subtle md:grid",
+                ROW_COLS,
+              )}
+            >
+              <span />
+              <span>AGENT</span>
+              <span className="text-right">BALANCE</span>
+              <span>LIQUID / YIELD / COMMITTED</span>
+              <span>DAILY CAP USED</span>
+              <span className="text-right">8004</span>
+              <span />
+            </div>
+
+            {filtered.map((agent) => {
+              const spent = agent.spendTodayUSD;
+              const cap = agent.dailyCapUSD;
+              const capPct =
+                cap != null && cap > 0
+                  ? Math.min(100, (spent / cap) * 100)
+                  : 0;
+              const liquidPct = agent.balanceUSDC > 0 ? 100 : 0;
+
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => enterWorkspace(agent)}
+                  className={cn(
+                    "grid w-full grid-cols-1 items-center gap-3 border-b border-border px-6 py-4 text-left last:border-b-0 hover:bg-elevated/40 md:gap-[18px] md:py-[18px]",
+                    ROW_COLS,
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "hidden size-[7px] rounded-full md:block",
+                      statusDotClass(agent.status),
+                    )}
+                    aria-hidden
+                  />
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "size-[7px] rounded-full md:hidden",
+                          statusDotClass(agent.status),
+                        )}
+                        aria-hidden
+                      />
+                      <span className="truncate font-mono text-[13px]">
+                        {agent.name}
+                      </span>
+                    </span>
+                    <span className="truncate font-mono text-[10px] tracking-[0.06em] text-subtle">
+                      {agentAttribution(agent)}
+                    </span>
+                  </span>
+                  <span className="font-mono text-[17px] tabular-nums md:text-right">
+                    {fmtUsdc(agent.balanceUSDC)}
+                  </span>
+                  <span className="hidden md:block">
+                    <SplitBar
+                      liquidPct={liquidPct}
+                      yieldPct={0}
+                      height={8}
+                      className="border border-border bg-elevated"
+                    />
+                  </span>
+                  <span className="hidden font-mono text-[10px] tracking-[0.06em] text-muted-foreground md:block">
+                    {fmtCap(spent)}
+                    {" / "}
+                    {cap != null ? fmtCap(cap) : "—"}
+                    <span className="mt-1.5 block h-[3px] w-full bg-border">
+                      <span
+                        className="block h-[3px] bg-primary-2 transition-[width] duration-500"
+                        style={{ width: `${capPct}%` }}
+                      />
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "hidden text-right font-mono text-[13px] md:block",
+                      agent.stellar8004AgentId != null
+                        ? "text-foreground"
+                        : "text-subtle",
+                    )}
+                  >
+                    {agent.stellar8004AgentId != null
+                      ? agent.stellar8004AgentId
+                      : "—"}
+                  </span>
+                  <span
+                    className="hidden justify-self-end font-mono text-[11px] text-subtle md:block"
+                    aria-hidden
+                  >
+                    →
+                  </span>
+
+                  {/* Mobile-only meters */}
+                  <span className="flex items-center justify-between gap-3 md:hidden">
+                    <span className="flex min-w-0 flex-1 flex-col gap-2">
+                      <span className="font-mono text-[10px] tracking-[0.06em] text-muted-foreground">
+                        DAILY · {fmtCap(spent)} / {cap != null ? fmtCap(cap) : "—"}
+                      </span>
+                      <span className="h-[3px] w-full bg-border">
+                        <span
+                          className="block h-[3px] bg-primary-2"
+                          style={{ width: `${capPct}%` }}
+                        />
+                      </span>
+                    </span>
+                    <span className="font-mono text-[11px] text-subtle" aria-hidden>
+                      →
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
