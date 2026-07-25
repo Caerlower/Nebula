@@ -13,7 +13,7 @@ import { onchainCheckSpend } from "@/lib/policy/onchain";
 import { privyConfigured } from "@/lib/auth";
 import { resolveSigner } from "@/lib/signing";
 import { explorerTxUrl } from "@/lib/stellar";
-import { loadOnchainPolicyInit } from "@/lib/hub-tools/context";
+import { loadOnchainPolicyInit, appUrl } from "@/lib/hub-tools/context";
 import { scheduleParkExcessAfterActivity } from "@/lib/hub-tools/treasury";
 import { fetchUsdcBalance } from "@/lib/x402/fetch";
 
@@ -36,10 +36,6 @@ import {
   updateMppCumulative,
   usdcToStroops,
 } from "./session";
-
-const APP_URL = (
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://nebulaonchain.xyz"
-).replace(/\/$/, "");
 
 /** Hub confirmation / pause only — does not record on-chain spend. */
 async function gateMppConfirmation(params: {
@@ -73,8 +69,12 @@ async function gateMppConfirmation(params: {
     const conf = await prisma.confirmation.create({
       data: {
         userId: params.principal.userId,
+        network: params.principal.network,
         toolName: params.toolName,
-        input: params.input as object,
+        input: {
+          ...(params.input as object),
+          _agentId: params.principal.agentId,
+        },
         summary: `${params.toolName}: ${params.amountUsdc} USDC → ${params.destination.slice(0, 4)}… (${decision.reason})`,
         status: "pending",
         expiresAt,
@@ -83,7 +83,7 @@ async function gateMppConfirmation(params: {
     return {
       status: "confirmation_required",
       confirmation_id: conf.id,
-      approve_url: `${APP_URL}/approve/${conf.id}`,
+      approve_url: `${appUrl()}/approve/${conf.id}`,
       expires_in: 15 * 60,
       summary: conf.summary,
     };
@@ -126,6 +126,7 @@ async function gateMppOnchainSpend(params: {
     amountXlm: params.amountUsdc,
     init: await loadOnchainPolicyInit(
       params.principal.userId,
+      params.principal.network,
       params.principal.agentId,
     ),
   });
@@ -151,6 +152,7 @@ export async function executeMppOpenSession(params: {
   const existing = await getOpenOrClosingMppSession(
     principal.userId,
     principal.agentId,
+    getMppNetworkId(ctx.network),
   );
   if (existing) {
     return {
@@ -230,6 +232,7 @@ export async function executeMppOpenSession(params: {
     data: {
       userId: principal.userId,
       agentId: principal.agentId,
+      network: principal.network,
       type: "mpp_open",
       destination: recipient,
       amountXlm: input.budget_usdc,
@@ -253,7 +256,7 @@ export async function executeMppOpenSession(params: {
       budget_usdc: session.budgetUsdc,
       commitment_pubkey_hex: session.commitmentPubkeyHex,
       network_id: session.networkId,
-      demo_url: `${APP_URL}/api/mpp-demo/${session.channel}`,
+      demo_url: `${appUrl()}/api/mpp-demo/${session.channel}`,
     },
     message: [
       "MPP session opened",
@@ -262,7 +265,7 @@ export async function executeMppOpenSession(params: {
       `Budget: ${session.budgetUsdc} USDC`,
       `Commitment pubkey (hex): ${session.commitmentPubkeyHex}`,
       "",
-      `Demo merchant (no local server): ${APP_URL}/api/mpp-demo/${session.channel}`,
+      `Demo merchant (no local server): ${appUrl()}/api/mpp-demo/${session.channel}`,
       "Call mpp_fetch with that URL, then mpp_close_session when done.",
     ].join("\n"),
   };
@@ -302,6 +305,7 @@ export async function executeMppFetch(params: {
   const sessionState = await requireOpenMppSession(
     params.principal.userId,
     params.principal.agentId,
+    getMppNetworkId(params.ctx.network),
   );
   if (!sessionState.ok) {
     return { status: "error", reason: sessionState.error };
@@ -419,6 +423,7 @@ export async function executeMppFetch(params: {
     data: {
       userId: params.principal.userId,
       agentId: params.principal.agentId,
+      network: params.principal.network,
       type: "mpp",
       destination: session.recipient,
       amountXlm: paidDelta > 0 ? paidDelta : deltaUsdc,
@@ -452,6 +457,7 @@ export async function executeMppStatus(params: {
   const session = await getOpenMppSession(
     params.principal.userId,
     params.principal.agentId,
+    getMppNetworkId(params.principal.network),
   );
   if (!session) {
     return {
@@ -492,6 +498,7 @@ export async function executeMppCloseSession(params: {
   const session = await getOpenOrClosingMppSession(
     params.principal.userId,
     params.principal.agentId,
+    getMppNetworkId(params.ctx.network),
   );
   if (!session) {
     return {
@@ -539,6 +546,7 @@ export async function executeMppCloseSession(params: {
         data: {
           userId: params.principal.userId,
           agentId: params.principal.agentId,
+          network: params.principal.network,
           type: "mpp_close",
           destination: session.recipient,
           amountXlm: settled,
@@ -610,6 +618,7 @@ export async function executeMppCloseSession(params: {
     data: {
       userId: params.principal.userId,
       agentId: params.principal.agentId,
+      network: params.principal.network,
       type: "mpp_close",
       destination: session.recipient,
       amountXlm: settled,
