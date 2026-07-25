@@ -112,8 +112,9 @@ export async function getWallet(): Promise<WalletSummary> {
   const change24hPct =
     first > 0 ? ((balanceXLM - first) / first) * 100 : 0;
 
-  const yield30dXLM =
-    blendXLM > 0 && apyPct > 0 ? (blendXLM * (apyPct / 100) * 30) / 365 : 0;
+  // Actual Blend interest over 30d is not indexed yet — do not invent it from APY.
+  // UI "EST. 30D" rows compute projections separately from live APY × balance.
+  const yield30dXLM = 0;
 
   return {
     address: wallet.address ?? "—",
