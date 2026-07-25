@@ -7,7 +7,7 @@ import type {
   TreasurySettings,
 } from "@/types/domain";
 
-import { getAgents, updateAgent } from "./agents";
+import { updateAgent } from "./agents";
 import {
   composePolicy,
   hubJson,
@@ -40,17 +40,46 @@ async function putAgentCaps(
 /* ------------------------------ treasury ------------------------------ */
 
 export async function getBlendPositions(): Promise<BlendPosition[]> {
-  // Per-agent Blend/treasury is delivered in its own (money-moving) stage. Until
-  // then this returns nothing rather than leaking the owner wallet's positions.
-  return [];
+  const agentId = getSelectedAgentId();
+  if (!agentId) return [];
+  try {
+    const data = await hubJson<{
+      blendDeposited: number | null;
+      supplyApy: number | null;
+      poolName: string | null;
+      poolId: string | null;
+    }>(`/api/treasury?agentId=${encodeURIComponent(agentId)}`);
+    const deposited = data.blendDeposited ?? 0;
+    if (deposited <= 0) return [];
+    const apyPct =
+      data.supplyApy != null && Number.isFinite(data.supplyApy)
+        ? data.supplyApy * 100
+        : 0;
+    return [
+      {
+        id: data.poolId ?? "blend-xlm",
+        pool: data.poolName ?? "Blend",
+        asset: "XLM",
+        deposited,
+        apyPct,
+        earned: 0,
+      },
+    ];
+  } catch {
+    return [];
+  }
 }
 
 export async function getTreasurySettings(): Promise<TreasurySettings> {
+  const agentId = getSelectedAgentId();
+  const path = agentId
+    ? `/api/treasury?agentId=${encodeURIComponent(agentId)}`
+    : "/api/treasury";
   const data = await hubJson<{
     autoYield: boolean;
     liquidThreshold: number;
     liquidHigh?: number;
-  }>("/api/treasury");
+  }>(path);
   const low = data.liquidThreshold ?? 2;
   return {
     autoYield: data.autoYield ?? true,
@@ -106,51 +135,6 @@ export async function disableAutoYieldAndUnwind(): Promise<{
   return { settings, withdrawnXlm, txHashes };
 }
 
-export async function transferXlm(input: {
-  destination: string;
-  amountXlm: number;
-  memo?: string;
-}): Promise<
-  | { kind: "ok"; txHash: string; explorerUrl?: string }
-  | { kind: "confirmation"; approveUrl: string; confirmationId: string }
-> {
-  const res = await hubJson<{
-    status: string;
-    tx_hash?: string;
-    explorer_url?: string;
-    approve_url?: string;
-    confirmation_id?: string;
-    reason?: string;
-    message?: string;
-  }>("/api/tools/transfer", {
-    method: "POST",
-    body: JSON.stringify({
-      destination: input.destination.trim(),
-      amount_xlm: input.amountXlm,
-      memo: input.memo?.trim() || undefined,
-      reason: "user_requested",
-    }),
-  });
-
-  if (res.status === "confirmation_required" && res.approve_url) {
-    return {
-      kind: "confirmation",
-      approveUrl: res.approve_url,
-      confirmationId: res.confirmation_id ?? "",
-    };
-  }
-
-  if (res.status !== "ok" || !res.tx_hash) {
-    throw new Error(res.reason ?? res.message ?? "transfer_failed");
-  }
-
-  return {
-    kind: "ok",
-    txHash: res.tx_hash,
-    explorerUrl: res.explorer_url,
-  };
-}
-
 /** Dashboard withdraw of XLM or Circle USDC (Privy-signed). */
 export async function withdrawFunds(input: {
   asset: "XLM" | "USDC";
@@ -183,21 +167,6 @@ export async function withdrawFunds(input: {
     explorerUrl: res.explorer_url,
     asset: input.asset,
   };
-}
-
-export async function deposit(amountXLM: number): Promise<{ txHash: string }> {
-  const res = await hubJson<{
-    status: string;
-    tx_hash?: string;
-    reason?: string;
-  }>("/api/tools/blend_deposit", {
-    method: "POST",
-    body: JSON.stringify({ amount_xlm: amountXLM }),
-  });
-  if (res.status !== "ok" || !res.tx_hash) {
-    throw new Error(res.reason ?? "blend_deposit_failed");
-  }
-  return { txHash: res.tx_hash };
 }
 
 export async function withdraw(amountXLM: number): Promise<{ txHash: string }> {
@@ -407,12 +376,20 @@ export function updateCategoryLimit(
 export async function addPolicyEntry(
   entry: Omit<PolicyEntry, "id" | "addedAt">,
 ): Promise<{ entry: PolicyEntry; txHash: string }> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) {
+    throw new Error("Select an agent before editing allow/deny lists.");
+  }
   if (entry.kind === "allow") {
     const res = await hubJson<{ entry: HubWhitelist }>(
       "/api/policy/whitelist",
       {
         method: "POST",
-        body: JSON.stringify({ address: entry.address, label: entry.label }),
+        body: JSON.stringify({
+          address: entry.address,
+          label: entry.label,
+          agentId,
+        }),
       },
     );
     return {
@@ -431,6 +408,7 @@ export async function addPolicyEntry(
     body: JSON.stringify({
       address: entry.address,
       reason: entry.label,
+      agentId,
     }),
   });
   return {
@@ -463,19 +441,51 @@ export async function setPolicyPaused(
   paused: boolean,
 ): Promise<{ txHash: string }> {
   return withPolicyWriteLock(async () => {
+    const agentId = getSelectedAgentId();
+    if (!agentId) {
+      throw new Error("Select an agent before pausing or resuming.");
+    }
     const written = await putAgentCaps({ paused });
+    try {
+      await updateAgent(agentId, {
+        status: paused ? "paused" : "active",
+      });
+    } catch (error) {
+      // Roll back the caps write so UI and enforcement stay aligned.
+      await putAgentCaps({ paused: !paused }).catch(() => null);
+      throw error;
+    }
     return { txHash: written.txHash ?? `hub_${Date.now().toString(16)}` };
   });
 }
 
-export async function revokeAgentAccess(): Promise<{ txHash: string }> {
-  const agents = await getAgents();
+/** Revoke every API/MCP key for the selected agent and take it offline. */
+export async function revokeAgentAccess(): Promise<{
+  txHash: string;
+  revokedKeys: number;
+}> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) {
+    throw new Error("Select an agent before revoking access.");
+  }
+
+  const { tokens } = await hubJson<{
+    tokens: Array<{ id: string; agentId: string | null }>;
+  }>("/api/tokens");
+  const mine = (tokens ?? []).filter((t) => t.agentId === agentId);
   await Promise.all(
-    agents
-      .filter((a) => a.status === "active")
-      .map((a) => updateAgent(a.id, { status: "offline" })),
+    mine.map((t) =>
+      hubJson(`/api/tokens/${t.id}`, { method: "DELETE" }).catch(() => null),
+    ),
   );
-  return { txHash: `hub_${Date.now().toString(16)}` };
+
+  await updateAgent(agentId, { status: "offline" });
+  await putAgentCaps({ paused: true }).catch(() => null);
+
+  return {
+    txHash: `hub_${Date.now().toString(16)}`,
+    revokedKeys: mine.length,
+  };
 }
 
 /* ----------------------------- reputation ----------------------------- */

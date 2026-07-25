@@ -2,7 +2,7 @@
  * Dashboard client API — shared fetch helpers, types, and mappers.
  */
 
-import { hubFetch } from "@/lib/hub-session";
+import { hubFetch } from "@/lib/auth/session";
 import { getSelectedAgentId } from "@/stores/agent";
 import { useAuthStore } from "@/stores/auth";
 import type {
@@ -138,17 +138,17 @@ export async function hubJson<T>(input: string, init?: RequestInit): Promise<T> 
 export function warmHubCaches(): void {
   // Per-agent data (wallet/treasury/reputation) is warmed lazily once an agent
   // is selected — warming owner-scoped endpoints here would only ever return
-  // empty for dashboard sessions.
+  // empty for dashboard sessions. Allow/deny lists are agent-scoped too.
   const endpoints = [
     "/api/agents",
     "/api/wallet/transactions?limit=100",
-    "/api/policy/whitelist",
-    "/api/policy/denylist",
     "/api/fx/xlm-usd",
   ];
-  for (const endpoint of endpoints) {
-    void hubJson(endpoint).catch(() => {});
-  }
+  void (async () => {
+    for (const endpoint of endpoints) {
+      await hubJson(endpoint).catch(() => {});
+    }
+  })();
 }
 
 export type HubWallet = {
@@ -185,6 +185,12 @@ export type HubAgent = {
   balanceXlm?: number;
   /** USDC in the agent's own wallet (set by the agents API). */
   balanceUsdc?: number;
+  /** Effective daily spend cap in USDC (agent policy or owner default). */
+  dailyCap?: number;
+  /** Confirmed spend today in USDC for this agent. */
+  spendTodayUsdc?: number;
+  /** On-chain Stellar8004 agent id, when registered. */
+  stellar8004AgentId?: number | null;
   tokens?: {
     id: string;
     label: string;
@@ -310,6 +316,36 @@ export function mapTxAsset(row: HubTx): "XLM" | "USDC" {
   return "XLM";
 }
 
+/**
+ * USDC face value of a ledger row for daily-spend meters.
+ * USDC transfers / x402 / MPP store face USDC in amountXlm; native XLM
+ * transfers need an FX rate.
+ */
+export function txSpendUsdc(
+  row: Pick<HubTx, "type" | "amountXlm" | "reason">,
+  usdPerXlm: number | null,
+): number {
+  const raw = Math.abs(parseXlm(row.amountXlm));
+  if (!Number.isFinite(raw) || raw === 0) return 0;
+
+  if (
+    row.type === "x402" ||
+    row.type === "mpp" ||
+    row.type === "mpp_open" ||
+    row.type === "mpp_close" ||
+    row.type === "trustline_repay"
+  ) {
+    return raw;
+  }
+
+  if (row.type === "transfer") {
+    if (mapTxAsset(row as HubTx) === "USDC") return raw;
+    return usdPerXlm != null && usdPerXlm > 0 ? raw * usdPerXlm : 0;
+  }
+
+  return 0;
+}
+
 export function mapTxOperations(row: HubTx): TxOperation[] {
   const detail = row.reason?.trim() || row.type;
   if (row.type === "mpp_open") {
@@ -365,6 +401,9 @@ export function mapAgent(row: HubAgent, txToday = 0): Agent {
     balanceXLM: row.balanceXlm ?? 0,
     balanceUSDC: row.balanceUsdc ?? 0,
     txToday,
+    spendTodayUSD: row.spendTodayUsdc ?? 0,
+    dailyCapUSD: row.dailyCap ?? null,
+    stellar8004AgentId: row.stellar8004AgentId ?? null,
     lastActive: lastToken?.lastUsedAt ?? row.createdAt,
     createdAt:
       typeof row.createdAt === "string"
@@ -487,19 +526,21 @@ const EMPTY_CAPS: HubAgentCaps = {
 };
 
 /**
- * Policy for the SELECTED AGENT. Spend caps are per-agent (via
- * /api/agents/[id]/policy); allow/deny lists remain account-level for now.
+ * Policy for the SELECTED AGENT — spend caps and allow/deny lists are per-agent.
  */
 export async function composePolicy(): Promise<Policy> {
   const agentId = getSelectedAgentId();
+  const listQs = agentId
+    ? `?agentId=${encodeURIComponent(agentId)}`
+    : "";
   const [capsRes, wl, dl, chain] = await Promise.all([
     agentId
       ? hubJson<{ policy: HubAgentCaps; custom: boolean }>(
           `/api/agents/${encodeURIComponent(agentId)}/policy`,
         ).catch(() => null)
       : Promise.resolve(null),
-    hubJson<{ whitelist: HubWhitelist[] }>("/api/policy/whitelist"),
-    hubJson<{ denylist: HubDenylist[] }>("/api/policy/denylist"),
+    hubJson<{ whitelist: HubWhitelist[] }>(`/api/policy/whitelist${listQs}`),
+    hubJson<{ denylist: HubDenylist[] }>(`/api/policy/denylist${listQs}`),
     hubJson<{ contractId: string | null; onchainConfigured: boolean }>(
       "/api/policy",
     ).catch(() => null),

@@ -44,7 +44,14 @@ export interface Agent {
   address: string;
   balanceXLM: number;
   balanceUSDC: number;
+  /** Count of confirmed spend txs today (legacy meter). */
   txToday: number;
+  /** Confirmed spend today in USDC. */
+  spendTodayUSD: number;
+  /** Effective daily spend cap in USDC; null when unknown. */
+  dailyCapUSD: number | null;
+  /** On-chain Stellar8004 agent id when registered. */
+  stellar8004AgentId: number | null;
   lastActive: string;
   createdAt: string;
 }
@@ -64,6 +71,14 @@ export interface WalletSummary {
   apyPct: number;
   yield30dXLM: number;
   spendTodayUSD: number;
+  /** Confirmed spend today by policy category (USDC face value). */
+  spendTodayByCategory?: {
+    transfer: number;
+    x402: number;
+    mpp: number;
+  };
+  /** Largest single confirmed spend today (USDC). */
+  largestSpendTodayUSD?: number;
   /** Live USD per 1 XLM (CoinGecko), when available. */
   usdPerXlm?: number | null;
   /** Optional liquid-band floor (USDC) from treasury settings. */
@@ -122,12 +137,6 @@ export interface Policy {
   categories: Record<PolicyCategory, number>;
   entries: PolicyEntry[];
   paused: boolean;
-}
-
-export interface AgentPolicyOverride {
-  dailyCapUSD: number | null;
-  perTxCapUSD: number | null;
-  note: string;
 }
 
 export type ReputationConfidence =
@@ -194,46 +203,6 @@ export interface TeamMember {
   email: string;
   role: "Owner" | "Admin" | "Member";
   joinedAt: string;
-}
-
-export interface Invoice {
-  id: string;
-  number: string;
-  date: string;
-  amountUSD: number;
-  status: "paid" | "due";
-}
-
-export interface BillingInfo {
-  plan: "Free" | "Pro" | "Enterprise";
-  renewsAt: string;
-  mcpCallsUsed: number;
-  mcpCallsLimit: number;
-  txVolumeUsedUSD: number;
-  txVolumeLimitUSD: number;
-  paymentMethod: { brand: string; last4: string } | null;
-}
-
-export interface NotificationPrefs {
-  policyViolations: boolean;
-  lowBalance: boolean;
-  yieldMilestones: boolean;
-  weeklySummary: boolean;
-}
-
-export interface Webhook {
-  id: string;
-  url: string;
-  events: string[];
-  createdAt: string;
-}
-
-export interface AppNotification {
-  id: string;
-  time: string;
-  title: string;
-  body: string;
-  read: boolean;
 }
 
 export interface Workspace {

@@ -10,16 +10,36 @@ import type {
 import {
   hubJson,
   loadAgentWalletAndTxs,
-  loadAllTxs,
   mapTransaction,
   mapTxStatus,
   nativeBalance,
-  parseXlm,
   startOfToday,
   buildHistory,
   usdcBalance,
+  txSpendUsdc,
 } from "./client";
 import { getSelectedAgentId } from "@/stores/agent";
+
+type HubTreasurySnapshot = {
+  liquid: number | null;
+  blendDeposited: number | null;
+  supplyApy: number | null;
+  poolName: string | null;
+  liquidThreshold?: number;
+};
+
+/** Agent-scoped Blend / liquid snapshot from /api/treasury. */
+export async function loadAgentTreasury(): Promise<HubTreasurySnapshot | null> {
+  const agentId = getSelectedAgentId();
+  if (!agentId) return null;
+  try {
+    return await hubJson<HubTreasurySnapshot>(
+      `/api/treasury?agentId=${encodeURIComponent(agentId)}`,
+    );
+  } catch {
+    return null;
+  }
+}
 
 /* ------------------------------ onboarding ----------------------------- */
 
@@ -34,43 +54,66 @@ export async function generateFundingAddress(): Promise<string> {
 /* ------------------------------- wallet ------------------------------- */
 
 /**
- * Balance summary for the SELECTED AGENT's own wallet (XLM + USDC). Treasury /
- * Blend numbers are intentionally 0 here — per-agent treasury lands in its own
- * stage; this read never touches the owner wallet or a shared treasury.
+ * Balance summary for the SELECTED AGENT's own wallet (XLM + USDC + Blend).
  */
 export async function getWallet(): Promise<WalletSummary> {
-  const { wallet, txs } = await loadAgentWalletAndTxs(100);
+  const [{ wallet, txs }, treasury] = await Promise.all([
+    loadAgentWalletAndTxs(100),
+    loadAgentTreasury(),
+  ]);
 
   const nativeXLM = nativeBalance(wallet);
-  const liquidXLM = nativeXLM;
-  const blendXLM = 0;
-  const balanceXLM = nativeXLM;
-  const apyPct = 0;
+  const blendXLM = treasury?.blendDeposited ?? 0;
+  const liquidXLM =
+    treasury?.liquid != null ? treasury.liquid : Math.max(0, nativeXLM);
+  const balanceXLM = liquidXLM + blendXLM;
+  // estSupplyApy is a fraction (0.0684 → 6.84%).
+  const apyPct =
+    treasury?.supplyApy != null && Number.isFinite(treasury.supplyApy)
+      ? treasury.supplyApy * 100
+      : 0;
 
   const today = startOfToday().getTime();
   const fx = await hubJson<{ usd_per_xlm?: number }>("/api/fx/xlm-usd").catch(
     () => null,
   );
   const usdPerXlm = fx?.usd_per_xlm && fx.usd_per_xlm > 0 ? fx.usd_per_xlm : null;
-  const spendToday = txs
-    .filter(
-      (t) =>
-        mapTxStatus(t.status) === "confirmed" &&
-        new Date(t.createdAt).getTime() >= today &&
-        (t.type === "transfer" || t.type === "x402" || t.type === "mpp"),
-    )
-    .reduce((sum, t) => {
-      const raw = parseXlm(t.amountXlm);
-      if (t.type === "transfer") {
-        return sum + (usdPerXlm != null ? raw * usdPerXlm : 0);
-      }
-      return sum + raw;
-    }, 0);
+
+  const spendTodayByCategory = { transfer: 0, x402: 0, mpp: 0 };
+  let spendToday = 0;
+  let largestSpendTodayUSD = 0;
+
+  for (const t of txs) {
+    if (mapTxStatus(t.status) !== "confirmed") continue;
+    if (new Date(t.createdAt).getTime() < today) continue;
+
+    const usdc = txSpendUsdc(t, usdPerXlm);
+    if (usdc <= 0) continue;
+
+    const category =
+      t.type === "transfer"
+        ? "transfer"
+        : t.type === "x402"
+          ? "x402"
+          : t.type === "mpp" ||
+              t.type === "mpp_open" ||
+              t.type === "mpp_close"
+            ? "mpp"
+            : null;
+    if (!category) continue;
+
+    spendTodayByCategory[category] += usdc;
+    spendToday += usdc;
+    if (usdc > largestSpendTodayUSD) largestSpendTodayUSD = usdc;
+  }
 
   const history = buildHistory("24h", balanceXLM, txs);
   const first = history[0]?.balance ?? balanceXLM;
   const change24hPct =
     first > 0 ? ((balanceXLM - first) / first) * 100 : 0;
+
+  const yield30dXLM =
+    blendXLM > 0 && apyPct > 0 ? (blendXLM * (apyPct / 100) * 30) / 365 : 0;
 
   return {
     address: wallet.address ?? "—",
@@ -80,11 +123,13 @@ export async function getWallet(): Promise<WalletSummary> {
     blendXLM,
     idleXLM: blendXLM,
     apyPct,
-    yield30dXLM: 0,
+    yield30dXLM,
     spendTodayUSD: spendToday,
+    spendTodayByCategory,
+    largestSpendTodayUSD,
     usdPerXlm,
-    liquidityFloorXLM: undefined,
-    poolName: null,
+    liquidityFloorXLM: treasury?.liquidThreshold,
+    poolName: treasury?.poolName ?? null,
     network: wallet.network === "mainnet" ? "mainnet" : "testnet",
     usdcBalance: usdcBalance(wallet),
   };
@@ -201,14 +246,4 @@ export async function getRecentTransactions(
 ): Promise<Transaction[]> {
   const rows = await getTransactions();
   return rows.slice(0, count);
-}
-
-export async function getAgentTransactions(
-  agentId: string,
-): Promise<Transaction[]> {
-  // Resolve a specific agent's history regardless of the current selection.
-  const txs = await loadAllTxs(100);
-  return txs
-    .filter((t) => t.agentId === agentId)
-    .map((t) => mapTransaction(t, ""));
 }
