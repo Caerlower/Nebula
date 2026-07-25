@@ -15,7 +15,11 @@ async function uncachedGET(req: NextRequest) {
   const agentId = url.searchParams.get("agentId") ?? undefined;
 
   const rows = await prisma.transaction.findMany({
-    where: { userId: principal.userId, ...(agentId ? { agentId } : {}) },
+    where: {
+      userId: principal.userId,
+      network: principal.network,
+      ...(agentId ? { agentId } : {}),
+    },
     orderBy: { createdAt: "desc" },
     take,
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -30,5 +34,9 @@ async function uncachedGET(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
-  return cachedJsonResponse(`txs:${principal.userId}:${new URL(req.url).search}`, 10000, () => uncachedGET(req));
+  return cachedJsonResponse(
+    `txs:${principal.userId}:${principal.network}:${new URL(req.url).search}`,
+    10000,
+    () => uncachedGET(req),
+  );
 }
