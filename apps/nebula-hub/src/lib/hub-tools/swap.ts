@@ -105,7 +105,11 @@ export async function executeSwap(
   ctx: ToolContext,
   confirmationId?: string,
 ): Promise<ToolResult> {
-  const paused = await requireNotPaused(principal.userId, principal.agentId);
+  const paused = await requireNotPaused(
+    principal.userId,
+    principal.network,
+    principal.agentId,
+  );
   if (paused) return paused;
 
   if (input.from_asset === input.to_asset) {
@@ -129,6 +133,7 @@ export async function executeSwap(
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "swap",
         destination: ctx.stellarAddress,
         amountXlm: input.amount,
@@ -177,6 +182,7 @@ export async function executeSwap(
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "swap",
         destination: ctx.stellarAddress,
         amountXlm: input.amount,
@@ -217,6 +223,7 @@ export async function executeSwap(
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "swap",
         destination: ctx.stellarAddress,
         amountXlm: input.amount,
@@ -243,7 +250,11 @@ export async function decideSwapConfirmation(
   | { action: "reject"; reason: string }
   | { action: "confirm"; amountUsdc: number; reason: string }
 > {
-  const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+  const policy = await loadPolicySnapshot(
+    principal.userId,
+    principal.network,
+    principal.agentId,
+  );
   if (policy.paused) {
     return { action: "reject", reason: "policy_paused" };
   }
