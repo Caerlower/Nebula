@@ -25,6 +25,11 @@ export function fmtUSD(value: number): string {
   return USD_FORMAT.format(value);
 }
 
+/** USDC amount without currency symbol — callers add `$` or `USDC` as needed. */
+export function fmtUsdc(value: number): string {
+  return XLM_FORMAT.format(value);
+}
+
 export function fmtInt(value: number): string {
   return INT_FORMAT.format(value);
 }
@@ -51,14 +56,6 @@ export function timeAgo(isoTime: string): string {
   const months = days / 30;
   if (months < 12) return `${Math.floor(months)}mo ago`;
   return `${Math.floor(months / 12)}y ago`;
-}
-
-export function fmtDate(isoTime: string): string {
-  return new Date(isoTime).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 export function fmtDateTime(isoTime: string): string {
