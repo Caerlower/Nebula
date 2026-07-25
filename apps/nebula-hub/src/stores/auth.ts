@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import type { SessionUser } from "@/lib/api";
+import type { SessionUser } from "@/types/domain";
 
 interface AuthState {
   user: SessionUser | null;
@@ -107,13 +107,21 @@ export const useAuthStore = create<AuthState>()(
         walletAuthed: state.walletAuthed,
         walletAddress: state.walletAddress,
       }),
-      onRehydrateStorage: () => (_state, error) => {
+      onRehydrateStorage: () => (state, error) => {
         if (error) {
           console.error("[auth] rehydrate failed", error);
         }
-        // Always mark hydrated — even when `_state` is undefined on error,
-        // otherwise login stays on "Signing you in" forever.
-        useAuthStore.setState({ hydrated: true });
+        // Always mark hydrated — even when rehydrate fails — otherwise login
+        // stays on "Signing you in" forever.
+        // Prefer the action on the rehydrated state; fall back to a microtask
+        // so we never touch `useAuthStore` while `create()` is still assigning it.
+        if (state && typeof state.setHydrated === "function") {
+          state.setHydrated(true);
+          return;
+        }
+        queueMicrotask(() => {
+          useAuthStore.setState({ hydrated: true });
+        });
       },
     },
   ),

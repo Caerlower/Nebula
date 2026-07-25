@@ -15,12 +15,10 @@ function initialTheme(): ThemeMode {
 }
 
 interface UIState {
-  /** "light" = warm midnight (default), "dark" = deep violet night */
+  /** "light" | "dark" = night variants; "day" = paper light. Toggle is day ↔ dark. */
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
   toggleTheme: () => void;
-  sidebarCollapsed: boolean;
-  toggleSidebar: () => void;
   mobileNavOpen: boolean;
   setMobileNavOpen: (open: boolean) => void;
   commandOpen: boolean;
@@ -37,10 +35,9 @@ interface UIState {
 export const useUIStore = create<UIState>()((set) => ({
   theme: initialTheme(),
   setTheme: (theme) => set({ theme }),
+  // One click: paper (day) ↔ black (dark). Matches old UI / ThemePill LIGHT·DARK.
   toggleTheme: () =>
-    set((s) => ({ theme: s.theme === "light" ? "dark" : s.theme === "dark" ? "day" : "light" })),
-  sidebarCollapsed: false,
-  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+    set((s) => ({ theme: s.theme === "day" ? "dark" : "day" })),
   mobileNavOpen: false,
   setMobileNavOpen: (open) => set({ mobileNavOpen: open }),
   commandOpen: false,
