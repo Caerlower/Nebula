@@ -45,10 +45,31 @@ export async function getBlendPositions(): Promise<BlendPosition[]> {
   try {
     const data = await hubJson<{
       blendDeposited: number | null;
+      blendUsdcDeposited?: number | null;
       supplyApy: number | null;
       poolName: string | null;
       poolId: string | null;
+      positions?: Array<{
+        id: string;
+        pool: string;
+        poolId: string;
+        asset: string;
+        deposited: number;
+        apyPct: number;
+      }>;
     }>(`/api/treasury?agentId=${encodeURIComponent(agentId)}`);
+
+    if (data.positions && data.positions.length > 0) {
+      return data.positions.map((p) => ({
+        id: p.id,
+        pool: p.pool,
+        asset: p.asset,
+        deposited: p.deposited,
+        apyPct: p.apyPct,
+        earned: 0,
+      }));
+    }
+
     const deposited = data.blendDeposited ?? 0;
     if (deposited <= 0) return [];
     const apyPct =
