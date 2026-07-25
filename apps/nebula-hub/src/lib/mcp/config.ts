@@ -1,4 +1,4 @@
-import { appBaseUrl } from "@/lib/auth/oauth";
+import { appBaseUrl } from "@/lib/app-url";
 
 /**
  * Build ready-to-paste MCP client configs for a freshly minted Nebula token.
