@@ -68,28 +68,3 @@ export const THEMES: Record<ThemeMode, AppThemeTokens> = {
     destructive: "#B23D2A",
   },
 };
-
-export const CHART_HEX = {
-  dark: {
-    chart1: "#6F88A3",
-    chart2: "#8FBF9F",
-    chart3: "#8B5CF6",
-    chart4: "#D6D2C4",
-    chart5: "#5C5C65",
-  },
-  day: {
-    chart1: "#4A6B8C",
-    chart2: "#3F7A55",
-    chart3: "#6D28D9",
-    chart4: "#A9A392",
-    chart5: "#9A9A92",
-  },
-} as const;
-
-export const CHART_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-] as const;
