@@ -30,13 +30,6 @@ const BRAND_FILLS = [
   "bg-[var(--brand-sand)] text-[var(--brand-black)]",
 ] as const;
 
-/** Resolve the brand fill class for a stored hue string — same bucketing as the avatar. */
-export function brandFillForHue(hue: string): string {
-  const n = Number(hue);
-  const bucket = Number.isFinite(n) ? ((Math.round(n) % 360) + 360) % 360 : 0;
-  return BRAND_FILLS[bucket % BRAND_FILLS.length]!;
-}
-
 /**
  * Deterministic avatar for an agent — the same name always maps to the same
  * Stellar brand fill, so agents stay visually distinguishable across the app.

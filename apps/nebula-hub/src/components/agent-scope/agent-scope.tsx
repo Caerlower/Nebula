@@ -11,6 +11,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useLoad } from "@/hooks/use-load";
 import * as api from "@/lib/api";
 import { useAgentStore } from "@/stores/agent";
+import { useUIStore } from "@/stores/ui";
 import type { Agent } from "@/types/domain";
 
 interface AgentScopeValue {
@@ -78,41 +79,29 @@ export function useAgentScope(): AgentScopeValue {
 }
 
 /**
- * Hook for data pages: returns the currently selected agent, plus loading /
- * empty flags. When there are no agents the caller should render nothing
- * (the AgentScopeGate shows the shared empty state at the shell level).
- */
-export function useSelectedAgent(): {
-  agent: Agent | null;
-  agentId: string | null;
-  loading: boolean;
-  hasAgents: boolean;
-} {
-  const { selectedAgent, selectedAgentId, loading, hasAgents } = useAgentScope();
-  return { agent: selectedAgent, agentId: selectedAgentId, loading, hasAgents };
-}
-
-/**
  * First-run guard: a freshly-signed-in user (EOA or Privy) with zero agents is
- * sent straight to the "create your first agent" flow — never an empty grid, a
- * bare dashboard, or (critically) owner/EOA/Privy wallet data. Account-level
- * settings and the create flow itself stay reachable so they don't loop.
+ * sent to Fleet with the create drawer open — never an empty grid on Overview
+ * or (critically) owner/EOA/Privy wallet data. Account settings stay reachable.
  */
 export function AgentScopeGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { loading, hasAgents } = useAgentScope();
+  const setCreateAgentOpen = useUIStore((s) => s.setCreateAgentOpen);
 
-  const onCreateFlow = pathname === "/agents/new";
+  const onFleet = pathname === "/agents" || pathname.startsWith("/agents/");
   const onAccountSettings = pathname.startsWith("/settings");
-  const needsFirstAgent =
-    !loading && !hasAgents && !onCreateFlow && !onAccountSettings;
+  const needsFirstAgent = !loading && !hasAgents && !onAccountSettings;
 
   useEffect(() => {
-    if (needsFirstAgent) router.replace("/agents/new");
-  }, [needsFirstAgent, router]);
+    if (!needsFirstAgent) return;
+    if (!onFleet) {
+      router.replace("/agents");
+      setCreateAgentOpen(true);
+    }
+  }, [needsFirstAgent, onFleet, router, setCreateAgentOpen]);
 
-  if (needsFirstAgent) return null;
+  if (needsFirstAgent && !onFleet) return null;
 
   return <>{children}</>;
 }
