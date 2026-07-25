@@ -3,20 +3,24 @@ import { NextRequest } from "next/server";
 import { cachedJsonResponse } from "@/lib/route-cache";
 
 import { isDashboardAuth, resolveAuth, unauthorized } from "@/lib/auth";
-import { getTreasuryBalances, fetchBlendSupplyRates } from "@/lib/blend";
+import {
+  getTreasuryBalances,
+  fetchBlendSupplyRates,
+  type BlendPositionRow,
+} from "@/lib/blend";
 import { prisma } from "@/lib/db";
+import { loadTreasurySettings } from "@/lib/policy/settings";
 
 async function uncachedGET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
 
-  const settings = await prisma.policySettings.findUnique({
-    where: { userId: principal.userId },
-  });
+  const settings = await loadTreasurySettings(
+    principal.userId,
+    principal.network,
+  );
 
-  const network =
-    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-    "testnet";
+  const network = principal.network;
 
   const agentId = new URL(req.url).searchParams.get("agentId");
 
@@ -25,7 +29,7 @@ async function uncachedGET(req: NextRequest) {
   let address: string | null = principal.stellarAddress;
   if (agentId) {
     const agent = await prisma.agent.findFirst({
-      where: { id: agentId, userId: principal.userId },
+      where: { id: agentId, userId: principal.userId, network: principal.network },
       select: { stellarAddress: true },
     });
     if (!agent) {
@@ -40,6 +44,8 @@ async function uncachedGET(req: NextRequest) {
       asset: "XLM",
       liquid: null,
       blendDeposited: null,
+      blendUsdcDeposited: null,
+      positions: [],
       supplyApy: null,
       poolId: null,
       poolName: null,
@@ -55,6 +61,8 @@ async function uncachedGET(req: NextRequest) {
 
   let liquid: number | null = null;
   let blendDeposited: number | null = null;
+  let blendUsdcDeposited: number | null = null;
+  let positions: BlendPositionRow[] = [];
   let supplyApy: number | null = null;
   let poolId: string | null = null;
   let poolName: string | null = null;
@@ -67,6 +75,8 @@ async function uncachedGET(req: NextRequest) {
       const balances = await getTreasuryBalances(address, network);
       liquid = balances.liquid;
       blendDeposited = balances.blendDeposited;
+      blendUsdcDeposited = balances.blendUsdcDeposited;
+      positions = balances.positions;
       supplyApy = balances.supplyApy;
       poolId = balances.poolId;
       poolName = balances.poolName;
@@ -113,6 +123,8 @@ async function uncachedGET(req: NextRequest) {
     asset: "XLM",
     liquid,
     blendDeposited,
+    blendUsdcDeposited,
+    positions,
     supplyApy,
     poolId,
     poolName,
@@ -131,7 +143,7 @@ export async function GET(req: NextRequest) {
   if (!principal) return unauthorized();
   const agentId = new URL(req.url).searchParams.get("agentId") ?? "none";
   return cachedJsonResponse(
-    `treasury:${principal.userId}:${agentId}`,
+    `treasury:${principal.userId}:${principal.network}:${agentId}`,
     30000,
     () => uncachedGET(req),
   );
