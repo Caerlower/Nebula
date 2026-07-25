@@ -16,7 +16,7 @@ import {
   ensurePolicyInitialized,
   onchainSetTreasuryBand,
   policyContractConfigured,
-} from "../policy-onchain";
+} from "@/lib/policy/onchain";
 import { explorerTxUrl, fetchBalances } from "../stellar";
 import { executeX402Tool } from "../x402/execute";
 import {
@@ -843,8 +843,16 @@ async function executePolicyReadTools(
   const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
   const [spend, whitelistCount, denylistCount] = await Promise.all([
     sumSpendUsdcSince(principal.userId, since, { agentId: principal.agentId }),
-    prisma.whitelistEntry.count({ where: { userId: principal.userId } }),
-    prisma.denylistEntry.count({ where: { userId: principal.userId } }),
+    principal.agentId
+      ? prisma.whitelistEntry.count({
+          where: { userId: principal.userId, agentId: principal.agentId },
+        })
+      : Promise.resolve(0),
+    principal.agentId
+      ? prisma.denylistEntry.count({
+          where: { userId: principal.userId, agentId: principal.agentId },
+        })
+      : Promise.resolve(0),
   ]);
 
   const catCaps = {

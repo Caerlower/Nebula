@@ -7,7 +7,7 @@ import {
 
 import type { AuthPrincipal } from "../auth";
 import { prisma } from "../db";
-import { onchainCheckSpend } from "../policy-onchain";
+import { onchainCheckSpend } from "@/lib/policy/onchain";
 import { resolveSigner } from "../signing";
 import {
   TrustLineHubClient,

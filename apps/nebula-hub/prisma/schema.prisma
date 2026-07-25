@@ -87,6 +87,8 @@ model Agent {
   user   User          @relation(fields: [userId], references: [id])
   tokens NebulaToken[]
   policy AgentPolicy?
+  whitelistEntries WhitelistEntry[]
+  denylistEntries  DenylistEntry[]
 }
 
 model Transaction {
@@ -124,25 +126,33 @@ model Confirmation {
 model WhitelistEntry {
   id        String   @id @default(cuid())
   userId    String
+  /// Agent this allow entry applies to (not account-wide).
+  agentId   String
   address   String
   label     String
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, address])
+  @@unique([agentId, address])
+  @@index([userId, agentId])
 }
 
 model DenylistEntry {
   id        String   @id @default(cuid())
   userId    String
+  /// Agent this deny entry applies to (not account-wide).
+  agentId   String
   address   String
   reason    String?
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, address])
+  @@unique([agentId, address])
+  @@index([userId, agentId])
 }
 
 model PolicySettings {
@@ -169,7 +179,7 @@ model PolicySettings {
 
 /// Per-agent spend caps. When absent, an agent inherits the owner's
 /// PolicySettings cap *values* (but keeps its own, isolated spend counter).
-/// Whitelist/denylist and the treasury band stay owner-level.
+/// Allow/deny lists are per-agent; the treasury liquid band stays on PolicySettings.
 model AgentPolicy {
   agentId        String   @id
   /// Confirmation micro threshold (USDC).

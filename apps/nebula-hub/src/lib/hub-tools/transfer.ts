@@ -5,7 +5,7 @@ import { privyConfigured } from "../auth";
 import { blendWithdrawAndPay } from "../blend";
 import { prisma } from "../db";
 import { xlmToUsdc } from "../fx";
-import { onchainCheckSpend } from "../policy-onchain";
+import { onchainCheckSpend } from "@/lib/policy/onchain";
 import { resolveSigner } from "../signing";
 import {
   buildPaymentXdr,

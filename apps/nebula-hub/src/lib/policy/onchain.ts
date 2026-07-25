@@ -20,8 +20,8 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 
-import { type HashSigner, privySigner } from "./signing";
-import { signAndSubmitSoroban } from "./stellar";
+import { type HashSigner, privySigner } from "@/lib/signing";
+import { signAndSubmitSoroban } from "@/lib/stellar";
 
 export type SpendCategory = "transfer" | "x402" | "mpp";
 

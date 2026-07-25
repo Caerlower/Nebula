@@ -3,7 +3,7 @@ import { evaluateConfirmation } from "nebulamcp-core";
 
 import type { AuthPrincipal } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { onchainCheckSpend } from "@/lib/policy-onchain";
+import { onchainCheckSpend } from "@/lib/policy/onchain";
 import { privyConfigured } from "@/lib/auth";
 import { resolveSigner } from "@/lib/signing";
 import { explorerTxUrl } from "@/lib/stellar";

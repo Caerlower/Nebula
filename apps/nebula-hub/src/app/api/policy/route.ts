@@ -15,7 +15,7 @@ import {
   onchainSetTreasuryBand,
   policyContractConfigured,
   policyContractId,
-} from "@/lib/policy-onchain";
+} from "@/lib/policy/onchain";
 
 const userPolicyTails = new Map<string, Promise<unknown>>();
 function withUserPolicyLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {

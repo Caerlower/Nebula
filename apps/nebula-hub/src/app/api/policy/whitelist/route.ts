@@ -5,18 +5,28 @@ import { z } from "zod";
 
 import { isDashboardAuth, resolveAuth, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { agentIdFromRequest, resolveListAgentId } from "@/lib/policy/lists";
 
 const createSchema = z.object({
   address: z.string().min(56).max(56),
   label: z.string().min(1).max(64),
+  agentId: z.string().min(1).optional(),
 });
 
 async function uncachedGET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
 
+  const agentId = await resolveListAgentId(
+    principal,
+    agentIdFromRequest(req),
+  );
+  if (!agentId) {
+    return Response.json({ whitelist: [] });
+  }
+
   const entries = await prisma.whitelistEntry.findMany({
-    where: { userId: principal.userId },
+    where: { userId: principal.userId, agentId },
     orderBy: { createdAt: "desc" },
   });
   return Response.json({ whitelist: entries });
@@ -48,15 +58,27 @@ async function uncachedPOST(req: NextRequest) {
     );
   }
 
+  const agentId = await resolveListAgentId(
+    principal,
+    body.data.agentId ?? agentIdFromRequest(req),
+  );
+  if (!agentId) {
+    return Response.json(
+      { status: "error", reason: "agent_required" },
+      { status: 400 },
+    );
+  }
+
   const entry = await prisma.whitelistEntry.upsert({
     where: {
-      userId_address: {
-        userId: principal.userId,
+      agentId_address: {
+        agentId,
         address: body.data.address,
       },
     },
     create: {
       userId: principal.userId,
+      agentId,
       address: body.data.address,
       label: body.data.label,
     },
@@ -69,7 +91,13 @@ async function uncachedPOST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
-  return cachedJsonResponse(`wl:${principal.userId}`, 15000, () => uncachedGET(req));
+  const agentId =
+    (await resolveListAgentId(principal, agentIdFromRequest(req))) ?? "none";
+  return cachedJsonResponse(
+    `wl:${principal.userId}:${agentId}`,
+    15000,
+    () => uncachedGET(req),
+  );
 }
 
 export async function POST(req: NextRequest) {

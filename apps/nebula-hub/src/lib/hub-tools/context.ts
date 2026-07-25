@@ -104,10 +104,15 @@ export async function loadPolicySnapshot(
   agentId?: string | null,
 ): Promise<PolicySnapshot> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // No agent scope → empty lists (never fall back to account-wide).
   const [caps, whitelist, denylist, spend] = await Promise.all([
     loadEffectiveCaps(userId, agentId),
-    prisma.whitelistEntry.findMany({ where: { userId } }),
-    prisma.denylistEntry.findMany({ where: { userId } }),
+    agentId
+      ? prisma.whitelistEntry.findMany({ where: { userId, agentId } })
+      : Promise.resolve([]),
+    agentId
+      ? prisma.denylistEntry.findMany({ where: { userId, agentId } })
+      : Promise.resolve([]),
     sumSpendUsdcSince(userId, since, { agentId }),
   ]);
 

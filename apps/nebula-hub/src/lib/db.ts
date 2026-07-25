@@ -13,11 +13,11 @@ function withPoolParams(url: string): string {
   if (!url || url.includes("connection_limit=")) return url;
   const limit =
     process.env.PRISMA_CONNECTION_LIMIT?.trim() ||
-    (process.env.NODE_ENV === "development" ? "5" : "3");
+    (process.env.NODE_ENV === "development" ? "10" : "3");
   const sep = url.includes("?") ? "&" : "?";
   const params = new URLSearchParams();
   params.set("connection_limit", limit);
-  params.set("pool_timeout", "20");
+  params.set("pool_timeout", "30");
   // Transaction pooler (Supabase :6543) needs pgbouncer=true for Prisma.
   if (url.includes(":6543") && !url.includes("pgbouncer=")) {
     params.set("pgbouncer", "true");
@@ -44,17 +44,26 @@ function clientLooksCurrent(client: PrismaClient): boolean {
   ) {
     return false;
   }
-  // NebulaToken.expiresAt was added for OAuth / Connect API key TTL.
-  const fields = (
+  const models = (
     client as {
       _runtimeDataModel?: {
-        models?: { NebulaToken?: { fields?: Array<{ name?: string }> } };
+        models?: Record<string, { fields?: Array<{ name?: string }> }>;
       };
     }
-  )._runtimeDataModel?.models?.NebulaToken?.fields;
+  )._runtimeDataModel?.models;
+  // NebulaToken.expiresAt was added for OAuth / Connect API key TTL.
+  const tokenFields = models?.NebulaToken?.fields;
   if (
-    Array.isArray(fields) &&
-    !fields.some((field) => field.name === "expiresAt")
+    Array.isArray(tokenFields) &&
+    !tokenFields.some((field) => field.name === "expiresAt")
+  ) {
+    return false;
+  }
+  // WhitelistEntry.agentId scopes allow/deny lists per agent.
+  const wlFields = models?.WhitelistEntry?.fields;
+  if (
+    Array.isArray(wlFields) &&
+    !wlFields.some((field) => field.name === "agentId")
   ) {
     return false;
   }
