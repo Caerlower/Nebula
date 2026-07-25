@@ -1,26 +1,10 @@
 import { z } from "zod";
 
-import { isValidStellarAddress } from "../stellar/address.js";
 import type { ToolContext, ToolResult } from "../types/context.js";
 
 /** MCP tokens must NOT call policy mutations — Hub enforces dashboard-only auth. */
 export const getPolicyStatusSchema = z.object({}).passthrough();
-export const setPolicyLimitsSchema = z.object({
-  max_per_call: z.number().positive().finite(),
-  max_per_day: z.number().positive().finite(),
-});
-export const deployPolicySchema = z.object({
-  max_per_call: z.number().positive().finite().optional(),
-  max_per_day: z.number().positive().finite().optional(),
-});
 export const spendingReportSchema = z.object({}).passthrough();
-
-export const whitelistAddSchema = z.object({
-  address: z
-    .string()
-    .refine(isValidStellarAddress, { message: "Invalid Stellar address" }),
-  label: z.string().min(1).max(64),
-});
 
 async function hubOnly(name: string): Promise<ToolResult> {
   return {
@@ -38,27 +22,6 @@ export const getPolicyStatusTool = {
     _i: z.infer<typeof getPolicyStatusSchema>,
     _c: ToolContext,
   ): Promise<ToolResult> => hubOnly("get_policy_status"),
-};
-
-export const setPolicyLimitsTool = {
-  name: "set_policy_limits" as const,
-  description:
-    "Update on-chain policy caps (dashboard Auth0 only — not available to Nebula MCP tokens).",
-  schema: setPolicyLimitsSchema,
-  handler: async (
-    _i: z.infer<typeof setPolicyLimitsSchema>,
-    _c: ToolContext,
-  ): Promise<ToolResult> => hubOnly("set_policy_limits"),
-};
-
-export const deployPolicyTool = {
-  name: "deploy_policy" as const,
-  description: "Deploy nebula-policy Soroban contract (dashboard Auth0 only).",
-  schema: deployPolicySchema,
-  handler: async (
-    _i: z.infer<typeof deployPolicySchema>,
-    _c: ToolContext,
-  ): Promise<ToolResult> => hubOnly("deploy_policy"),
 };
 
 export const spendingReportTool = {
