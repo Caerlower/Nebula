@@ -7,7 +7,7 @@ import {
   mintOAuthAccessToken,
   parseRedirectUris,
   verifyPkceS256,
-} from "@/lib/oauth";
+} from "@/lib/auth/oauth";
 
 const tokenSchema = z.object({
   grant_type: z.literal("authorization_code"),

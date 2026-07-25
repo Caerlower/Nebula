@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { BETA_COOKIE, BETA_COOKIE_MAX_AGE_S, isValidBetaCode } from "@/lib/beta";
+import { BETA_COOKIE, BETA_COOKIE_MAX_AGE_S, isValidBetaCode } from "@/lib/auth/beta";
 
 /** GET → is this browser already inside the private beta? */
 export async function GET() {

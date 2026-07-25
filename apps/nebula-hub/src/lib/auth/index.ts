@@ -3,8 +3,8 @@ import { createHash, createPrivateKey, sign as cryptoSign } from "node:crypto";
 import { PrivyClient, type User } from "@privy-io/node";
 import { NextRequest } from "next/server";
 
-import { hashNebulaToken, prisma } from "./db";
-import { SESSION_COOKIE, readWalletSession } from "./wallet-auth";
+import { hashNebulaToken, prisma } from "@/lib/db";
+import { SESSION_COOKIE, readWalletSession } from "@/lib/wallet/auth";
 
 /**
  * Per-token principal cache. Without it every API request pays token

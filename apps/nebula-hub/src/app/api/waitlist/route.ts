@@ -4,7 +4,7 @@ import path from "node:path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { BETA_COOKIE, isValidBetaCode } from "@/lib/beta";
+import { BETA_COOKIE, isValidBetaCode } from "@/lib/auth/beta";
 import { getSupabaseAdmin } from "@/lib/db";
 
 /**

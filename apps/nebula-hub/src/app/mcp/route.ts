@@ -5,7 +5,7 @@ import {
   appBaseUrl,
   handleMcpHttpRequest,
   mcpWwwAuthenticate,
-} from "@/lib/oauth";
+} from "@/lib/auth/oauth";
 import { rateLimitOrThrow } from "@/lib/route-cache";
 
 export const runtime = "nodejs";

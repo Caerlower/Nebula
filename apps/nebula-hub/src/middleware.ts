@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { BETA_COOKIE, isValidBetaCode } from "@/lib/beta";
+import { BETA_COOKIE, isValidBetaCode } from "@/lib/auth/beta";
 
 /**
- * Private-beta gate for product routes. Auth is Privy (client) + Hub API tokens —
- * no Auth0 middleware.
+ * Private-beta gate for product routes.
+ * Session auth is Privy (client) + Hub wallet cookie / API tokens — not this middleware.
  */
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -14,6 +14,7 @@ const PROTECTED_PREFIXES = [
   "/transactions",
   "/reputation",
   "/connect",
+  "/api-keys",
   "/settings",
   "/onboarding",
 ];
@@ -51,6 +52,8 @@ export const config = {
     "/reputation/:path*",
     "/connect",
     "/connect/:path*",
+    "/api-keys",
+    "/api-keys/:path*",
     "/settings",
     "/settings/:path*",
     "/onboarding",

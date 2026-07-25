@@ -7,7 +7,7 @@ import {
   hashOpaque,
   mintAuthorizationCode,
   parseRedirectUris,
-} from "@/lib/oauth";
+} from "@/lib/auth/oauth";
 
 const consentSchema = z.object({
   client_id: z.string().min(1),

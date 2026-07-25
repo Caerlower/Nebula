@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 
-import { hashOpaque } from "@/lib/oauth";
+import { hashOpaque } from "@/lib/auth/oauth";
 import { prisma } from "@/lib/db";
 import { rateLimitOrThrow } from "@/lib/route-cache";
 
