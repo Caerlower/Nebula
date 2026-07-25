@@ -4,6 +4,11 @@ import { PrivyClient, type User } from "@privy-io/node";
 import { NextRequest } from "next/server";
 
 import { hashNebulaToken, prisma } from "@/lib/db";
+import {
+  networkFromPrincipal,
+  parseHubNetwork,
+  type HubNetwork,
+} from "@/lib/network";
 import { SESSION_COOKIE, readWalletSession } from "@/lib/wallet/auth";
 
 /**
@@ -59,6 +64,8 @@ export type AuthPrincipal = {
   accountType: "custodial" | "external";
   /** Where signatures come from for this account's spends. */
   signerStrategy: "privy" | "partner_callback" | "client_side";
+  /** Preferred Stellar ledger for this account's Hub traffic. */
+  network: HubNetwork;
 };
 
 function normalizeSignerStrategy(
@@ -79,6 +86,7 @@ async function principalFromUser(
     privyWalletId: string | null;
     accountType?: string | null;
     signerStrategy?: string | null;
+    preferredNetwork?: string | null;
   },
   source: AuthPrincipal["source"],
   extra?: { agentId?: string | null; tokenId?: string | null },
@@ -95,7 +103,40 @@ async function principalFromUser(
     // (Freighter/EOA) accounts are external/client_side.
     accountType: user.accountType === "external" ? "external" : "custodial",
     signerStrategy: normalizeSignerStrategy(user.signerStrategy),
+    network: networkFromPrincipal({
+      network: parseHubNetwork(user.preferredNetwork),
+    }),
   };
+}
+
+/** Bind principal to an agent's wallet + ledger (MCP / confirmation approve). */
+function applyAgentWallet(
+  principal: AuthPrincipal,
+  agent: {
+    id: string;
+    stellarAddress: string | null;
+    privyWalletId: string | null;
+    accountType: string | null;
+    signerStrategy: string | null;
+    network: string;
+  },
+): AuthPrincipal {
+  const network =
+    parseHubNetwork(agent.network) ?? principal.network;
+  return {
+    ...principal,
+    agentId: agent.id,
+    network: networkFromPrincipal({ network }),
+    stellarAddress: agent.stellarAddress ?? principal.stellarAddress,
+    privyWalletId: agent.privyWalletId ?? principal.privyWalletId,
+    accountType: agent.accountType === "external" ? "external" : "custodial",
+    signerStrategy: normalizeSignerStrategy(agent.signerStrategy),
+  };
+}
+
+/** Drop cached principals after network (or other) preference changes. */
+export function invalidateAuthPrincipalCache(): void {
+  principalCache.clear();
 }
 
 function bearerToken(req: NextRequest): string | null {
@@ -149,31 +190,28 @@ export async function resolveAuth(
       agentId: row.agentId,
       tokenId: row.id,
     });
-    // A token bound to an agent operates the AGENT's own wallet + signer, not
-    // the owner's. Legacy agents without a provisioned wallet fall back to the
-    // owner wallet (backward compatible). Tael cards surface here as
-    // partner_callback agents whose address is the external card.
-    if (row.agent?.stellarAddress) {
-      principal.stellarAddress = row.agent.stellarAddress;
-      principal.privyWalletId = row.agent.privyWalletId;
-      principal.accountType =
-        row.agent.accountType === "external" ? "external" : "custodial";
-      principal.signerStrategy = normalizeSignerStrategy(
-        row.agent.signerStrategy,
-      );
-    } else if (taelAgent) {
+    // A token bound to an agent operates the AGENT's own wallet + signer +
+    // ledger — never the owner's preferredNetwork. Preference only drives the
+    // dashboard NetworkChip; MCP traffic must stay on the twin that was minted.
+    if (row.agent) {
+      const bound = applyAgentWallet(principal, row.agent);
+      if (cacheKey) cachePrincipal(cacheKey, bound);
+      return bound;
+    }
+    if (taelAgent) {
       // Company (agent-less) token + x-tael-agent header → resolve the card
       // agent owned by this company account and operate that card's wallet.
+      // stellarAddress is globally unique, so no network filter needed.
       const card = await prisma.agent.findFirst({
-        where: { userId: row.userId, stellarAddress: taelAgent },
+        where: {
+          userId: row.userId,
+          stellarAddress: taelAgent,
+        },
       });
       if (card) {
-        principal.agentId = card.id;
-        principal.stellarAddress = card.stellarAddress;
-        principal.privyWalletId = card.privyWalletId;
-        principal.accountType =
-          card.accountType === "external" ? "external" : "custodial";
-        principal.signerStrategy = normalizeSignerStrategy(card.signerStrategy);
+        const bound = applyAgentWallet(principal, card);
+        if (cacheKey) cachePrincipal(cacheKey, bound);
+        return bound;
       }
     }
     if (cacheKey) cachePrincipal(cacheKey, principal);
@@ -262,9 +300,12 @@ export async function resolveAuth(
         privyWalletId: demoPrivyWalletId(),
       },
     });
+    const network = networkFromPrincipal({
+      network: parseHubNetwork(user.preferredNetwork),
+    });
     await prisma.policySettings.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id },
+      where: { userId_network: { userId: user.id, network } },
+      create: { userId: user.id, network },
       update: {},
     });
     return principalFromUser(user, "dev_mint");
@@ -334,7 +375,12 @@ export async function ensureUserFromPrivy(claims: {
         name: claims.name ?? null,
       },
     });
-    await prisma.policySettings.create({ data: { userId: user.id } });
+    const network = networkFromPrincipal({
+      network: parseHubNetwork(user.preferredNetwork),
+    });
+    await prisma.policySettings.create({
+      data: { userId: user.id, network },
+    });
   } else if (user.privyUserId !== claims.privyUserId) {
     user = await prisma.user.update({
       where: { id: user.id },
@@ -591,11 +637,4 @@ export async function privyRawSignHash(
     throw new Error("Privy raw_sign returned no signature");
   }
   return signature.startsWith("0x") ? signature : `0x${signature}`;
-}
-
-/** Cheap health probe — does not create a wallet. */
-export function privyAppIdFingerprint(): string | null {
-  const id = process.env.PRIVY_APP_ID;
-  if (!id) return null;
-  return createHash("sha256").update(id).digest("hex").slice(0, 8);
 }
