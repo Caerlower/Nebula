@@ -3,237 +3,219 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle2, ChevronDown, KeyRound, Loader2, PlugZap } from "lucide-react";
 
-import { PageHeader } from "@/components/shared/page-header";
-import { CodeBlock } from "@/components/shared/code-block";
+import { SectionRule } from "@/components/design/primitives";
+import { AgentTokensPanel } from "@/components/shared/api-keys-card";
 import { FRAMEWORK_META } from "@/components/shared/status-badges";
-import { AgentAvatar } from "@/components/agent-scope/agent-avatar";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import * as api from "@/lib/api";
-import { MCP_URL, getSnippet } from "@/lib/mcp-snippets";
-import { cn, truncMiddle } from "@/lib/utils";
+import { getSnippet } from "@/lib/mcp/snippets";
+import { cn } from "@/lib/utils";
 import type { Framework } from "@/types/domain";
 
-function TestHubSession() {
-  const [state, setState] = useState<"idle" | "testing" | "ok">("idle");
-  const [latency, setLatency] = useState<number | null>(null);
-
-  const test = async () => {
-    setState("testing");
-    try {
-      const { latencyMs } = await api.testConnection("claude-desktop");
-      setLatency(latencyMs);
-      setState("ok");
-    } catch {
-      setState("idle");
-      toast.error("Hub session check failed — sign in again", {
-        action: { label: "Retry", onClick: () => void test() },
-      });
-    }
-  };
-
-  if (state === "ok") {
-    return (
-      <p className="inline-flex items-center gap-2 text-sm text-success" role="status">
-        <CheckCircle2 className="size-4" aria-hidden />
-        Hub session OK{latency != null ? ` (${latency}ms)` : ""} — paste your token into the client next
-      </p>
-    );
-  }
-
+function CopyChip({ value }: { value: string }) {
   return (
-    <Button variant="outline" onClick={() => void test()} disabled={state === "testing"}>
-      {state === "testing" ? (
-        <>
-          <Loader2 className="size-4 animate-spin" /> Checking…
-        </>
-      ) : (
-        <>
-          <PlugZap className="size-4" /> Check Hub session
-        </>
-      )}
-    </Button>
-  );
-}
-
-function StepHeading({ n, title }: { n: number; title: string }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border bg-elevated text-[11px] font-semibold text-muted-foreground">
-        {n}
-      </span>
-      <p className="text-sm font-medium">{title}</p>
-    </div>
+    <button
+      type="button"
+      className="shrink-0 font-mono text-[10px] tracking-[0.12em] text-subtle hover:text-foreground"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          toast.success("Copied");
+        } catch {
+          toast.error("Couldn't copy");
+        }
+      }}
+    >
+      COPY
+    </button>
   );
 }
 
 export default function ConnectPage() {
   const { selectedAgent } = useAgentScope();
   const [client, setClient] = useState<Framework>("claude-code");
+  const [openStep, setOpenStep] = useState(1);
+  const [pasted, setPasted] = useState(false);
   const snippet = getSnippet(client);
+  const frameworks = Object.keys(FRAMEWORK_META) as Framework[];
 
-  return (
-    <div className="mx-auto max-w-3xl">
-      <PageHeader
-        eyebrow="setup"
-        title="Connect"
-        subtitle="Pick your client and paste in the ready-made config. Each config uses a token scoped to this agent only."
-      />
-
-      {/* slim identity strip */}
-      {selectedAgent ? (
-        <div className="mb-8 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface/60 px-4 py-3">
-          <AgentAvatar
-            name={selectedAgent.name}
-            seed={selectedAgent.id}
-            color={selectedAgent.avatarColor}
-            size="sm"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Connecting {selectedAgent.name}</p>
-            {selectedAgent.address !== "—" ? (
-              <p className="font-mono text-xs text-muted-foreground">
-                {truncMiddle(selectedAgent.address, 6, 6)}
-              </p>
-            ) : null}
-          </div>
-          <span className="rounded-full border border-border bg-elevated/60 px-2.5 py-1 text-[11px] text-muted-foreground">
-            per-agent scoped
-          </span>
-        </div>
-      ) : null}
-
-      {/* choose client */}
-      <section className="mb-8">
-        <p className="stat-label mb-3">Choose your client</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {(Object.keys(FRAMEWORK_META) as Framework[]).map((framework) => {
-            const Icon = FRAMEWORK_META[framework].icon;
-            const active = framework === client;
+  const steps = [
+    {
+      num: "01",
+      title: "Issue an agent token",
+      body: "Tokens are scoped to this agent only. Create one on the API Keys page (or Issue new token on the right), then put it in LIVE CONFIG.",
+      cta: (
+        <Link
+          href="/api-keys"
+          className="mt-4 inline-flex rounded-full px-5 py-2.5 text-[13px] font-semibold"
+          style={{ background: "var(--btn-bg)", color: "var(--btn-fg)" }}
+        >
+          Open API Keys
+        </Link>
+      ),
+    },
+    {
+      num: "02",
+      title: "Pick your client",
+      body: "Claude Code, Claude Desktop, Cursor, OpenAI Agents, or a custom MCP SDK client. LIVE CONFIG updates for the client you pick.",
+      cta: (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {frameworks.map((fw) => {
+            const active = fw === client;
             return (
               <button
-                key={framework}
+                key={fw}
                 type="button"
-                onClick={() => setClient(framework)}
-                aria-pressed={active}
+                onClick={() => {
+                  setClient(fw);
+                  setPasted(false);
+                }}
                 className={cn(
-                  "pressable flex flex-col items-center gap-2 rounded-xl border p-3 text-center",
+                  "rounded-[10px] border px-3.5 py-2 font-mono text-[10px] tracking-[0.1em]",
                   active
-                    ? "border-primary/60 bg-elevated text-foreground shadow-[var(--card-shadow)]"
-                    : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
+                    ? "border-primary bg-[var(--accent-soft)] text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className={cn("size-5", active && "text-primary")} aria-hidden />
-                <span className="text-[11px] font-medium leading-tight">
-                  {FRAMEWORK_META[framework].label}
-                </span>
+                {FRAMEWORK_META[fw].label.toUpperCase()}
               </button>
             );
           })}
         </div>
-      </section>
-
-      {/* sequential steps for the chosen client */}
-      <Card key={client} className="rise-in space-y-8 p-6">
-        <div className="space-y-3">
-          <StepHeading n={1} title="Prerequisites" />
-          <div className="pl-9">
-            <CodeBlock
-              code={snippet.install.code}
-              language={snippet.install.language}
-              title={snippet.install.title}
-            />
-          </div>
+      ),
+    },
+    {
+      num: "03",
+      title: "Paste the config",
+      body: "Copy LIVE CONFIG from the right, drop it into the file for your client, then restart the client.",
+      cta: (
+        <div className="mt-4 space-y-3">
+          {snippet.pasteTargets.map((target) => (
+            <div
+              key={target.label + target.path}
+              className="rounded-xl border border-border bg-[var(--panel-3)] px-4 py-3.5"
+            >
+              <div className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground">
+                {target.label.toUpperCase()}
+              </div>
+              <code className="mt-1.5 block overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[12px] text-primary-2">
+                {target.path}
+              </code>
+            </div>
+          ))}
+          <p className="text-[12px] text-muted-foreground">
+            Replace{" "}
+            <span className="font-mono text-[11px] text-subtle">nbl_live_…</span>{" "}
+            in LIVE CONFIG with the token you just issued, then save and restart.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setPasted(true);
+              toast.success("You're set — restart the client and try a balance check");
+            }}
+            className="mt-1 inline-flex rounded-full px-5 py-2.5 text-[13px] font-semibold"
+            style={{ background: "var(--btn-bg)", color: "var(--btn-fg)" }}
+          >
+            {pasted ? "Pasted ✓" : "I've pasted it"}
+          </button>
         </div>
+      ),
+    },
+  ];
 
-        <div className="space-y-3">
-          <StepHeading n={2} title="Get this agent's token" />
-          <div className="space-y-3 pl-9">
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              Paste an <code className="text-[12px]">nbl_live_</code> key scoped to{" "}
-              {selectedAgent ? selectedAgent.name : "this agent"} into the config below.
-              It authenticates as this agent only and operates only its wallet.
-            </p>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/api-keys">
-                <KeyRound className="size-4" aria-hidden />
-                Manage this agent&apos;s keys
-              </Link>
-            </Button>
-          </div>
-        </div>
+  return (
+    <div>
+      <div className="pb-6">
+        <SectionRule>CONNECT · MCP</SectionRule>
+        <h1 className="page-title">
+          Wire {selectedAgent?.name ?? "your agent"} into your client
+        </h1>
+      </div>
 
-        <div className="space-y-3">
-          <StepHeading n={3} title="Configure" />
-          <div className="pl-9">
-            <CodeBlock
-              code={snippet.config.code}
-              language={snippet.config.language}
-              title={snippet.config.title}
-            />
-            <p className="mt-2.5 text-[13px] leading-relaxed text-muted-foreground">
-              {snippet.note}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <StepHeading n={4} title="Verify Hub session" />
-          <div className="space-y-2.5 pl-9">
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              Confirms you&apos;re signed into this Hub. MCP itself is verified in your
-              client (e.g. <code className="text-[12px]">claude mcp list</code> or a{" "}
-              <code className="text-[12px]">check_balance</code> call).
-            </p>
-            <TestHubSession />
-          </div>
-        </div>
-      </Card>
-
-      {/* advanced / details — collapsed by default so it never competes with the flow */}
-      <details className="group mt-6 rounded-xl border border-border bg-surface/40">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-medium">
-          Details &amp; advanced
-          <ChevronDown
-            className="size-4 text-muted-foreground transition-transform group-open:rotate-180"
-            aria-hidden
-          />
-        </summary>
-        <div className="space-y-6 border-t border-border p-5">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">How MCP connects</p>
-            <ul className="list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed text-muted-foreground">
-              <li>
-                <span className="text-foreground">Claude Code / custom agents</span> —
-                call the Hub directly at <code className="text-[12px]">{MCP_URL}</code>{" "}
-                (Streamable HTTP + Bearer token).
-              </li>
-              <li>
-                <span className="text-foreground">Claude Desktop / Cursor / OpenAI</span>{" "}
-                — run <code className="text-[12px]">npx -y nebulamcp-stdio</code> over
-                stdio.
-              </li>
-              <li>
-                Always use the <code className="text-[12px]">www</code> host — apex
-                redirects can strip <code className="text-[12px]">Authorization</code>.
-              </li>
-              <li>
-                Agents transact in USDC — open the agent&apos;s USDC trustline from its{" "}
-                <Link
-                  href="/dashboard"
-                  className="text-foreground underline-offset-4 hover:underline"
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_440px]">
+        <div className="soft-panel px-8 pt-2 pb-7">
+          {steps.map((step, i) => {
+            const n = i + 1;
+            const open = openStep === n;
+            const done = openStep > n || (n === 3 && pasted);
+            return (
+              <div
+                key={step.num}
+                className="grid grid-cols-[34px_minmax(0,1fr)] gap-[18px] border-b border-border py-6 last:border-b-0"
+              >
+                <div
+                  className={cn(
+                    "pt-0.5 font-mono text-[12px]",
+                    open
+                      ? "text-primary"
+                      : done
+                        ? "text-muted-foreground"
+                        : "text-subtle",
+                  )}
                 >
-                  Dashboard
-                </Link>
-                .
-              </li>
-            </ul>
+                  {step.num}
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenStep(n)}
+                    className={cn(
+                      "block text-left text-[17px] font-semibold tracking-[-0.01em]",
+                      open ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {step.title}
+                  </button>
+                  {open ? (
+                    <div className="mt-3">
+                      <p className="max-w-[520px] text-[13px] text-pretty text-muted-foreground">
+                        {step.body}
+                      </p>
+                      {step.cta}
+                      {n < steps.length ? (
+                        <button
+                          type="button"
+                          onClick={() => setOpenStep(n + 1)}
+                          className="mt-4 inline-flex rounded-full px-5 py-2.5 text-[13px] font-semibold"
+                          style={{
+                            background: "var(--btn-bg)",
+                            color: "var(--btn-fg)",
+                          }}
+                        >
+                          Continue
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="soft-panel bg-elevated px-7 py-7">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+              LIVE CONFIG
+            </span>
+            <span className="font-mono text-[9px] tracking-[0.12em] text-primary-2">
+              UPDATES AS YOU GO
+            </span>
+          </div>
+          <div className="relative mt-4">
+            <pre className="overflow-x-auto rounded-xl border border-border bg-[var(--panel-3)] p-[18px] pr-16 font-mono text-[11px] leading-[1.75] break-words whitespace-pre-wrap text-muted-foreground">
+              {snippet.config.code}
+            </pre>
+            <div className="absolute top-3 right-3">
+              <CopyChip value={snippet.config.code} />
+            </div>
+          </div>
+          <div className="mt-6 border-t border-border pt-5">
+            <AgentTokensPanel />
           </div>
         </div>
-      </details>
+      </div>
     </div>
   );
 }
