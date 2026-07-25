@@ -5,15 +5,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Check,
   CreditCard,
-  Globe,
   LogOut,
   Menu,
   Users,
   UserRound,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   AgentScopeGate,
@@ -21,6 +18,7 @@ import {
   useAgentScope,
 } from "@/components/agent-scope/agent-scope";
 import { CreateAgentDrawer } from "@/components/agents/create-agent-drawer";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { AgentSwitcher } from "@/components/shell/agent-switcher";
 import { CommandPalette } from "@/components/shell/command-palette";
 import {
@@ -38,7 +36,9 @@ import { warmHubCaches } from "@/lib/api";
 import * as api from "@/lib/api";
 import { cn, truncMiddle } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
+import { syncAgentSelectionToNetwork } from "@/stores/agent";
 import { useUIStore } from "@/stores/ui";
+import { toast } from "sonner";
 
 function initialsOf(name: string): string {
   return name
@@ -159,51 +159,150 @@ function NetworkChip() {
   const network = useUIStore((s) => s.network);
   const setNetwork = useUIStore((s) => s.setNetwork);
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<"testnet" | "mainnet" | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const choose = async (next: "testnet" | "mainnet") => {
+  // Hydrate from account preference (drives Hub + MCP for this user).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ws = await api.getWorkspace();
+        if (cancelled) return;
+        setNetwork(ws.network);
+        syncAgentSelectionToNetwork(ws.network);
+      } catch {
+        /* keep NEXT_PUBLIC_STELLAR_NETWORK / store default */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setNetwork]);
+
+  const label = network === "mainnet" ? "MAINNET" : "TESTNET";
+
+  const choose = (option: "testnet" | "mainnet") => {
+    if (option === network || busy) return;
     setOpen(false);
-    if (next === network) return;
-    const previous = network;
-    setNetwork(next);
+    setPending(option);
+  };
+
+  const confirmSwitch = async () => {
+    if (!pending) return;
+    setBusy(true);
     try {
-      await api.setNetwork(next);
-      toast.success(`Switched to ${next === "testnet" ? "Testnet" : "Mainnet"}`);
-    } catch {
-      setNetwork(previous);
-      toast.error("Network switch failed", {
-        action: { label: "Retry", onClick: () => void choose(next) },
-      });
+      const ws = await api.setNetwork(pending);
+      // Swap to the target ledger's saved agent (or null). Do not keep the
+      // previous network's agent id active across the reload boundary.
+      setNetwork(ws.network);
+      syncAgentSelectionToNetwork(ws.network);
+      toast.success(
+        ws.network === "mainnet"
+          ? "Switched to Stellar mainnet"
+          : "Switched to Stellar testnet",
+      );
+      // Full reload so wallet, policy, 8004, treasury, and explorer links
+      // all remount against the new ledger (agents list is network-scoped).
+      window.location.reload();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not switch network",
+      );
+      setPending(null);
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Network: ${network}. Change network`}
-          className="ml-0.5 border border-border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-subtle"
-        >
-          {network === "testnet" ? "TESTNET" : "MAINNET"}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-52 p-1.5">
-        {(["testnet", "mainnet"] as const).map((option) => (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
           <button
-            key={option}
             type="button"
-            className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-sm hover:bg-elevated"
-            onClick={() => void choose(option)}
+            aria-label={`Stellar network: ${label}. Click to switch`}
+            className="ml-0.5 inline-flex shrink-0 items-center rounded-full border border-border px-[11px] py-1.5 font-mono text-[10px] tracking-[0.12em] text-muted-foreground hover:text-foreground"
           >
-            <span className="inline-flex items-center gap-1.5 capitalize">
-              <Globe className="size-3.5 text-muted-foreground" aria-hidden />
-              {option}
-            </span>
-            {network === option ? <Check className="size-3.5 text-primary" aria-hidden /> : null}
+            {label}
           </button>
-        ))}
-      </PopoverContent>
-    </Popover>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[280px] gap-0 overflow-hidden rounded-[18px] border border-border bg-surface p-0 shadow-[var(--card-shadow)]"
+        >
+          <div className="border-b border-border px-5 pt-5 pb-4">
+            <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+              STELLAR NETWORK
+            </p>
+            <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+              Switches wallet, policy, Stellar8004, payments, Blend, and
+              explorers for this account. Fianza credit stays testnet-only
+              until their pubnet API ships.
+            </p>
+          </div>
+          <ul className="space-y-1.5 px-3 py-3">
+            {(["testnet", "mainnet"] as const).map((option) => {
+              const active = network === option;
+              return (
+                <li key={option}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => choose(option)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
+                      active
+                        ? "border-border-strong bg-[var(--panel-3)]"
+                        : "border-border hover:border-border-strong hover:bg-[var(--panel-3)]/60",
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-2 shrink-0 rounded-full",
+                        active ? "bg-primary" : "bg-subtle",
+                      )}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-medium capitalize">
+                        {option}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[10px] tracking-[0.06em] text-muted-foreground">
+                        {active
+                          ? "ACTIVE · THIS ACCOUNT"
+                          : option === "mainnet"
+                            ? "PUBNET · REAL FUNDS"
+                            : "SDF TESTNET"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </PopoverContent>
+      </Popover>
+
+      <ConfirmDialog
+        open={pending !== null}
+        onOpenChange={(next) => {
+          if (!next && !busy) setPending(null);
+        }}
+        title={
+          pending === "mainnet"
+            ? "Switch to Stellar mainnet?"
+            : "Switch to Stellar testnet?"
+        }
+        description={
+          pending === "mainnet"
+            ? "Balances, policy, Stellar8004 identity, Blend yield, and payments will use pubnet. Fianza credit remains unavailable on mainnet until their API reports pubnet."
+            : "Balances, policy, Stellar8004 identity, Blend yield, and payments will use SDF testnet. Friendbot and Circle faucet links return."
+        }
+        confirmLabel={pending === "mainnet" ? "Use mainnet" : "Use testnet"}
+        onConfirm={confirmSwitch}
+      />
+    </>
   );
 }
 
