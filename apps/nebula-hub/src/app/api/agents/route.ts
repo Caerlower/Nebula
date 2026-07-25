@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-
 import { bustRouteCache, cachedJsonResponse } from "@/lib/route-cache";
 import { z } from "zod";
 
@@ -13,17 +12,15 @@ import { rowSpendUsdc, SPEND_TX_TYPES } from "@/lib/fx";
 import { loadTreasurySettings } from "@/lib/hub-tools/context";
 import { fetchBalances } from "@/lib/stellar";
 
-const HUB_NETWORK =
-  (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-  "testnet";
 
 /** XLM + USDC balances for an agent's own wallet (0 when unprovisioned). */
 async function agentBalances(
   address: string | null,
+  network: "testnet" | "mainnet",
 ): Promise<{ xlm: number; usdc: number }> {
   if (!address) return { xlm: 0, usdc: 0 };
   try {
-    const balances = await fetchBalances(address, HUB_NETWORK);
+    const balances = await fetchBalances(address, network);
     const xlm = balances.find((b) => b.asset === "XLM" || b.asset === "native");
     const usdc = balances.find(
       (b) => b.asset === "USDC" || b.asset.startsWith("USDC:"),
@@ -99,7 +96,7 @@ async function uncachedGET(req: NextRequest) {
   }
 
   const agents = await prisma.agent.findMany({
-    where: { userId: principal.userId },
+    where: { userId: principal.userId, network: principal.network },
     include: {
       tokens: {
         where: { revokedAt: null },
@@ -128,10 +125,11 @@ async function uncachedGET(req: NextRequest) {
   const since = new Date();
   since.setHours(0, 0, 0, 0);
   const [ownerCaps, spendRows] = await Promise.all([
-    loadTreasurySettings(principal.userId),
+    loadTreasurySettings(principal.userId, principal.network),
     prisma.transaction.findMany({
       where: {
         userId: principal.userId,
+        network: principal.network,
         status: "confirmed",
         type: { in: [...SPEND_TX_TYPES] },
         createdAt: { gte: since },
@@ -150,7 +148,7 @@ async function uncachedGET(req: NextRequest) {
   // Each agent has its own wallet — report its own balance, not the owner's.
   const withBalance = await Promise.all(
     agents.map(async (a) => {
-      const { xlm, usdc } = await agentBalances(a.stellarAddress);
+      const { xlm, usdc } = await agentBalances(a.stellarAddress, principal.network);
       const dailyCap = a.policy
         ? Number(a.policy.dailyCap)
         : Number(ownerCaps.dailyCap);
@@ -185,6 +183,7 @@ async function uncachedPOST(req: NextRequest) {
   const agent = await prisma.agent.create({
     data: {
       userId: principal.userId,
+      network: principal.network,
       name: body.data.name,
       framework: body.data.framework,
       description: body.data.description ?? null,
@@ -232,7 +231,11 @@ async function uncachedPOST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const principal = await resolveAuth(req);
   if (!principal) return unauthorized();
-  return cachedJsonResponse(`agents:${principal.userId}`, 30000, () => uncachedGET(req));
+  return cachedJsonResponse(
+    `agents:${principal.userId}:${principal.network}`,
+    30000,
+    () => uncachedGET(req),
+  );
 }
 
 export async function POST(req: NextRequest) {
