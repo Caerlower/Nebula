@@ -3,363 +3,110 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
-  Coins,
   ExternalLink,
   Loader2,
-  MoreHorizontal,
-  Percent,
-  PiggyBank,
-  Wallet,
+  QrCode,
 } from "lucide-react";
 
-import { PageHeader } from "@/components/shared/page-header";
-import { AnimatedNumber } from "@/components/shared/animated-number";
 import { CopyButton } from "@/components/shared/copy-button";
-import { StatCard } from "@/components/shared/stat-card";
-import { EmptyState } from "@/components/shared/empty-state";
-import { AXIS_PROPS, GRID_PROPS, makeTooltip } from "@/components/shared/chart-bits";
-import { ChartSkeleton, StatCardSkeleton, TableSkeleton } from "@/components/shared/skeletons";
+import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { SectionRule } from "@/components/design/primitives";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import * as api from "@/lib/api";
-import { fmtAmount, fmtDate, fmtUSD, fmtXLM, truncMiddle } from "@/lib/utils";
+import { fmtUSD, fmtXLM, truncMiddle } from "@/lib/utils";
 import { useLoad } from "@/hooks/use-load";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
-import type { BlendPosition, WalletSummary } from "@/types/domain";
+import type { BlendPosition } from "@/types/domain";
 
 const STELLAR_G_ADDRESS = /^G[A-Z2-7]{55}$/;
 
-function DepositDialog({
-  open,
-  onOpenChange,
-  wallet,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  wallet: WalletSummary | null;
-}) {
-  const address = wallet?.address && wallet.address !== "—" ? wallet.address : null;
-  const testnet = wallet?.network !== "mainnet";
-  const friendbot = address
-    ? `https://friendbot.stellar.org?addr=${encodeURIComponent(address)}`
-    : null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Deposit</DialogTitle>
-          <DialogDescription>
-            Send XLM or Circle USDC to this address. Idle XLM can earn on Blend
-            when auto-yield is on; USDC is used for x402 / MPP.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-          {/* Fixed light plate so QR modules stay readable in every theme */}
-          <div className="rounded-lg bg-white p-3 shadow-sm" aria-hidden>
-            {address ? (
-              <QRCodeSVG
-                value={address}
-                size={132}
-                bgColor="#ffffff"
-                fgColor="#0F0F0F"
-                level="M"
-              />
-            ) : (
-              <div className="flex size-[132px] items-center justify-center text-xs text-neutral-400">
-                No wallet
-              </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1 space-y-3">
-            <div>
-              <p className="text-[13px] text-muted-foreground">Your Stellar address</p>
-              {address ? (
-                <div className="mt-1.5 flex items-start gap-1">
-                  <p className="break-all font-mono text-sm leading-relaxed" title={address}>
-                    {address}
-                  </p>
-                  <CopyButton value={address} label="Copy address" />
-                </div>
-              ) : (
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  Wallet not provisioned yet — finish login once.
-                </p>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {testnet && friendbot ? (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={friendbot} target="_blank" rel="noreferrer">
-                    Fund XLM (Friendbot)
-                    <ExternalLink className="size-3.5" aria-hidden />
-                  </a>
-                </Button>
-              ) : null}
-              {testnet ? (
-                <Button variant="outline" size="sm" asChild>
-                  <a
-                    href="https://faucet.circle.com/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Fund USDC (Circle)
-                    <ExternalLink className="size-3.5" aria-hidden />
-                  </a>
-                </Button>
-              ) : null}
-            </div>
-            <p className="text-[12px] leading-relaxed text-muted-foreground">
-              USDC requires a Circle trustline — open one from the agent&apos;s
-              Dashboard if you haven&apos;t already.
-            </p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Done</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+export default function TreasuryPage() {
+  const { selectedAgentId, selectedAgent } = useAgentScope();
+  const { data: wallet, reload: reloadWallet } = useLoad(
+    () => api.getWallet(),
+    [selectedAgentId],
   );
-}
-
-function WithdrawDialog({
-  open,
-  onOpenChange,
-  wallet,
-  onSent,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  wallet: WalletSummary | null;
-  onSent: () => void;
-}) {
-  const [asset, setAsset] = useState<"XLM" | "USDC">("XLM");
-  const [destination, setDestination] = useState("");
-  const [amount, setAmount] = useState("");
-  const [memo, setMemo] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const liquidXlm = wallet?.liquidXLM ?? 0;
-  const usdcBal = wallet?.usdcBalance ?? 0;
-  const available = asset === "USDC" ? usdcBal : liquidXlm;
-
-  const parsed = Number.parseFloat(amount);
-  const destOk = STELLAR_G_ADDRESS.test(destination.trim());
-  const amountOk = Number.isFinite(parsed) && parsed > 0;
-  const underBalance = amountOk && parsed <= available + 1e-7;
-  const valid = destOk && amountOk && underBalance;
-
-  useEffect(() => {
-    if (!open) {
-      setAsset("XLM");
-      setDestination("");
-      setAmount("");
-      setMemo("");
-      setBusy(false);
-    }
-  }, [open]);
-
-  const submit = async () => {
-    if (!valid) return;
-    setBusy(true);
-    try {
-      const result = await api.withdrawFunds({
-        asset,
-        destination: destination.trim(),
-        amount: parsed,
-        memo: memo.trim() || undefined,
-      });
-      toast.success(`Sent ${parsed} ${asset}`, {
-        description: `tx ${truncMiddle(result.txHash, 6, 6)}`,
-        action: result.explorerUrl
-          ? {
-              label: "Explorer",
-              onClick: () =>
-                window.open(result.explorerUrl!, "_blank", "noreferrer"),
-            }
-          : undefined,
-      });
-      onSent();
-      onOpenChange(false);
-    } catch (err) {
-      toast.error("Withdrawal failed", {
-        description: err instanceof Error ? err.message : undefined,
-        action: { label: "Retry", onClick: () => void submit() },
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Withdraw</DialogTitle>
-          <DialogDescription>
-            Send from your Hub wallet. Privy signs on-chain.
-          </DialogDescription>
-        </DialogHeader>
-        <Tabs
-          value={asset}
-          onValueChange={(v) => {
-            setAsset(v as "XLM" | "USDC");
-            setAmount("");
-          }}
-        >
-          <TabsList aria-label="Asset" className="w-full">
-            <TabsTrigger value="XLM" className="flex-1">
-              XLM
-            </TabsTrigger>
-            <TabsTrigger value="USDC" className="flex-1">
-              USDC
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <p className="text-[13px] text-muted-foreground">
-          Available{" "}
-          <span className="font-mono tabular text-foreground">
-            {fmtAmount(available, asset)}
-          </span>
-        </p>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit();
-          }}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="withdraw-dest">Destination (G…)</Label>
-            <Input
-              id="withdraw-dest"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value.trim())}
-              placeholder="G…"
-              autoComplete="off"
-              spellCheck={false}
-              className={cn(
-                "font-mono text-sm",
-                destination && !destOk && "border-destructive",
-              )}
-              autoFocus
-            />
-            {destination && !destOk ? (
-              <p className="text-[12px] text-destructive">Invalid Stellar address</p>
-            ) : null}
-            <p
-              className={cn(
-                "text-[12px] text-muted-foreground",
-                asset !== "USDC" && "invisible",
-              )}
-              aria-hidden={asset !== "USDC"}
-            >
-              Destination must have a Circle USDC trustline.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="withdraw-amount">Amount ({asset})</Label>
-              <button
-                type="button"
-                className="text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                onClick={() => setAmount(String(Math.max(0, available)))}
-              >
-                Max
-              </button>
-            </div>
-            <Input
-              id="withdraw-amount"
-              type="number"
-              min="0"
-              step="any"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-            {amountOk && !underBalance ? (
-              <p className="text-[12px] text-destructive">
-                Exceeds available balance
-              </p>
-            ) : null}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="withdraw-memo">Memo (optional)</Label>
-            <Input
-              id="withdraw-memo"
-              value={memo}
-              maxLength={28}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder="Up to 28 characters"
-            />
-          </div>
-        </form>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
-          </Button>
-          <Button onClick={() => void submit()} disabled={!valid || busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            Sign &amp; send
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AutoYieldCard({
-  onUnwindComplete,
-}: {
-  onUnwindComplete?: () => void;
-}) {
-  const { selectedAgentId } = useAgentScope();
-  const { data, loading, setData } = useLoad(
+  const { data: positions, loading: positionsLoading, setData: setPositions, reload: reloadPositions } =
+    useLoad(() => api.getBlendPositions(), [selectedAgentId]);
+  const { data: settings, loading: settingsLoading, setData: setSettings } = useLoad(
     () => api.getTreasurySettings(),
     [selectedAgentId],
   );
+
+  const depositOpen = useUIStore((s) => s.depositOpen);
+  const setDepositOpen = useUIStore((s) => s.setDepositOpen);
+  const [withdrawTarget, setWithdrawTarget] = useState<BlendPosition | null>(null);
+  const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
+  const [withdrawAsset, setWithdrawAsset] = useState<"USDC" | "XLM">("USDC");
+  const [destination, setDestination] = useState("");
+  const [amount, setAmount] = useState("0.00");
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+
+  // Auto-yield management state
   const [draftLow, setDraftLow] = useState<string | null>(null);
   const [draftHigh, setDraftHigh] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmOffOpen, setConfirmOffOpen] = useState(false);
   const [blendInYield, setBlendInYield] = useState(0);
   const [switchBusy, setSwitchBusy] = useState(false);
+  const [editingBand, setEditingBand] = useState(false);
 
+  // ⌘K "Fund wallet" lands here — open the deposit tab + QR.
+  useEffect(() => {
+    if (!depositOpen) return;
+    setActiveTab("deposit");
+    setQrOpen(true);
+    setDepositOpen(false);
+  }, [depositOpen, setDepositOpen]);
+
+  useEffect(() => {
+    setAmount("0.00");
+    setDestination("");
+  }, [activeTab, withdrawAsset, selectedAgentId]);
+
+  const depositAddress =
+    wallet?.address && wallet.address !== "—" ? wallet.address : null;
+  const testnet = wallet?.network !== "mainnet";
+  const friendbot = depositAddress
+    ? `https://friendbot.stellar.org?addr=${encodeURIComponent(depositAddress)}`
+    : null;
+
+  const withdrawPosition = async (position: BlendPosition) => {
+    const previous = positions ?? [];
+    setPositions(previous.filter((p) => p.id !== position.id));
+    try {
+      const { txHash } = await api.withdrawPosition(position.id);
+      toast.success(`Withdrew from ${position.pool}`, {
+        description: `tx ${truncMiddle(txHash, 6, 6)}`,
+      });
+      void reloadWallet();
+      void reloadPositions();
+    } catch {
+      setPositions(previous);
+      toast.error("Couldn't withdraw from the pool", {
+        action: { label: "Retry", onClick: () => void withdrawPosition(position) },
+      });
+    }
+  };
+
+  // Auto-yield settings logic
   const lowText =
-    draftLow ?? (data != null ? String(data.liquidityFloorXLM) : "");
+    draftLow ?? (settings != null ? String(settings.liquidityFloorXLM) : "");
   const highText =
-    draftHigh ?? (data != null ? String(data.liquidityCeilingXLM) : "");
+    draftHigh ?? (settings != null ? String(settings.liquidityCeilingXLM) : "");
 
   const parsedLow = Number.parseFloat(lowText);
   const parsedHigh = Number.parseFloat(highText);
@@ -368,20 +115,20 @@ function AutoYieldCard({
   const bandOk = lowOk && highOk && parsedHigh >= parsedLow;
 
   const dirty =
-    data != null &&
-    ((draftLow != null && parsedLow !== data.liquidityFloorXLM) ||
-      (draftHigh != null && parsedHigh !== data.liquidityCeilingXLM));
+    settings != null &&
+    ((draftLow != null && parsedLow !== settings.liquidityFloorXLM) ||
+      (draftHigh != null && parsedHigh !== settings.liquidityCeilingXLM));
 
   const enableAutoYield = async () => {
-    if (!data) return;
-    const previous = data;
-    setData({ ...data, autoYield: true });
+    if (!settings) return;
+    const previous = settings;
+    setSettings({ ...settings, autoYield: true });
     setSwitchBusy(true);
     try {
       await api.updateTreasurySettings({ autoYield: true });
       toast.success("Auto-yield enabled");
     } catch {
-      setData(previous);
+      setSettings(previous);
       toast.error("Couldn't update auto-yield", {
         action: { label: "Retry", onClick: () => void enableAutoYield() },
       });
@@ -406,12 +153,12 @@ function AutoYieldCard({
   };
 
   const confirmDisableAutoYield = async () => {
-    if (!data) return;
-    const previous = data;
+    if (!settings) return;
+    const previous = settings;
     try {
-      const { settings, withdrawnXlm, txHashes } =
+      const { settings: updatedSettings, withdrawnXlm, txHashes } =
         await api.disableAutoYieldAndUnwind();
-      setData(settings);
+      setSettings(updatedSettings);
       if (withdrawnXlm > 0 && txHashes[0]) {
         toast.success("Auto-yield off · Blend withdrawn", {
           description: `${fmtXLM(withdrawnXlm)} XLM returned to liquid · tx ${truncMiddle(txHashes[0], 6, 6)}`,
@@ -423,9 +170,10 @@ function AutoYieldCard({
       } else {
         toast.success("Auto-yield paused");
       }
-      onUnwindComplete?.();
+      void reloadWallet();
+      void reloadPositions();
     } catch (error) {
-      setData(previous);
+      setSettings(previous);
       toast.error("Couldn't turn off auto-yield", {
         description:
           error instanceof Error ? error.message : "Withdraw or settings update failed",
@@ -439,7 +187,7 @@ function AutoYieldCard({
   };
 
   const saveBand = async () => {
-    if (!data || !bandOk) {
+    if (!settings || !bandOk) {
       toast.error("High must be ≥ low, and both must be ≥ 0");
       return;
     }
@@ -449,7 +197,7 @@ function AutoYieldCard({
         liquidityFloorXLM: parsedLow,
         liquidityCeilingXLM: parsedHigh,
       });
-      setData(next);
+      setSettings(next);
       setDraftLow(null);
       setDraftHigh(null);
       toast.success(
@@ -468,474 +216,666 @@ function AutoYieldCard({
     }
   };
 
-  return (
-    <Card className="p-5">
-      <p className="stat-label">Auto-yield settings</p>
-      {loading || !data ? (
-        <TableSkeleton rows={2} cols={2} className="mt-4" />
-      ) : (
-        <div className="mt-4 space-y-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm">Auto-route idle funds to Blend</p>
-              <p className="text-[13px] text-muted-foreground">
-                Above the high mark, funds go to work. Below the low mark, they come back.
-              </p>
-            </div>
-            <Switch
-              checked={data.autoYield}
-              disabled={switchBusy}
-              onCheckedChange={(next) => {
-                if (next) void enableAutoYield();
-                else void requestDisableAutoYield();
-              }}
-              aria-label="Auto-route idle funds to Blend"
-            />
-          </div>
-          <ConfirmDialog
-            open={confirmOffOpen}
-            onOpenChange={setConfirmOffOpen}
-            title="Turn off auto-yield?"
-            description={
-              blendInYield > 0
-                ? `This withdraws about ${fmtXLM(blendInYield)} XLM from Blend back to your liquid balance, and stops parking idle funds. Yield stops accruing on that position after the withdraw.`
-                : "This stops parking idle funds into Blend. If any XLM is still in Blend, it will be withdrawn to your liquid balance."
-            }
-            confirmLabel={
-              blendInYield > 0 ? "Withdraw & turn off" : "Turn off auto-yield"
-            }
-            destructive
-            onConfirm={() => confirmDisableAutoYield()}
-          />
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">Liquid band (USDC)</p>
-              {dirty ? (
-                <Button
-                  size="sm"
-                  onClick={() => void saveBand()}
-                  disabled={saving || !bandOk}
-                >
-                  {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                  Save
-                </Button>
-              ) : null}
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="liquidity-low" className="text-sm font-normal">
-                  Low
-                </Label>
-                <Input
-                  id="liquidity-low"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="any"
-                  value={lowText}
-                  onChange={(e) => setDraftLow(e.target.value)}
-                  className="font-mono tabular"
-                  aria-label="Liquid low cap in USDC"
-                />
-                <p className="text-[12px] text-muted-foreground">
-                  Refill liquid when it dips below this
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="liquidity-high" className="text-sm font-normal">
-                  High
-                </Label>
-                <Input
-                  id="liquidity-high"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="any"
-                  value={highText}
-                  onChange={(e) => setDraftHigh(e.target.value)}
-                  className="font-mono tabular"
-                  aria-label="Liquid high cap in USDC"
-                />
-                <p className="text-[12px] text-muted-foreground">
-                  Send the excess to Blend above this
-                </p>
-              </div>
-            </div>
-            {dirty && !bandOk ? (
-              <p className="text-[12px] text-destructive">
-                High must be greater than or equal to low.
-              </p>
-            ) : null}
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
+  const parsedAmount = Number.parseFloat(String(amount).replace(/,/g, ""));
+  const isAmountValid = Number.isFinite(parsedAmount) && parsedAmount > 0;
 
-function YieldChartCard() {
-  const { selectedAgentId } = useAgentScope();
-  const { data, loading } = useLoad(
-    () => api.getBalanceHistory("90d"),
-    [selectedAgentId],
-  );
-  const YieldTooltip = makeTooltip(
-    (v) => fmtAmount(v, "XLM"),
-    (label) => (typeof label === "string" ? fmtDate(label) : ""),
-  );
+  // Spendable = Circle USDC only — never treat XLM·FX as USDC spendable.
+  const spendableUsdc = wallet?.usdcBalance ?? 0;
+  const liquidXlm = wallet?.liquidXLM ?? 0;
+  const blendXlm = wallet?.blendXLM ?? 0;
+  const rate = wallet?.usdPerXlm ?? 0;
+  const blendUsd = rate > 0 ? blendXlm * rate : 0;
+  const splitTotal = Math.max(spendableUsdc + blendUsd, 1e-9);
+  const liquidBarPct = Math.min(100, (spendableUsdc / splitTotal) * 100);
+  const blendBarPct = Math.min(100, (blendUsd / splitTotal) * 100);
 
-  return (
-    <Card className="p-5">
-      <p className="stat-label">Cumulative yield earned (90d)</p>
-      {loading || !data ? (
-        <ChartSkeleton height={220} className="mt-4" />
-      ) : (
-        <div className="mt-4 h-52">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="fill-cum-yield" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.26} />
-                  <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid {...GRID_PROPS} />
-              <XAxis
-                dataKey="time"
-                {...AXIS_PROPS}
-                tickFormatter={(v: string) => fmtDate(v)}
-                minTickGap={48}
-              />
-              <YAxis {...AXIS_PROPS} width={48} />
-              <Tooltip content={YieldTooltip} cursor={{ stroke: "var(--border)" }} />
-              <Area
-                type="monotone"
-                dataKey="yield"
-                name="Cumulative yield"
-                stroke="var(--chart-3)"
-                strokeWidth={2}
-                fill="url(#fill-cum-yield)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </Card>
-  );
-}
+  const available =
+    activeTab === "withdraw" && withdrawAsset === "XLM"
+      ? liquidXlm
+      : spendableUsdc;
 
-export default function TreasuryPage() {
-  const { selectedAgentId } = useAgentScope();
-  const { data: wallet, reload: reloadWallet } = useLoad(
-    () => api.getWallet(),
-    [selectedAgentId],
-  );
-  const { data: positions, loading: positionsLoading, setData: setPositions, reload: reloadPositions } =
-    useLoad(() => api.getBlendPositions(), [selectedAgentId]);
+  const afterUsdc =
+    activeTab === "deposit" && isAmountValid
+      ? spendableUsdc + parsedAmount
+      : activeTab === "withdraw" &&
+          withdrawAsset === "USDC" &&
+          isAmountValid
+        ? Math.max(0, spendableUsdc - parsedAmount)
+        : spendableUsdc;
+  const afterBlend = blendUsd;
+  const afterTotal = afterUsdc + afterBlend;
+  const est30d = (blendUsd * (wallet?.apyPct ?? 0)) / 100 / 12;
 
-  const depositOpen = useUIStore((s) => s.depositOpen);
-  const setDepositOpen = useUIStore((s) => s.setDepositOpen);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [detail, setDetail] = useState<BlendPosition | null>(null);
-  const [withdrawTarget, setWithdrawTarget] = useState<BlendPosition | null>(null);
+  // Band thresholds are USDC-denominated; live marker tracks spendable USDC.
+  const floorUSD = settings?.liquidityFloorXLM ?? 0;
+  const ceilingUSD = settings?.liquidityCeilingXLM ?? 0;
+  const maxScale = Math.max(ceilingUSD * 1.2, spendableUsdc, floorUSD, 1);
+  const floorPct = (floorUSD / maxScale) * 100;
+  const ceilingPct = (ceilingUSD / maxScale) * 100;
+  const livePct = Math.min(100, (spendableUsdc / maxScale) * 100);
+  const widthPct = Math.max(0, ceilingPct - floorPct);
 
-  // command palette may set the flag before this page mounts
-  useEffect(() => () => setDepositOpen(false), [setDepositOpen]);
+  const amountDisplay = isAmountValid
+    ? parsedAmount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "0.00";
 
-  const withdrawPosition = async (position: BlendPosition) => {
-    const previous = positions ?? [];
-    setPositions(previous.filter((p) => p.id !== position.id));
+  const destOk = STELLAR_G_ADDRESS.test(destination.trim());
+  const underBalance = isAmountValid && parsedAmount <= available + 1e-7;
+  const canWithdraw =
+    activeTab === "withdraw" &&
+    isAmountValid &&
+    underBalance &&
+    destOk &&
+    !withdrawBusy;
+
+  const formatChip = (n: number) =>
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const submitWithdraw = async () => {
+    if (!canWithdraw) return;
+    setWithdrawBusy(true);
     try {
-      const { txHash } = await api.withdrawPosition(position.id);
-      toast.success(`Withdrew from ${position.pool}`, {
-        description: `tx ${truncMiddle(txHash, 6, 6)}`,
+      const result = await api.withdrawFunds({
+        asset: withdrawAsset,
+        destination: destination.trim(),
+        amount: parsedAmount,
       });
+      toast.success(`Sent ${amountDisplay} ${withdrawAsset}`, {
+        description: `tx ${truncMiddle(result.txHash, 6, 6)}`,
+        action: result.explorerUrl
+          ? {
+              label: "Explorer",
+              onClick: () =>
+                window.open(result.explorerUrl!, "_blank", "noreferrer"),
+            }
+          : undefined,
+      });
+      setAmount("0.00");
+      setDestination("");
       void reloadWallet();
       void reloadPositions();
-    } catch {
-      setPositions(previous);
-      toast.error("Couldn't withdraw from the pool", {
-        action: { label: "Retry", onClick: () => void withdrawPosition(position) },
+    } catch (err) {
+      toast.error("Withdrawal failed", {
+        description: err instanceof Error ? err.message : undefined,
+        action: { label: "Retry", onClick: () => void submitWithdraw() },
       });
+    } finally {
+      setWithdrawBusy(false);
     }
+  };
+
+  const toggleBandEdit = async () => {
+    if (editingBand && dirty && bandOk) {
+      await saveBand();
+      setEditingBand(false);
+      return;
+    }
+    setEditingBand((v) => !v);
   };
 
   return (
     <div>
-      <PageHeader
-        eyebrow="wallet"
-        accent="teal"
-        title="Treasury"
-        subtitle="Idle funds earn on Blend automatically. You decide how much stays liquid."
-        actions={
-          <>
-            <Button variant="ghost" onClick={() => setWithdrawOpen(true)}>
-              Withdraw
-            </Button>
-            <Button onClick={() => setDepositOpen(true)}>Deposit</Button>
-          </>
-        }
-      />
-
-      <div className="space-y-8">
-      <div>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-        {wallet ? (
-          <>
-            <StatCard
-              label="USDC balance"
-              tone="primary"
-              icon={Coins}
-              footer="Spendable by this agent for x402 / MPP / transfers"
-            >
-              <div className="flex items-end gap-1.5">
-                <AnimatedNumber
-                  value={wallet.usdcBalance ?? 0}
-                  format={(v) =>
-                    v.toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })
-                  }
-                  className="hero-number hero-gradient"
-                />
-                <span className="mb-1 font-mono text-sm text-muted-foreground">
-                  USDC
-                </span>
-              </div>
-              <p className="mt-1 inline-flex items-center gap-1.5 font-mono text-sm tabular text-muted-foreground">
-                <Wallet className="size-3.5" aria-hidden />
-                {fmtXLM(wallet.liquidXLM)} XLM liquid
-                {wallet.usdPerXlm != null ? (
-                  <span className="text-subtle">
-                    (≈ {fmtUSD(wallet.liquidXLM * wallet.usdPerXlm)})
-                  </span>
-                ) : null}
-              </p>
-            </StatCard>
-            <StatCard
-              label="In Blend"
-              tone="teal"
-              icon={PiggyBank}
-              footer={
-                wallet.blendXLM > 0
-                  ? `Earning on ${wallet.poolName ?? "Blend"}`
-                  : "Nothing deposited yet"
-              }
-            >
-              <div className="flex items-end gap-1.5">
-                <AnimatedNumber
-                  value={wallet.blendXLM}
-                  format={fmtXLM}
-                  className="hero-number text-teal"
-                />
-                <span className="mb-1 font-mono text-sm text-muted-foreground">
-                  XLM
-                </span>
-              </div>
-              {wallet.usdPerXlm != null ? (
-                <p className="mt-1 font-mono text-sm tabular text-muted-foreground">
-                  ≈ {fmtUSD(wallet.blendXLM * wallet.usdPerXlm)} USDC
-                </p>
-              ) : null}
-            </StatCard>
-            <StatCard
-              label="Supply APY"
-              tone="teal"
-              icon={Percent}
-              footer={
-                wallet.blendXLM > 0
-                  ? "Live Blend XLM rate on your position"
-                  : "Live Blend XLM market rate"
-              }
-            >
-              <div className="flex items-end gap-1">
-                <AnimatedNumber
-                  value={wallet.apyPct}
-                  format={(v) => v.toFixed(2)}
-                  className="hero-number text-teal"
-                />
-                <span className="mb-1 font-mono text-sm text-muted-foreground">%</span>
-              </div>
-            </StatCard>
-          </>
-        ) : (
-          <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-          </>
-        )}
+      <div className="mb-8">
+        <SectionRule>TREASURY · {selectedAgent?.name}</SectionRule>
+        <h1 className="page-title">Liquid band and yield</h1>
       </div>
 
-      {wallet ? (
-        <p className="mt-4 text-[13px] text-muted-foreground">
-          Total{" "}
-          <span className="font-mono tabular text-foreground">
-            {fmtXLM(wallet.balanceXLM)}
-          </span>{" "}
-          XLM
-          {wallet.usdPerXlm != null ? (
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="soft-panel" style={{ padding: "30px 32px" }}>
+          {wallet && settings ? (
             <>
-              {" "}
-              <span className="font-mono tabular text-foreground">
-                (≈ {fmtUSD(wallet.balanceXLM * wallet.usdPerXlm)} USDC)
-              </span>
-            </>
-          ) : null}
-          <span className="text-subtle">
-            {" "}
-            · liquid {fmtXLM(wallet.liquidXLM)} + Blend {fmtXLM(wallet.blendXLM)}
-          </span>
-        </p>
-      ) : null}
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="border-b border-border px-5 py-4">
-          <p className="stat-label">Blend positions</p>
-        </div>
-        {positionsLoading || !positions ? (
-          <TableSkeleton rows={3} cols={5} className="p-5" />
-        ) : positions.length === 0 ? (
-          <EmptyState
-            title="No Blend positions"
-            subtitle="Fund the wallet and enable auto-yield to start earning on idle balance."
-            actionLabel="Deposit"
-            onAction={() => setDepositOpen(true)}
-          />
-        ) : (
-          <>
-            {/* desktop table */}
-            <div className="hidden sm:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Pool</TableHead>
-                    <TableHead className="text-right">Deposited</TableHead>
-                    <TableHead className="text-right">APY</TableHead>
-                    <TableHead className="text-right">Earned to date</TableHead>
-                    <TableHead className="w-12" aria-label="Actions" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {positions.map((position) => (
-                    <TableRow key={position.id}>
-                      <TableCell>{position.pool}</TableCell>
-                      <TableCell className="text-right font-mono tabular">
-                        {fmtAmount(position.deposited, position.asset)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular">
-                        {position.apyPct.toFixed(2)}%
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular text-teal">
-                        +{fmtAmount(position.earned, position.asset)}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-7 text-muted-foreground"
-                              aria-label={`Actions for ${position.pool}`}
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => setDetail(position)}>
-                              Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setWithdrawTarget(position)}>
-                              Withdraw
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            {/* mobile cards */}
-            <ul className="divide-y divide-border sm:hidden">
-              {positions.map((position) => (
-                <li key={position.id} className="flex items-start justify-between gap-3 px-5 py-4">
-                  <div>
-                    <p className="text-sm font-medium">{position.pool}</p>
-                    <p className="mt-1 font-mono text-[13px] tabular text-muted-foreground">
-                      {fmtAmount(position.deposited, position.asset)} · {position.apyPct.toFixed(2)}%
+              <div className="grid grid-cols-2 gap-[34px]">
+                <div>
+                  <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                    LIQUID · SPENDABLE NOW
+                  </p>
+                  <p className="mt-3 font-mono text-[34px] leading-none tracking-[-0.02em] tabular-nums">
+                    {fmtUSD(spendableUsdc)}
+                  </p>
+                  <p className="mt-1.5 font-mono text-[10px] text-subtle">USDC</p>
+                  <div
+                    className="mt-4 h-[6px] bg-warm"
+                    style={{ width: `${liquidBarPct}%` }}
+                  />
+                </div>
+                <div>
+                  <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                    BLEND POSITION
+                  </p>
+                  <p className="mt-3 font-mono text-[34px] leading-none tracking-[-0.02em] tabular-nums">
+                    {fmtUSD(blendUsd)}
+                  </p>
+                  {blendXlm > 0 ? (
+                    <p className="mt-1.5 font-mono text-[10px] text-subtle">
+                      {fmtXLM(blendXlm)} XLM IN POOL
                     </p>
-                    <p className="font-mono text-[13px] tabular text-teal">
-                      +{fmtAmount(position.earned, position.asset)}
+                  ) : (
+                    <p className="mt-1.5 font-mono text-[10px] text-subtle">
+                      XLM YIELD POSITION
+                    </p>
+                  )}
+                  <div
+                    className="mt-4 h-[6px] bg-primary"
+                    style={{ width: `${blendBarPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 border-t border-border pt-6">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+                    YIELD BAND
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void toggleBandEdit()}
+                    disabled={saving}
+                    className="shrink-0 rounded-full border border-border-strong px-3 py-[5px] font-mono text-[10px] tracking-[0.12em] text-muted-foreground disabled:opacity-50"
+                  >
+                    {saving
+                      ? "SAVING…"
+                      : editingBand
+                        ? dirty
+                          ? "SAVE BAND"
+                          : "DONE"
+                        : "EDIT BAND"}
+                  </button>
+                </div>
+                <p className="mt-2.5 max-w-[520px] text-[13px] text-pretty text-muted-foreground">
+                  Nebula keeps the liquid balance inside this band. Below the floor it
+                  unwinds from Blend; above the ceiling it sweeps the excess in.
+                </p>
+
+                <div className="relative mt-5">
+                  <div className="relative h-5">
+                    <span
+                      className="absolute top-0 font-mono text-[9px] tracking-[0.1em] text-primary-2 whitespace-nowrap"
+                      style={
+                        livePct < 14
+                          ? { left: 0 }
+                          : livePct > 86
+                            ? { left: "100%", transform: "translateX(-100%)" }
+                            : { left: `${livePct}%`, transform: "translateX(-50%)" }
+                      }
+                    >
+                      LIVE USDC {fmtUSD(spendableUsdc).replace("$", "")}
+                    </span>
+                  </div>
+                  <div className="relative h-2 rounded-md border border-border bg-[var(--panel-3)]">
+                    <div
+                      className="absolute -top-px -bottom-px rounded-md bg-warm/50"
+                      style={{ left: `${floorPct}%`, width: `${widthPct}%` }}
+                      title="Yield band (floor → ceiling)"
+                    />
+                    <div
+                      className="absolute -top-[7px] -bottom-[7px] w-0.5 bg-primary-2"
+                      style={{ left: `${livePct}%` }}
+                      title="Your spendable USDC right now"
+                    />
+                  </div>
+                  <p className="mt-2 font-mono text-[9px] tracking-[0.08em] text-subtle">
+                    SAND = TARGET BAND · PURPLE MARKER = SPENDABLE USDC NOW
+                  </p>
+                </div>
+
+                <div className="mt-[22px] grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground">
+                      LOWER · LIQUID FLOOR
+                    </p>
+                    {editingBand ? (
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={lowText}
+                        onChange={(e) => setDraftLow(e.target.value)}
+                        className="mt-2 h-auto rounded-xl border-primary-2 bg-[var(--panel-3)] px-3 py-2 font-mono text-[19px]"
+                      />
+                    ) : (
+                      <p className="mt-2 font-mono text-[22px] tabular-nums">
+                        {fmtUSD(settings.liquidityFloorXLM)}
+                      </p>
+                    )}
+                    <p className="mt-1.5 font-mono text-[10px] text-subtle">
+                      Below: unwind from Blend
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setWithdrawTarget(position)}
-                    aria-label={`Withdraw from ${position.pool}`}
+                  <div>
+                    <p className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground">
+                      UPPER · SWEEP CEILING
+                    </p>
+                    {editingBand ? (
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={highText}
+                        onChange={(e) => setDraftHigh(e.target.value)}
+                        className="mt-2 h-auto rounded-xl border-primary-2 bg-[var(--panel-3)] px-3 py-2 font-mono text-[19px]"
+                      />
+                    ) : (
+                      <p className="mt-2 font-mono text-[22px] tabular-nums">
+                        {fmtUSD(settings.liquidityCeilingXLM)}
+                      </p>
+                    )}
+                    <p className="mt-1.5 font-mono text-[10px] text-subtle">
+                      Above: sweep excess to Blend
+                    </p>
+                  </div>
+                </div>
+
+                {editingBand && dirty && !bandOk ? (
+                  <p className="mt-3 text-[12px] text-destructive">
+                    High must be greater than or equal to low.
+                  </p>
+                ) : null}
+
+                {!settings.autoYield ? (
+                  <button
+                    type="button"
+                    onClick={() => void enableAutoYield()}
+                    disabled={switchBusy}
+                    className="mt-4 font-mono text-[10px] tracking-[0.14em] text-primary-2 hover:underline"
                   >
-                    Withdraw
+                    {switchBusy ? "ENABLING…" : "ENABLE AUTO-YIELD"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void requestDisableAutoYield()}
+                    disabled={switchBusy}
+                    className="mt-4 font-mono text-[10px] tracking-[0.14em] text-subtle hover:text-muted-foreground hover:underline"
+                  >
+                    AUTO-YIELD ON · TURN OFF
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-8 border-t border-border pt-6">
+                <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
+                  POSITION DETAIL
+                </p>
+                {(
+                  [
+                    { label: "BLEND POOL", val: wallet.poolName ?? "Blend", fg: undefined },
+                    {
+                      label: "LIVE APY",
+                      val: `${wallet.apyPct.toFixed(2)}%`,
+                      fg: "text-primary",
+                    },
+                    {
+                      label: "EARNED · 30D",
+                      val: `+${fmtUSD(wallet.yield30dXLM * (rate || 0) || est30d)}`,
+                      fg: "text-primary",
+                    },
+                    { label: "UNWIND TIME", val: "~5S", fg: undefined },
+                    {
+                      label: "COMMITTED IN CHANNELS",
+                      val: fmtUSD(0),
+                      fg: undefined,
+                    },
+                  ] as const
+                ).map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex items-center justify-between border-b border-border py-3.5"
+                  >
+                    <span className="font-mono text-[11px] tracking-[0.05em] text-muted-foreground">
+                      {row.label}
+                    </span>
+                    <span className={cn("font-mono text-[13px]", row.fg)}>{row.val}</span>
+                  </div>
+                ))}
+                <p className="mt-5 max-w-[520px] text-[13px] text-pretty text-muted-foreground">
+                  Idle funds above your liquid floor sweep into Blend automatically. If a
+                  payment needs more than the liquid band holds, Nebula unwinds the
+                  position first — settlement takes about 5 seconds longer.
+                </p>
+              </div>
+            </>
+          ) : (
+            <TableSkeleton rows={4} cols={2} />
+          )}
+        </div>
+
+        <div className="soft-panel bg-elevated" style={{ padding: "30px 28px" }}>
+          <div className="mb-[22px] flex gap-1.5">
+            {(
+              [
+                ["deposit", "DEPOSIT"],
+                ["withdraw", "WITHDRAW"],
+              ] as const
+            ).map(([id, label]) => {
+              const on = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    "flex-1 rounded-full border border-border-strong py-2 font-mono text-[11px] tracking-[0.1em]",
+                    !on && "bg-transparent text-muted-foreground",
+                  )}
+                  style={
+                    on
+                      ? { background: "var(--btn-bg)", color: "var(--btn-fg)" }
+                      : undefined
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTab === "deposit" ? (
+            <>
+              <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                AGENT DEPOSIT ADDRESS
+              </p>
+              <p className="mt-2 text-[13px] text-pretty text-muted-foreground">
+                Send XLM or Circle USDC to this address. Idle XLM can earn on Blend;
+                USDC funds x402 / MPP.
+              </p>
+
+              {depositAddress ? (
+                <div className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-[var(--panel-3)] px-3.5 py-3">
+                  <p
+                    className="min-w-0 flex-1 break-all font-mono text-[12px] leading-relaxed"
+                    title={depositAddress}
+                  >
+                    {depositAddress}
+                  </p>
+                  <CopyButton
+                    value={depositAddress}
+                    label="Copy address"
+                    className="size-8 shrink-0 text-subtle hover:text-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQrOpen(true)}
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground"
+                    aria-label="Show QR code"
+                    title="Show QR code"
+                  >
+                    <QrCode className="size-4" />
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-4 rounded-xl border border-border bg-[var(--panel-3)] px-3.5 py-4 text-sm text-muted-foreground">
+                  Wallet not provisioned yet — finish agent setup first.
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {testnet && friendbot ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={friendbot} target="_blank" rel="noreferrer">
+                      Fund XLM (Friendbot)
+                      <ExternalLink className="size-3.5" aria-hidden />
+                    </a>
                   </Button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </Card>
+                ) : null}
+                {testnet ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a
+                      href="https://faucet.circle.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Fund USDC (Circle)
+                      <ExternalLink className="size-3.5" aria-hidden />
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AutoYieldCard
-          onUnwindComplete={() => {
-            void reloadWallet();
-            void reloadPositions();
-          }}
-        />
-        <YieldChartCard />
+              <div className="mt-[26px] border-t border-border pt-[18px]">
+                <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                  CURRENT HOLDINGS
+                </p>
+                {(
+                  [
+                    { label: "LIQUID USDC", val: fmtUSD(spendableUsdc) },
+                    { label: "LIQUID XLM", val: `${fmtXLM(liquidXlm)} XLM` },
+                    { label: "IN BLEND YIELD", val: fmtUSD(afterBlend) },
+                    { label: "TOTAL USDC", val: fmtUSD(afterTotal) },
+                  ] as const
+                ).map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex justify-between py-2.5 font-mono text-[11px]"
+                  >
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span>{row.val}</span>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-5 text-[12px] leading-relaxed text-muted-foreground">
+                Funds appear after the network confirms. USDC needs a Circle
+                trustline on this agent (open one from Overview if needed).
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mb-4 flex gap-1.5">
+                {(["USDC", "XLM"] as const).map((asset) => {
+                  const on = withdrawAsset === asset;
+                  return (
+                    <button
+                      key={asset}
+                      type="button"
+                      onClick={() => setWithdrawAsset(asset)}
+                      className={cn(
+                        "flex-1 rounded-[10px] border py-2 font-mono text-[10px] tracking-[0.1em]",
+                        on
+                          ? "border-primary text-foreground"
+                          : "border-border text-muted-foreground",
+                      )}
+                    >
+                      {asset}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                  AMOUNT · {withdrawAsset}
+                </p>
+                <p className="font-mono text-[10px] tracking-[0.08em] text-subtle tabular-nums">
+                  AVAIL{" "}
+                  {withdrawAsset === "XLM"
+                    ? `${fmtXLM(liquidXlm)} XLM`
+                    : fmtUSD(spendableUsdc)}
+                </p>
+              </div>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="mt-2.5 w-full rounded-xl border border-border bg-[var(--panel-3)] px-3.5 py-3.5 font-mono text-[24px] tracking-[-0.02em] outline-none focus:border-primary-2"
+                placeholder="0.00"
+                aria-label={`Amount in ${withdrawAsset}`}
+              />
+
+              <div className="mt-2.5 flex gap-1.5">
+                {(
+                  [
+                    ["500", "500"],
+                    ["2000", "2,000"],
+                    ["4000", "4,000"],
+                    ["max", "MAX"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      if (value === "max") {
+                        setAmount(formatChip(Math.max(0, available)));
+                      } else {
+                        setAmount(formatChip(Number(value)));
+                      }
+                    }}
+                    className="flex-1 rounded-[10px] border border-border py-2 font-mono text-[10px] tracking-[0.08em] text-muted-foreground"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4">
+                <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                  DESTINATION
+                </p>
+                <input
+                  type="text"
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value.trim())}
+                  placeholder="G…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className={cn(
+                    "mt-2.5 w-full rounded-xl border bg-[var(--panel-3)] px-3.5 py-3 font-mono text-[13px] outline-none focus:border-primary-2",
+                    destination && !destOk
+                      ? "border-destructive"
+                      : "border-border",
+                  )}
+                  aria-label="Destination Stellar address"
+                />
+                {destination && !destOk ? (
+                  <p className="mt-1.5 text-[12px] text-destructive">
+                    Invalid Stellar address
+                  </p>
+                ) : null}
+                {withdrawAsset === "USDC" ? (
+                  <p className="mt-1.5 font-mono text-[10px] text-subtle">
+                    Destination must hold a Circle USDC trustline
+                  </p>
+                ) : null}
+                {isAmountValid && !underBalance ? (
+                  <p className="mt-1.5 text-[12px] text-destructive">
+                    Exceeds available balance
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="mt-[26px] border-t border-border pt-[18px]">
+                <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+                  AFTER THIS WITHDRAWAL
+                </p>
+                {(
+                  [
+                    { label: "LIQUID USDC", val: fmtUSD(afterUsdc) },
+                    { label: "IN BLEND YIELD", val: fmtUSD(afterBlend) },
+                    { label: "TOTAL", val: fmtUSD(afterTotal) },
+                    {
+                      label: "EST. 30D YIELD",
+                      val: `+${fmtUSD(est30d)}`,
+                      accent: true,
+                    },
+                  ] as const
+                ).map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex justify-between py-2.5 font-mono text-[11px]"
+                  >
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span
+                      className={
+                        "accent" in row && row.accent ? "text-primary" : undefined
+                      }
+                    >
+                      {row.val}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                disabled={!canWithdraw}
+                onClick={() => void submitWithdraw()}
+                className="mt-5 w-full rounded-full py-[13px] text-[13px] font-semibold disabled:opacity-50"
+                style={{ background: "var(--btn-bg)", color: "var(--btn-fg)" }}
+              >
+                {withdrawBusy ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <Loader2 className="size-4 animate-spin" />
+                    Signing…
+                  </span>
+                ) : (
+                  `Withdraw ${amountDisplay} ${withdrawAsset}`
+                )}
+              </button>
+            </>
+          )}
+
+          <p className="mt-3 text-center font-mono text-[10px] tracking-[0.06em] text-subtle">
+            SIGNED BY PRIVY · AGENT HOLDS NO KEY
+          </p>
+        </div>
       </div>
-      </div>
 
-      <DepositDialog
-        open={depositOpen}
-        onOpenChange={setDepositOpen}
-        wallet={wallet}
-      />
-      <WithdrawDialog
-        open={withdrawOpen}
-        onOpenChange={setWithdrawOpen}
-        wallet={wallet}
-        onSent={() => {
-          void reloadWallet();
-          void reloadPositions();
-        }}
-      />
-
-      <Dialog open={detail != null} onOpenChange={(open) => !open && setDetail(null)}>
-        <DialogContent className="sm:max-w-sm">
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="sm:max-w-xs">
           <DialogHeader>
-            <DialogTitle>{detail?.pool}</DialogTitle>
-            <DialogDescription>Position detail</DialogDescription>
+            <DialogTitle>Deposit QR</DialogTitle>
+            <DialogDescription>
+              Scan to send XLM or USDC to this agent.
+            </DialogDescription>
           </DialogHeader>
-          {detail ? (
-            <dl className="space-y-2.5 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Deposited</dt>
-                <dd className="font-mono tabular">{fmtAmount(detail.deposited, detail.asset)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Current APY</dt>
-                <dd className="font-mono tabular">{detail.apyPct.toFixed(2)}%</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Earned to date</dt>
-                <dd className="font-mono tabular text-teal">+{fmtAmount(detail.earned, detail.asset)}</dd>
-              </div>
-            </dl>
+          <div className="flex justify-center py-2">
+            <div className="rounded-lg bg-white p-3 shadow-sm" aria-hidden>
+              {depositAddress ? (
+                <QRCodeSVG
+                  value={depositAddress}
+                  size={168}
+                  bgColor="#ffffff"
+                  fgColor="#0F0F0F"
+                  level="M"
+                />
+              ) : (
+                <div className="flex size-[168px] items-center justify-center text-xs text-neutral-400">
+                  No wallet
+                </div>
+              )}
+            </div>
+          </div>
+          {depositAddress ? (
+            <p className="break-all text-center font-mono text-[11px] text-muted-foreground">
+              {depositAddress}
+            </p>
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmOffOpen}
+        onOpenChange={setConfirmOffOpen}
+        title="Turn off auto-yield?"
+        description={
+          blendInYield > 0
+            ? `This withdraws about ${fmtXLM(blendInYield)} XLM from Blend back to your liquid balance, and stops parking idle funds. Yield stops accruing on that position after the withdraw.`
+            : "This stops parking idle funds into Blend. If any XLM is still in Blend, it will be withdrawn to your liquid balance."
+        }
+        confirmLabel={
+          blendInYield > 0 ? "Withdraw & turn off" : "Turn off auto-yield"
+        }
+        destructive
+        onConfirm={() => confirmDisableAutoYield()}
+      />
+
 
       <ConfirmDialog
         open={withdrawTarget != null}
