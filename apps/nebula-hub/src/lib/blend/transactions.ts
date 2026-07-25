@@ -14,12 +14,17 @@ import {
 
 import { signAndSubmitSorobanWithPrivy } from "../stellar";
 import {
+  getBlendDeposited,
   getBlendDepositedXlm,
+  getLiquidUsdc,
   getLiquidXlm,
   getNativeXlmBalance,
 } from "./balances";
 import {
-  BLEND_TESTNET_XLM_ASSET,
+  type BlendAsset,
+  assertBlendAssetSupported,
+  blendAssetId,
+  blendXlmAsset,
   floorXlm,
   getBlendSdkNetwork,
   resolvePool,
@@ -63,10 +68,7 @@ export async function blendDepositXlm(params: {
   network: "testnet" | "mainnet";
   poolId?: string | null;
 }): Promise<BlendSubmitResult> {
-  return submitXlmCollateral({
-    ...params,
-    requestType: RequestType.SupplyCollateral,
-  });
+  return blendDeposit({ ...params, asset: "XLM" });
 }
 
 export async function blendWithdrawXlm(params: {
@@ -76,7 +78,32 @@ export async function blendWithdrawXlm(params: {
   network: "testnet" | "mainnet";
   poolId?: string | null;
 }): Promise<BlendSubmitResult> {
-  return submitXlmCollateral({
+  return blendWithdraw({ ...params, asset: "XLM" });
+}
+
+export async function blendDeposit(params: {
+  publicKey: string;
+  walletId: string;
+  amount: number;
+  network: "testnet" | "mainnet";
+  asset: BlendAsset;
+  poolId?: string | null;
+}): Promise<BlendSubmitResult> {
+  return submitCollateral({
+    ...params,
+    requestType: RequestType.SupplyCollateral,
+  });
+}
+
+export async function blendWithdraw(params: {
+  publicKey: string;
+  walletId: string;
+  amount: number;
+  network: "testnet" | "mainnet";
+  asset: BlendAsset;
+  poolId?: string | null;
+}): Promise<BlendSubmitResult> {
+  return submitCollateral({
     ...params,
     requestType: RequestType.WithdrawCollateral,
   });
@@ -97,13 +124,6 @@ export async function blendWithdrawAndPay(params: {
   network: "testnet" | "mainnet";
   poolId?: string | null;
 }): Promise<BlendPayBundleResult> {
-  if (params.network !== "testnet") {
-    return {
-      ok: false,
-      error: "Blend treasury is configured for testnet only.",
-    };
-  }
-
   const pool = resolvePool(params.network, params.poolId);
   if (!pool) {
     return { ok: false, error: "No Blend pool available for this network." };
@@ -118,7 +138,11 @@ export async function blendWithdrawAndPay(params: {
     return { ok: false, error: "Payment amount is too small." };
   }
 
-  const position = await getBlendDepositedXlm(params.publicKey, params.network);
+  const position = await getBlendDepositedXlm(
+    params.publicKey,
+    params.network,
+    params.poolId,
+  );
   const deposited = floorXlm(position.deposited);
   if (withdrawAmount > deposited) {
     if (withdrawAmount - deposited <= 0.000001) {
@@ -143,7 +167,7 @@ export async function blendWithdrawAndPay(params: {
   const request: Request = {
     amount: toBlendAmount(withdrawAmount),
     request_type: RequestType.WithdrawCollateral,
-    address: BLEND_TESTNET_XLM_ASSET,
+    address: blendXlmAsset(params.network),
   };
 
   let blendOp: xdr.Operation;
@@ -227,20 +251,24 @@ export async function blendWithdrawAndPay(params: {
   }
 }
 
-async function submitXlmCollateral(params: {
+async function submitCollateral(params: {
   publicKey: string;
   walletId: string;
   amount: number;
   network: "testnet" | "mainnet";
+  asset: BlendAsset;
   poolId?: string | null;
   requestType: RequestType.SupplyCollateral | RequestType.WithdrawCollateral;
 }): Promise<BlendSubmitResult> {
-  if (params.network !== "testnet") {
+  try {
+    assertBlendAssetSupported(params.network, params.asset);
+  } catch (error) {
     return {
       ok: false,
-      error: "Blend treasury is configured for testnet only.",
+      error: error instanceof Error ? error.message : String(error),
     };
   }
+
   const pool = resolvePool(params.network, params.poolId);
   if (!pool) {
     return { ok: false, error: "No Blend pool available for this network." };
@@ -252,34 +280,52 @@ async function submitXlmCollateral(params: {
   }
 
   if (params.requestType === RequestType.SupplyCollateral) {
-    const { liquid, feeBuffer } = await getLiquidXlm(
-      params.publicKey,
-      params.network,
-    );
-    const available = floorXlm(liquid);
-    if (amount > available) {
-      if (amount - available <= 0.000001) {
-        amount = available;
-      } else {
-        const native = await getNativeXlmBalance(
-          params.publicKey,
-          params.network,
-        );
-        return {
-          ok: false,
-          error:
-            `Insufficient liquid XLM. Available for treasury: ${available} ` +
-            `(native ${native}, fee buffer ${feeBuffer}), needed: ${amount}.`,
-        };
+    if (params.asset === "XLM") {
+      const { liquid, feeBuffer } = await getLiquidXlm(
+        params.publicKey,
+        params.network,
+      );
+      const available = floorXlm(liquid);
+      if (amount > available) {
+        if (amount - available <= 0.000001) {
+          amount = available;
+        } else {
+          const native = await getNativeXlmBalance(
+            params.publicKey,
+            params.network,
+          );
+          return {
+            ok: false,
+            error:
+              `Insufficient liquid XLM. Available for treasury: ${available} ` +
+              `(native ${native}, fee buffer ${feeBuffer}), needed: ${amount}.`,
+          };
+        }
+      }
+    } else {
+      const liquid = floorXlm(
+        await getLiquidUsdc(params.publicKey, params.network),
+      );
+      if (amount > liquid) {
+        if (amount - liquid <= 0.000001) {
+          amount = liquid;
+        } else {
+          return {
+            ok: false,
+            error: `Insufficient liquid USDC. Available: ${liquid}, needed: ${amount}.`,
+          };
+        }
       }
     }
     if (amount < MIN_SUBMIT_AMOUNT) {
       return { ok: false, error: "Amount is too small to submit to Blend." };
     }
   } else {
-    const position = await getBlendDepositedXlm(
+    const position = await getBlendDeposited(
       params.publicKey,
       params.network,
+      params.asset,
+      params.poolId,
     );
     const deposited = floorXlm(position.deposited);
     if (amount > deposited) {
@@ -289,7 +335,7 @@ async function submitXlmCollateral(params: {
         return {
           ok: false,
           error:
-            `Insufficient Blend XLM. Deposited: ${deposited}, ` +
+            `Insufficient Blend ${params.asset}. Deposited: ${deposited}, ` +
             `needed: ${amount}.`,
         };
       }
@@ -306,7 +352,7 @@ async function submitXlmCollateral(params: {
   const request: Request = {
     amount: toBlendAmount(amount),
     request_type: params.requestType,
-    address: BLEND_TESTNET_XLM_ASSET,
+    address: blendAssetId(params.network, params.asset),
   };
 
   let operation: xdr.Operation;
