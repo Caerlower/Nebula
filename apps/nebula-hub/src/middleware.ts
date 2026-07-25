@@ -1,39 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { BETA_COOKIE, isValidBetaCode } from "@/lib/auth/beta";
-
 /**
- * Private-beta gate for product routes.
- * Session auth is Privy (client) + Hub wallet cookie / API tokens — not this middleware.
+ * Product routes no longer require a private-beta invite cookie.
+ * Session auth remains Privy (client) + Hub wallet cookie / API tokens.
  */
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/treasury",
-  "/policy",
-  "/agents",
-  "/transactions",
-  "/reputation",
-  "/connect",
-  "/api-keys",
-  "/settings",
-  "/onboarding",
-];
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const isProtected = PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-  if (!isProtected) return NextResponse.next();
-
-  if (isValidBetaCode(request.cookies.get(BETA_COOKIE)?.value)) {
-    return NextResponse.next();
-  }
-
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/login";
-  loginUrl.search = "";
-  return NextResponse.redirect(loginUrl);
+export function middleware(_request: NextRequest) {
+  return NextResponse.next();
 }
 
 export const config = {

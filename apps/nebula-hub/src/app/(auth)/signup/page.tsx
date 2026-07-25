@@ -12,11 +12,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { BadgeCheck, Github, Loader2, Wallet } from "lucide-react";
+import { Github, Loader2, Wallet } from "lucide-react";
 
 import { AuthSplash } from "@/components/shared/auth-splash";
 import { SectionRule } from "@/components/design/primitives";
-import { fetchBetaStatus, redeemBetaCode } from "@/lib/auth/beta";
 import { syncHubSession } from "@/lib/auth/session";
 import { applyPrivySession } from "@/lib/auth/session";
 import { signInWithFreighter, WalletConnectError } from "@/lib/wallet/connect";
@@ -34,7 +33,6 @@ import { useAuthStore } from "@/stores/auth";
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
   code: z.string(),
-  invite: z.string(),
 });
 
 type Values = z.infer<typeof schema>;
@@ -50,7 +48,6 @@ function GoogleMark() {
   );
 }
 
-
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,7 +61,6 @@ function SignupForm() {
 
   const [oauthBusy, setOauthBusy] = useState<"google" | "github" | null>(null);
   const [walletBusy, setWalletBusy] = useState(false);
-  const [betaGranted, setBetaGranted] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
   const signInWallet = useAuthStore((s) => s.signInWallet);
@@ -95,7 +91,7 @@ function SignupForm() {
       toast.error("Couldn't create account", { description: String(error) });
     },
   });
-  const { initOAuth, state: oauthState } = useLoginWithOAuth({
+  const { initOAuth } = useLoginWithOAuth({
     onComplete: () => onAuthComplete.current(),
     onError: (error) => {
       setOauthBusy(null);
@@ -106,12 +102,8 @@ function SignupForm() {
 
   const form = useForm<Values>({
     resolver: zodResolver(schema as never),
-    defaultValues: { email: "", code: "", invite: "" },
+    defaultValues: { email: "", code: "" },
   });
-
-  useEffect(() => {
-    void fetchBetaStatus().then(setBetaGranted);
-  }, []);
 
   useEffect(() => {
     if (!ready || !hydrated || !authenticated || !user) return;
@@ -132,31 +124,7 @@ function SignupForm() {
     return () => window.clearTimeout(t);
   }, [oauthReturn, ready, hydrated, authenticated, router]);
 
-  const ensureBetaAccess = async (): Promise<boolean> => {
-    if (betaGranted) return true;
-    const invite = form.getValues("invite").trim();
-    if (!invite) {
-      form.setError("invite", {
-        message: "Nebula is in private beta — enter your invite code",
-      });
-      return false;
-    }
-    try {
-      const ok = await redeemBetaCode(invite);
-      if (!ok) {
-        form.setError("invite", { message: "That code isn't valid" });
-        return false;
-      }
-      setBetaGranted(true);
-      return true;
-    } catch {
-      toast.error("Couldn't verify the invite code");
-      return false;
-    }
-  };
-
   const onSendCode = async () => {
-    if (!(await ensureBetaAccess())) return;
     const email = form.getValues("email");
     if (!z.string().email().safeParse(email).success) {
       form.setError("email", { message: "Enter a valid email" });
@@ -175,7 +143,6 @@ function SignupForm() {
   };
 
   const submit = async (values: Values) => {
-    if (!(await ensureBetaAccess())) return;
     if (!codeSent) {
       await onSendCode();
       return;
@@ -192,7 +159,6 @@ function SignupForm() {
   };
 
   const oauth = async (provider: "google" | "github") => {
-    if (!(await ensureBetaAccess())) return;
     setOauthBusy(provider);
     try {
       await initOAuth({ provider });
@@ -205,7 +171,6 @@ function SignupForm() {
   };
 
   const connectWallet = async () => {
-    if (!(await ensureBetaAccess())) return;
     if (redirected.current) return;
     setWalletBusy(true);
     try {
@@ -318,33 +283,6 @@ function SignupForm() {
               </FormItem>
             )}
           />
-          {betaGranted ? (
-            <p className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] text-success">
-              <BadgeCheck className="size-3.5" aria-hidden /> Private beta
-              access active on this browser
-            </p>
-          ) : (
-            <FormField
-              control={form.control}
-              name="invite"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-                    Invite code
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="NEBULA-XXXX"
-                      autoComplete="off"
-                      className="h-11 rounded-xl border-border bg-[var(--panel-3)] font-mono text-[13px] uppercase"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
           <button
             type="submit"
             disabled={emailBusy}
