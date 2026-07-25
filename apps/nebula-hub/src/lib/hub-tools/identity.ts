@@ -123,10 +123,14 @@ export async function executeRegisterIdentity(
 
   let hints: { name?: string; description?: string } | undefined;
   if (principal.agentId) {
-    const agent = await prisma.agent.findUnique({
-      where: { id: principal.agentId },
+    const agent = await prisma.agent.findFirst({
+      where: {
+        id: principal.agentId,
+        userId: principal.userId,
+        network: principal.network,
+      },
     });
-    if (!agent || agent.userId !== principal.userId) {
+    if (!agent) {
       return { status: "error", reason: "agent_not_found" };
     }
     hints = {
