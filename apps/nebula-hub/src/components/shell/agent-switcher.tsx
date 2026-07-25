@@ -1,190 +1,219 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LayoutGrid, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { AgentAvatar } from "@/components/agent-scope/agent-avatar";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
+import { SplitBar, splitPcts } from "@/components/design/primitives";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { StatusDot, AGENT_STATUS_META } from "@/components/shared/status-badges";
+import { AGENT_STATUS_META } from "@/components/shared/status-badges";
 import { Button } from "@/components/ui/button";
 import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "@/components/ui/command";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useLoad } from "@/hooks/use-load";
 import * as api from "@/lib/api";
-import { fmtXLM, truncMiddle } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { cn, fmtXLM, truncMiddle } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
+
+const fmtUsdc = (n: number) =>
+  n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 /**
- * Workspace switcher: a select-style trigger opens a searchable agent picker
- * (command-palette style), and the adjacent ⋯ menu carries agent actions.
- * Auth wallets are never shown here — only real agents.
+ * Workspace switcher — Claude Design dropdown with fleet split bars.
  */
 export function AgentSwitcher() {
   const router = useRouter();
   const { agents, loading, selectedAgent, setSelectedAgentId, reloadAgents } =
     useAgentScope();
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const setCreateAgentOpen = useUIStore((s) => s.setCreateAgentOpen);
+  const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const { data: wallet } = useLoad(
+    () => (selectedAgent ? api.getWallet() : Promise.resolve(null)),
+    [selectedAgent?.id],
+  );
+
+  const selectedSplit = useMemo(() => {
+    if (wallet) {
+      return splitPcts(wallet.liquidXLM, wallet.blendXLM);
+    }
+    return { liquidPct: 100, yieldPct: 0, reservedPct: 0 };
+  }, [wallet]);
+
+  const fleetTotal = useMemo(() => {
+    const usdc = agents.reduce((s, a) => s + (a.balanceUSDC ?? 0), 0);
+    return `$${fmtUsdc(usdc)}`;
+  }, [agents]);
+
   const newAgent = () => {
-    setPickerOpen(false);
-    router.push("/agents/new");
+    setOpen(false);
+    setCreateAgentOpen(true);
   };
 
   if (loading && !selectedAgent) {
     return (
-      <div className="h-9 w-44 animate-pulse rounded-lg border border-border bg-elevated/50" />
+      <div className="h-10 w-56 animate-pulse rounded-[14px] border border-border bg-elevated/50" />
     );
   }
 
   if (agents.length === 0) {
     return (
-      <Button variant="outline" size="sm" className="gap-1.5" onClick={newAgent}>
-        <Plus className="size-3.5" aria-hidden />
-        New agent
+      <Button variant="outline" size="sm" className="gap-1.5 font-mono text-[11px]" onClick={newAgent}>
+        + NEW AGENT
       </Button>
     );
   }
 
+  const balanceLabel = wallet
+    ? fmtUsdc(wallet.usdcBalance ?? 0)
+    : selectedAgent
+      ? fmtUsdc(selectedAgent.balanceUSDC)
+      : "—";
+
+  const idLabel =
+    selectedAgent?.address && selectedAgent.address !== "—"
+      ? truncMiddle(selectedAgent.address, 4, 4)
+      : selectedAgent
+        ? truncMiddle(selectedAgent.id, 4, 4)
+        : "";
+
   return (
     <>
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          className="pressable group flex h-9 max-w-[15rem] items-center gap-2 rounded-lg border border-border bg-surface py-1 pl-1.5 pr-2.5 text-left transition-colors hover:border-border-strong hover:bg-elevated"
-          aria-label="Switch agent workspace"
-          aria-haspopup="dialog"
-        >
-          {selectedAgent ? (
-            <AgentAvatar
-              name={selectedAgent.name}
-              seed={selectedAgent.id}
-              color={selectedAgent.avatarColor}
-              size="sm"
-              className="size-6 rounded-md text-[10px] shadow-none"
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex max-w-[min(100vw-8rem,28rem)] shrink-0 items-center gap-3.5 rounded-[14px] border border-border bg-surface py-[7px] pr-3.5 pl-3 shadow-[var(--card-shadow)]"
+            aria-label="Switch agent workspace"
+            aria-haspopup="dialog"
+          >
+            <span
+              aria-hidden
+              className="size-[7px] shrink-0 rounded-full"
+              style={{
+                background:
+                  selectedAgent?.status === "paused"
+                    ? "var(--subtle-foreground)"
+                    : selectedAgent?.status === "active"
+                      ? "var(--success)"
+                      : selectedAgent?.avatarColor || "var(--primary)",
+                boxShadow: "0 0 0 3px var(--accent-soft)",
+              }}
             />
-          ) : null}
-          <span className="min-w-0 truncate text-sm font-semibold leading-normal">
-            {selectedAgent?.name ?? "Select agent"}
-          </span>
-          <ChevronDown
-            className="size-4 shrink-0 text-muted-foreground"
-            aria-hidden
-          />
-        </button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground"
-              aria-label="Agent actions"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
-            <DropdownMenuItem onSelect={newAgent}>
-              <Plus className="size-4" aria-hidden />
-              Add agent
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => router.push("/agents")}>
-              <LayoutGrid className="size-4" aria-hidden />
-              All agents
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={() => setConfirmDelete(true)}
-            >
-              <Trash2 className="size-4" aria-hidden />
-              Delete agent
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <CommandDialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <CommandInput placeholder="Search agents or add a new one…" />
-        <CommandList>
-          <CommandEmpty>No agents match.</CommandEmpty>
-          <CommandGroup heading="Actions">
-            <CommandItem
-              keywords={["new", "add", "create"]}
-              onSelect={newAgent}
-              className="gap-2.5 rounded-lg py-2.5"
-            >
-              <span className="flex size-7 items-center justify-center rounded-lg border border-border bg-elevated/60">
-                <Plus className="!size-4" aria-hidden />
+            <span className="flex min-w-0 flex-col items-start gap-px leading-[1.25]">
+              <span className="truncate font-mono text-[12px] tracking-[-0.01em]">
+                {selectedAgent?.name ?? "Select agent"}
               </span>
-              <span className="font-medium">Add new agent</span>
-            </CommandItem>
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading="Your agents">
+              <span className="truncate font-mono text-[9px] tracking-[0.1em] text-subtle">
+                {idLabel}
+              </span>
+            </span>
+            <span className="flex flex-col items-end gap-[3px] leading-[1.25]">
+              <span className="font-mono text-[12px] tabular-nums">{balanceLabel}</span>
+              <SplitBar
+                liquidPct={selectedSplit.liquidPct}
+                yieldPct={selectedSplit.yieldPct}
+                height={3}
+                className="w-[66px]"
+              />
+            </span>
+            <span className="font-mono text-[10px] text-subtle" aria-hidden>
+              ▾
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[min(100vw-2rem,430px)] overflow-hidden rounded-2xl border-border-strong p-0 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.7)]"
+        >
+          <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
+            <span className="font-mono text-[9px] tracking-[0.16em] text-subtle">
+              SWITCH AGENT
+            </span>
+            <span className="font-mono text-[9px] tracking-[0.16em] text-subtle">
+              FLEET {fleetTotal}
+            </span>
+          </div>
+          <div className="max-h-72 overflow-y-auto">
             {agents.map((agent) => {
               const active = agent.id === selectedAgent?.id;
+              const status = AGENT_STATUS_META[agent.status].label.toUpperCase();
               return (
-                <CommandItem
+                <button
                   key={agent.id}
-                  value={`${agent.name} ${agent.address} ${agent.id}`}
-                  onSelect={() => {
+                  type="button"
+                  onClick={() => {
                     setSelectedAgentId(agent.id);
-                    setPickerOpen(false);
+                    setOpen(false);
                   }}
                   className={cn(
-                    "gap-2.5 rounded-lg py-2.5",
-                    active &&
-                      "bg-primary/10 data-[selected=true]:bg-primary/15",
+                    "grid w-full grid-cols-[14px_1fr_auto] items-center gap-3 border-b border-border px-3.5 py-3 text-left",
+                    active ? "bg-surface" : "bg-transparent hover:bg-elevated/50",
                   )}
                 >
-                  <AgentAvatar
-                    name={agent.name}
-                    seed={agent.id}
-                    color={agent.avatarColor}
-                    size="sm"
-                    className="rounded-lg shadow-none"
+                  <span
+                    className="size-[7px] rounded-full"
+                    style={{ background: agent.avatarColor || "var(--primary)" }}
+                    aria-hidden
                   />
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="truncate text-sm font-medium leading-normal">
-                      {agent.name}
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate font-mono text-[12px]">{agent.name}</span>
+                    <SplitBar liquidPct={100} yieldPct={0} className="w-full" />
+                  </span>
+                  <span className="flex flex-col items-end gap-0.5">
+                    <span className="font-mono text-[12px] tabular-nums">
+                      ${fmtUsdc(agent.balanceUSDC)}
                     </span>
-                    <StatusDot tone={AGENT_STATUS_META[agent.status].tone} />
-                    {active ? (
-                      <span className="shrink-0 rounded-full border border-primary/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-primary">
-                        Current
-                      </span>
-                    ) : null}
+                    <span className="font-mono text-[9px] tracking-[0.12em] text-subtle">
+                      {status}
+                      {agent.address !== "—"
+                        ? ` · ${fmtXLM(agent.balanceXLM)} XLM`
+                        : ""}
+                    </span>
                   </span>
-                  <span className="ml-auto shrink-0 font-mono text-[11px] tracking-tight text-subtle">
-                    {agent.address !== "—"
-                      ? `${truncMiddle(agent.address, 4, 4)} · ${fmtXLM(agent.balanceXLM)} XLM`
-                      : "provisioning…"}
-                  </span>
-                </CommandItem>
+                </button>
               );
             })}
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
+          </div>
+          <button
+            type="button"
+            onClick={newAgent}
+            className="w-full px-3.5 py-3 text-left font-mono text-[11px] tracking-[0.1em] text-primary-2"
+          >
+            + NEW AGENT
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              router.push("/agents");
+            }}
+            className="w-full border-t border-border px-3.5 py-2.5 text-left font-mono text-[10px] tracking-[0.1em] text-subtle"
+          >
+            VIEW FLEET →
+          </button>
+          {selectedAgent ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setConfirmDelete(true);
+              }}
+              className="w-full border-t border-border px-3.5 py-2.5 text-left font-mono text-[10px] tracking-[0.1em] text-destructive"
+            >
+              DELETE CURRENT
+            </button>
+          ) : null}
+        </PopoverContent>
+      </Popover>
 
       <ConfirmDialog
         open={confirmDelete}
