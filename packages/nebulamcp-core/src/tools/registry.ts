@@ -26,12 +26,7 @@ import {
   optimizeTreasuryTool,
   setLiquidityThresholdTool,
 } from "./blend.js";
-import {
-  deployPolicyTool,
-  getPolicyStatusTool,
-  setPolicyLimitsTool,
-  spendingReportTool,
-} from "./policy.js";
+import { getPolicyStatusTool, spendingReportTool } from "./policy.js";
 import {
   awaitConfirmationTool,
   getMyReputationTool,
@@ -108,14 +103,6 @@ export const tools = {
   optimize_treasury: wrap(optimizeTreasuryTool),
   spending_report: wrap(spendingReportTool),
   get_policy_status: wrap(getPolicyStatusTool),
-  set_policy_limits: wrap(setPolicyLimitsTool, {
-    dashboardOnly: true,
-    mcpHidden: true,
-  }),
-  deploy_policy: wrap(deployPolicyTool, {
-    dashboardOnly: true,
-    mcpHidden: true,
-  }),
   register_identity: wrap(registerIdentityTool),
   get_my_reputation: wrap(getMyReputationTool),
   trustline_status: wrap(trustlineStatusTool),
