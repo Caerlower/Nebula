@@ -4,14 +4,15 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
-import { Bot, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { hubFetch } from "@/lib/auth/session";
-import { Button } from "@/components/ui/button";
+import { AuthSplash } from "@/components/shared/auth-splash";
+import { SectionRule } from "@/components/design/primitives";
 import { Wordmark } from "@/components/shell/wordmark";
-import { useAuthStore } from "@/stores/auth";
+import { hubFetch } from "@/lib/auth/session";
 import { cn, truncMiddle } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth";
 
 type AgentOption = {
   id: string;
@@ -118,7 +119,9 @@ function AuthorizeInner() {
         error?: string;
       };
       if (!res.ok || !data.redirect_to) {
-        throw new Error(data.error_description ?? data.error ?? "consent_failed");
+        throw new Error(
+          data.error_description ?? data.error ?? "consent_failed",
+        );
       }
       window.location.assign(data.redirect_to);
     } catch (error) {
@@ -131,131 +134,156 @@ function AuthorizeInner() {
 
   if (!ready || !hydrated) {
     return (
-      <div className="flex justify-center py-20">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <AuthSplash title="One moment" detail="Loading your session…" />
       </div>
     );
   }
 
   if (!authed) {
     return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-12">
-        <Wordmark className="text-[26px]" />
-        <h1 className="page-title mt-8 text-[28px]">Sign in to continue</h1>
-        <p className="mt-2 text-[15px] text-muted-foreground">
+      <div className="mx-auto flex min-h-dvh max-w-[420px] flex-col justify-center px-6 py-12">
+        <Wordmark className="text-[22px]" />
+        <SectionRule className="mt-10">MCP CONNECTOR</SectionRule>
+        <h1 className="page-title">Sign in to continue</h1>
+        <p className="mt-3 text-[14px] text-pretty text-muted-foreground">
           An MCP client wants access to a Nebula agent wallet.
         </p>
-        <Button className="mt-8" asChild>
-          <Link href={returnToLogin}>Sign in</Link>
-        </Button>
+        <Link
+          href={returnToLogin}
+          className="mt-8 inline-flex h-11 w-full items-center justify-center rounded-full bg-[var(--btn-bg)] px-5 text-[13px] font-medium text-[var(--btn-fg)] transition-opacity hover:opacity-90"
+        >
+          Sign in
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-12">
-      <Wordmark className="text-[26px]" />
-      <h1 className="page-title mt-8 text-[28px]">Authorize MCP access</h1>
-      <p className="mt-2 text-[15px] text-muted-foreground">
-        Pick which agent this Claude connector will use. Tools will run on that
+    <div className="mx-auto flex min-h-dvh max-w-[440px] flex-col justify-center px-6 py-12">
+      <Wordmark className="text-[22px]" />
+      <SectionRule className="mt-10">MCP CONNECTOR</SectionRule>
+      <h1 className="page-title text-[28px] sm:text-[32px]">
+        Authorize access
+      </h1>
+      <p className="mt-3 text-[14px] text-pretty text-muted-foreground">
+        Pick which agent this Claude connector will use. Tools run on that
         agent&apos;s managed wallet — not your login wallet.
       </p>
 
-      <div className="mt-8 space-y-2">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-subtle">
-          Agent
-        </p>
-        {agents === null ? (
-          <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-4 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Loading agents…
-          </div>
-        ) : agents.length === 0 ? (
-          <div className="rounded-lg border border-border px-3 py-4 text-sm text-muted-foreground">
-            No agents yet.{" "}
-            <Link
-              href="/agents/new"
-              className="text-foreground underline-offset-4 hover:underline"
-            >
-              Create one
-            </Link>{" "}
-            first, then come back and reconnect.
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {agents.map((agent) => {
-              const readyWallet = Boolean(agent.stellarAddress);
-              const active = agent.id === selectedAgentId;
-              return (
-                <li key={agent.id}>
-                  <button
-                    type="button"
-                    disabled={!readyWallet}
-                    onClick={() => setSelectedAgentId(agent.id)}
-                    className={cn(
-                      "flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
-                      active
-                        ? "border-border-strong bg-elevated shadow-[inset_2px_0_0_var(--primary)]"
-                        : "border-border hover:bg-elevated/50",
-                      !readyWallet && "cursor-not-allowed opacity-50",
-                    )}
-                  >
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-brand text-brand-foreground">
-                      <Bot className="size-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium">
-                        {agent.name}
+      <div className="mt-8 overflow-hidden soft-panel-lg">
+        <div className="border-b border-border px-6 pt-6 pb-5">
+          <p className="mb-3.5 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+            Agent
+          </p>
+          {agents === null ? (
+            <div className="flex items-center gap-2 py-3 text-[13px] text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              Loading agents…
+            </div>
+          ) : agents.length === 0 ? (
+            <p className="py-1 text-[13px] text-muted-foreground">
+              No agents yet.{" "}
+              <Link
+                href="/agents/new"
+                className="text-foreground underline-offset-4 hover:underline"
+              >
+                Create one
+              </Link>{" "}
+              first, then come back and reconnect.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {agents.map((agent) => {
+                const readyWallet = Boolean(agent.stellarAddress);
+                const active = agent.id === selectedAgentId;
+                return (
+                  <li key={agent.id}>
+                    <button
+                      type="button"
+                      disabled={!readyWallet}
+                      onClick={() => setSelectedAgentId(agent.id)}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
+                        active
+                          ? "border-border-strong bg-[var(--panel-3)]"
+                          : "border-border hover:border-border-strong",
+                        !readyWallet && "cursor-not-allowed opacity-50",
+                      )}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "mt-1.5 size-2 shrink-0 rounded-full",
+                          active ? "bg-primary" : "bg-subtle",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[14px] font-medium">
+                          {agent.name}
+                        </span>
+                        <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
+                          {agent.stellarAddress
+                            ? truncMiddle(agent.stellarAddress, 6, 6)
+                            : "Wallet still provisioning…"}
+                        </span>
                       </span>
-                      <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
-                        {agent.stellarAddress
-                          ? truncMiddle(agent.stellarAddress, 6, 6)
-                          : "Wallet still provisioning…"}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      <dl className="mt-6 space-y-3 rounded-lg border border-border p-4 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Client</dt>
-          <dd className="mt-0.5 break-all font-mono text-xs">
-            {clientId || "—"}
-          </dd>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
-        <div>
-          <dt className="text-muted-foreground">Scope</dt>
-          <dd className="mt-0.5">{scope}</dd>
+
+        <dl className="space-y-4 border-b border-border px-6 py-5">
+          <div>
+            <dt className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+              Client
+            </dt>
+            <dd className="mt-1.5 break-all font-mono text-[11px] leading-relaxed">
+              {clientId || "—"}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-4">
+            <dt className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+              Scope
+            </dt>
+            <dd className="font-mono text-[12px]">{scope}</dd>
+          </div>
+        </dl>
+
+        {!valid ? (
+          <p className="border-b border-border px-6 py-4 text-[13px] text-destructive">
+            Missing client_id, redirect_uri, or S256 code_challenge.
+          </p>
+        ) : null}
+
+        <div className="flex gap-3 px-6 py-5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => router.replace("/agents")}
+            className="h-11 flex-1 rounded-full border border-border bg-[var(--panel-3)] px-5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:opacity-50"
+          >
+            Deny
+          </button>
+          <button
+            type="button"
+            disabled={!canAllow}
+            onClick={() => void approve()}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[var(--btn-bg)] px-5 text-[13px] font-medium text-[var(--btn-fg)] transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            ) : null}
+            {busy
+              ? "Working…"
+              : selected
+                ? `Allow ${selected.name}`
+                : "Allow agent"}
+          </button>
         </div>
-      </dl>
-
-      {!valid ? (
-        <p className="mt-4 text-sm text-destructive">
-          Missing client_id, redirect_uri, or S256 code_challenge.
-        </p>
-      ) : null}
-
-      <div className="mt-8 flex gap-3">
-        <Button
-          className="flex-1"
-          disabled={!canAllow}
-          onClick={() => void approve()}
-        >
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-          Allow {selected ? selected.name : "agent"}
-        </Button>
-        <Button
-          variant="outline"
-          className="flex-1"
-          disabled={busy}
-          onClick={() => router.replace("/agents")}
-        >
-          Deny
-        </Button>
       </div>
     </div>
   );
@@ -265,8 +293,8 @@ export default function AuthorizePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex justify-center py-20">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <div className="flex min-h-dvh items-center justify-center bg-background">
+          <AuthSplash title="One moment" detail="Loading…" />
         </div>
       }
     >
