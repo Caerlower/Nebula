@@ -17,6 +17,7 @@ import {
   onchainSetTreasuryBand,
   policyContractConfigured,
 } from "@/lib/policy/onchain";
+import { networkFromPrincipal, parseHubNetwork } from "@/lib/network";
 import { explorerTxUrl, fetchBalances } from "../stellar";
 import { executeX402Tool } from "../x402/execute";
 import {
@@ -28,10 +29,11 @@ import {
 } from "../mpp/execute";
 
 import {
-  APP_URL,
+  appUrl,
   formatAmt,
   ledgerAsset,
   loadEffectiveCaps,
+  loadOnchainPolicyInit,
   loadPolicySnapshot,
   loadTreasurySettings,
   buildToolContext,
@@ -176,7 +178,7 @@ export async function runHubTool(
         tokenId: principal.tokenId,
         stellarAddress: principal.stellarAddress ?? "",
         privyWalletId: principal.privyWalletId ?? "",
-        network: "testnet",
+        network: principal.network,
         signTransactionXdr: async () => {
           throw new Error("no_wallet");
         },
@@ -196,7 +198,7 @@ export async function runHubTool(
         tokenId: principal.tokenId,
         stellarAddress: principal.stellarAddress ?? "",
         privyWalletId: principal.privyWalletId ?? "",
-        network: "testnet",
+        network: principal.network,
         signTransactionXdr: async () => {
           throw new Error("no_wallet");
         },
@@ -275,7 +277,11 @@ export async function runHubTool(
       memo?: string;
       reason: string;
     };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     let amountUsdc: number;
     try {
       amountUsdc = await xlmToUsdc(input.amount_xlm);
@@ -298,6 +304,7 @@ export async function runHubTool(
         data: {
           userId: principal.userId,
           agentId: principal.agentId,
+          network: principal.network,
           type: "transfer",
           destination: input.destination,
           amountXlm: input.amount_xlm,
@@ -313,8 +320,9 @@ export async function runHubTool(
       const conf = await prisma.confirmation.create({
         data: {
           userId: principal.userId,
+          network: principal.network,
           toolName,
-          input,
+          input: { ...input, _agentId: principal.agentId },
           summary: `Transfer ${input.amount_xlm} XLM (≈ $${formatAmt(amountUsdc)} USDC) to ${input.destination.slice(0, 4)}…${input.destination.slice(-4)} (${decision.reason})`,
           status: "pending",
           expiresAt,
@@ -323,7 +331,7 @@ export async function runHubTool(
       return {
         status: "confirmation_required",
         confirmation_id: conf.id,
-        approve_url: `${APP_URL}/approve/${conf.id}`,
+        approve_url: `${appUrl()}/approve/${conf.id}`,
         expires_in: 15 * 60,
         summary: conf.summary,
       };
@@ -354,6 +362,7 @@ export async function runHubTool(
         data: {
           userId: principal.userId,
           agentId: principal.agentId,
+          network: principal.network,
           type: "swap",
           destination: ctx.stellarAddress,
           amountXlm: input.amount,
@@ -368,8 +377,9 @@ export async function runHubTool(
       const conf = await prisma.confirmation.create({
         data: {
           userId: principal.userId,
+          network: principal.network,
           toolName,
-          input,
+          input: { ...input, _agentId: principal.agentId },
           summary:
             `Swap ${input.amount} ${input.from_asset} → ${input.to_asset} ` +
             `(≈ $${formatAmt(decision.amountUsdc)} USDC notional; ${decision.reason})`,
@@ -380,7 +390,7 @@ export async function runHubTool(
       return {
         status: "confirmation_required",
         confirmation_id: conf.id,
-        approve_url: `${APP_URL}/approve/${conf.id}`,
+        approve_url: `${appUrl()}/approve/${conf.id}`,
         expires_in: 15 * 60,
         summary: conf.summary,
       };
@@ -413,7 +423,10 @@ export async function runHubTool(
   }
 
   if (toolName === "get_treasury_status") {
-    const settings = await loadTreasurySettings(principal.userId);
+    const settings = await loadTreasurySettings(
+      principal.userId,
+      principal.network,
+    );
     try {
       const balances = await getTreasuryBalances(
         ctx.stellarAddress,
@@ -429,6 +442,8 @@ export async function runHubTool(
           asset: "XLM",
           liquid: balances.liquid,
           blend_deposited: balances.blendDeposited,
+          blend_usdc_deposited: balances.blendUsdcDeposited,
+          positions: balances.positions,
           supply_apy: balances.supplyApy,
           raw_native_xlm: balances.rawNativeXlm,
           fee_buffer: balances.feeBuffer,
@@ -448,7 +463,11 @@ export async function runHubTool(
         },
         message:
           `Liquid ${formatAmt(balances.liquid)} XLM · ` +
-          `Blend ${formatAmt(balances.blendDeposited)} XLM · ` +
+          `Blend ${formatAmt(balances.blendDeposited)} XLM` +
+          (balances.blendUsdcDeposited > 0
+            ? ` · ${formatAmt(balances.blendUsdcDeposited)} USDC`
+            : "") +
+          ` · ` +
           `band $${formatAmt(band.lowUsdc)}–$${formatAmt(band.highUsdc)} USDC ` +
           `(≈ ${formatAmt(band.lowXlm)}–${formatAmt(band.highXlm)} XLM) · ` +
           `APY ${balances.supplyApy != null ? `${(balances.supplyApy * 100).toFixed(2)}%` : "n/a"}`,
@@ -466,12 +485,18 @@ export async function runHubTool(
 
   if (toolName === "set_liquidity_threshold") {
     const input = parsed.data as { threshold: number };
-    const existing = await loadTreasurySettings(principal.userId);
+    const existing = await loadTreasurySettings(
+      principal.userId,
+      principal.network,
+    );
     const liquidHigh = Math.max(Number(existing.liquidHigh), input.threshold);
     const row = await prisma.policySettings.upsert({
-      where: { userId: principal.userId },
+      where: {
+        userId_network: { userId: principal.userId, network: principal.network },
+      },
       create: {
         userId: principal.userId,
+        network: principal.network,
         liquidThreshold: input.threshold,
         liquidHigh,
       },
@@ -483,23 +508,24 @@ export async function runHubTool(
 
     let onchain: string = "hub_only";
     if (
-      policyContractConfigured() &&
+      policyContractConfigured(ctx.network) &&
       principal.privyWalletId &&
       principal.privyWalletId !== "dev-wallet" &&
       principal.stellarAddress
     ) {
-      const network = ctx.network;
-      const init = await ensurePolicyInitialized({
+      const payload = await loadOnchainPolicyInit(
+        principal.userId,
+        principal.network,
+        principal.agentId,
+      );
+      const wallet = {
         walletId: principal.privyWalletId,
         stellarAddress: principal.stellarAddress,
-        network,
-        maxPerCallXlm: Number(row.perTxCap),
-        maxPerDayXlm: Number(row.dailyCap),
-        categories: {
-          transfer: Number(row.catTransfer),
-          x402: Number(row.catX402),
-          mpp: Number(row.catMpp),
-        },
+        network: ctx.network,
+      };
+      const init = await ensurePolicyInitialized({
+        ...wallet,
+        ...payload,
         liquidLowXlm: Number(row.liquidThreshold),
         liquidHighXlm: Number(row.liquidHigh),
         autoYield: row.autoYield,
@@ -512,9 +538,7 @@ export async function runHubTool(
       }
       if (!init.hash) {
         const band = await onchainSetTreasuryBand({
-          walletId: principal.privyWalletId,
-          stellarAddress: principal.stellarAddress,
-          network,
+          ...wallet,
           liquidLowXlm: Number(row.liquidThreshold),
           liquidHighXlm: Number(row.liquidHigh),
           autoYield: row.autoYield,
@@ -529,7 +553,7 @@ export async function runHubTool(
       } else {
         onchain = "initialize_ok";
       }
-    } else if (!policyContractConfigured()) {
+    } else if (!policyContractConfigured(ctx.network)) {
       onchain = "skipped_no_contract";
     }
 
@@ -546,7 +570,12 @@ export async function runHubTool(
 
   if (toolName === "blend_deposit") {
     return executeBlendDeposit(
-      parsed.data as { amount_xlm: number; pool_id?: string },
+      parsed.data as {
+        amount?: number;
+        amount_xlm?: number;
+        asset?: "XLM" | "USDC";
+        pool_id?: string;
+      },
       principal,
       ctx,
     );
@@ -554,7 +583,12 @@ export async function runHubTool(
 
   if (toolName === "blend_withdraw") {
     return executeBlendWithdraw(
-      parsed.data as { amount_xlm: number; pool_id?: string },
+      parsed.data as {
+        amount?: number;
+        amount_xlm?: number;
+        asset?: "XLM" | "USDC";
+        pool_id?: string;
+      },
       principal,
       ctx,
     );
@@ -571,7 +605,11 @@ export async function runHubTool(
       amount_usdc?: number;
       facilitator?: string;
     };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     return executeX402Tool({
       toolName,
       input,
@@ -583,7 +621,11 @@ export async function runHubTool(
 
   if (toolName === "mpp_open_session") {
     const input = parsed.data as { budget_usdc: number; recipient?: string };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     return executeMppOpenSession({ input, principal, ctx, policy });
   }
 
@@ -593,13 +635,21 @@ export async function runHubTool(
       amount_xlm: number;
       streaming?: boolean;
     };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     return executeMppPay({ input, principal, ctx, policy });
   }
 
   if (toolName === "mpp_fetch") {
     const input = parsed.data as { url: string };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     return executeMppFetch({ input, principal, ctx, policy });
   }
 
@@ -628,19 +678,31 @@ export async function runHubTool(
       skip_proof?: boolean;
       from_ledger?: number;
     };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     return executeTrustlineOnboard(input, ctx, principal, policy);
   }
 
   if (toolName === "trustline_borrow") {
     const input = parsed.data as { amount_usdc: number; reason: string };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     return executeTrustlineBorrow(input, ctx, principal, policy);
   }
 
   if (toolName === "trustline_repay") {
     const input = parsed.data as { amount_usdc: number; reason: string };
-    const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     return executeTrustlineRepay(input, ctx, principal, policy);
   }
 
@@ -677,11 +739,7 @@ async function executeAwaitConfirmation(
         status: "ok",
         tx_hash: conf.txHash ?? undefined,
         explorer_url: conf.txHash
-          ? explorerTxUrl(
-              (process.env.STELLAR_NETWORK as "testnet" | "mainnet") ??
-                "testnet",
-              conf.txHash,
-            )
+          ? explorerTxUrl(principal.network, conf.txHash)
           : undefined,
         data: {
           confirmation_id: conf.id,
@@ -723,11 +781,11 @@ async function executeAwaitConfirmation(
       status: "pending",
       retry: true,
       polled_seconds: polledSec,
-      approve_url: `${APP_URL}/approve/${input.confirmation_id}`,
+      approve_url: `${appUrl()}/approve/${input.confirmation_id}`,
     },
     message: [
       `Still pending after ${polledSec}s.`,
-      `Approve at: ${APP_URL}/approve/${input.confirmation_id}`,
+      `Approve at: ${appUrl()}/approve/${input.confirmation_id}`,
       "Call await_confirmation again with the same confirmation_id.",
     ].join("\n"),
   };
@@ -838,11 +896,25 @@ async function executePolicyReadTools(
   }
 
   // get_policy_status — caps / band / lists only (all spend caps in USDC)
-  const settings = await loadTreasurySettings(principal.userId);
-  const caps = await loadEffectiveCaps(principal.userId, principal.agentId);
-  const policy = await loadPolicySnapshot(principal.userId, principal.agentId);
+  const settings = await loadTreasurySettings(
+    principal.userId,
+    principal.network,
+  );
+  const caps = await loadEffectiveCaps(
+    principal.userId,
+    principal.network,
+    principal.agentId,
+  );
+  const policy = await loadPolicySnapshot(
+    principal.userId,
+    principal.network,
+    principal.agentId,
+  );
   const [spend, whitelistCount, denylistCount] = await Promise.all([
-    sumSpendUsdcSince(principal.userId, since, { agentId: principal.agentId }),
+    sumSpendUsdcSince(principal.userId, since, {
+      agentId: principal.agentId,
+      network: principal.network,
+    }),
     principal.agentId
       ? prisma.whitelistEntry.count({
           where: { userId: principal.userId, agentId: principal.agentId },
@@ -959,6 +1031,11 @@ export async function executeApprovedConfirmation(
     return { status: "error", reason: "unsupported_confirmation_tool" };
   }
 
+  const confNetwork = parseHubNetwork(conf.network);
+  if (!confNetwork) {
+    return { status: "error", reason: "invalid_confirmation_network" };
+  }
+
   let principal: AuthPrincipal = {
     userId: conf.userId,
     agentId: null,
@@ -967,22 +1044,30 @@ export async function executeApprovedConfirmation(
     email: conf.user.email,
     stellarAddress: conf.user.stellarAddress,
     privyWalletId: conf.user.privyWalletId,
-    accountType: "custodial",
-    signerStrategy: "privy",
+    accountType:
+      conf.user.accountType === "external" ? "external" : "custodial",
+    signerStrategy:
+      conf.user.signerStrategy === "client_side"
+        ? "client_side"
+        : conf.user.signerStrategy === "partner_callback"
+          ? "partner_callback"
+          : "privy",
+    // Execute on the ledger stamped at create time — not live preference.
+    network: networkFromPrincipal({ network: confNetwork }),
   };
 
-  // TrustLine confirmations store the agent id so approve signs with the
-  // agent wallet (same wallet that opened the credit line), not the owner.
+  // All confirmations store _agentId so approve signs with the agent wallet
+  // that requested the spend (TrustLine historically; transfer/x402/mpp/swap now).
   const confInput = conf.input as { _agentId?: string | null };
-  if (
-    (conf.toolName === "trustline_borrow" ||
-      conf.toolName === "trustline_repay") &&
-    confInput._agentId
-  ) {
+  if (confInput._agentId) {
     const agent = await prisma.agent.findFirst({
-      where: { id: confInput._agentId, userId: conf.userId },
+      where: {
+        id: confInput._agentId,
+        userId: conf.userId,
+        network: confNetwork,
+      },
     });
-    if (!agent?.stellarAddress || !agent.privyWalletId) {
+    if (!agent?.stellarAddress) {
       return { status: "error", reason: "agent_wallet_not_provisioned" };
     }
     principal = {
@@ -990,8 +1075,13 @@ export async function executeApprovedConfirmation(
       agentId: agent.id,
       stellarAddress: agent.stellarAddress,
       privyWalletId: agent.privyWalletId,
-      accountType: "custodial",
-      signerStrategy: "privy",
+      accountType: agent.accountType === "external" ? "external" : "custodial",
+      signerStrategy:
+        agent.signerStrategy === "client_side"
+          ? "client_side"
+          : agent.signerStrategy === "partner_callback"
+            ? "partner_callback"
+            : "privy",
     };
   }
 
@@ -1008,7 +1098,11 @@ export async function executeApprovedConfirmation(
       amount_usdc: number;
       reason: string;
     };
-    const policy = await loadPolicySnapshot(conf.userId, principal.agentId);
+    const policy = await loadPolicySnapshot(
+      conf.userId,
+      principal.network,
+      principal.agentId,
+    );
     const result =
       conf.toolName === "trustline_borrow"
         ? await executeTrustlineBorrow(input, ctx, principal, policy, {
@@ -1034,7 +1128,11 @@ export async function executeApprovedConfirmation(
       max_amount_xlm?: number;
       amount_xlm?: number;
     };
-    const policy = await loadPolicySnapshot(conf.userId);
+    const policy = await loadPolicySnapshot(
+      conf.userId,
+      principal.network,
+      principal.agentId,
+    );
     const result = await executeX402Tool({
       toolName: conf.toolName,
       input,
@@ -1055,7 +1153,11 @@ export async function executeApprovedConfirmation(
 
   if (conf.toolName === "mpp_open_session") {
     const input = conf.input as { budget_usdc: number; recipient?: string };
-    const policy = await loadPolicySnapshot(conf.userId);
+    const policy = await loadPolicySnapshot(
+      conf.userId,
+      principal.network,
+      principal.agentId,
+    );
     const result = await executeMppOpenSession({
       input,
       principal,
@@ -1075,7 +1177,11 @@ export async function executeApprovedConfirmation(
 
   if (conf.toolName === "mpp_fetch") {
     const input = conf.input as { url: string };
-    const policy = await loadPolicySnapshot(conf.userId);
+    const policy = await loadPolicySnapshot(
+      conf.userId,
+      principal.network,
+      principal.agentId,
+    );
     const result = await executeMppFetch({
       input,
       principal,
