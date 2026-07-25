@@ -1,3 +1,4 @@
+import { PRODUCTION_APP_URL } from "@/lib/app-url";
 import type { Framework } from "@/types/domain";
 
 /**
@@ -7,7 +8,9 @@ import type { Framework } from "@/types/domain";
  * always agree on server name ("nebula"), Hub host, and transport.
  */
 
-export const HUB = "https://www.nebulaonchain.xyz";
+export const HUB =
+  process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
+  PRODUCTION_APP_URL;
 export const MCP_URL = `${HUB}/mcp`;
 
 /** Placeholder that {@link getSnippet} swaps for a real token when provided. */
