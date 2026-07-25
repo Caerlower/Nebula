@@ -60,4 +60,10 @@ skills-lock.json
 *.p12
 credentials.json
 secrets.json
+
+# Local pnpm content-addressable store (never commit)
 .pnpm-store/
+
+# Soroban test failure snapshots (local; do not commit)
+**/test_snapshots/
+
