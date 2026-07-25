@@ -5,6 +5,7 @@ import { resolveAuth, unauthorized } from "@/lib/auth";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
 import { demoPrivyWalletId, demoStellarAddress } from "@/lib/auth";
 import { buildMcpConfig } from "@/lib/mcp/config";
+import { networkFromPrincipal, parseHubNetwork } from "@/lib/network";
 
 /** null = never expires. Allowed UI presets: 7 / 30 / 180 days. */
 const createSchema = z.object({
@@ -71,9 +72,12 @@ export async function POST(req: NextRequest) {
         },
       });
       userId = user.id;
+      const network = networkFromPrincipal({
+        network: parseHubNetwork(user.preferredNetwork),
+      });
       await prisma.policySettings.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id },
+        where: { userId_network: { userId: user.id, network } },
+        create: { userId: user.id, network },
         update: {},
       });
     } else {
@@ -99,6 +103,26 @@ export async function POST(req: NextRequest) {
     expiresInDays == null
       ? null
       : new Date(Date.now() + expiresInDays * 86_400_000);
+
+  if (body.data.agentId) {
+    const network =
+      principal?.network ??
+      networkFromPrincipal({ network: "testnet" });
+    const agent = await prisma.agent.findFirst({
+      where: {
+        id: body.data.agentId,
+        userId: userId!,
+        network,
+      },
+      select: { id: true },
+    });
+    if (!agent) {
+      return Response.json(
+        { status: "error", reason: "agent_not_found" },
+        { status: 400 },
+      );
+    }
+  }
 
   const plaintext = mintNebulaTokenPlaintext();
   const tokenHash = hashNebulaToken(plaintext);
