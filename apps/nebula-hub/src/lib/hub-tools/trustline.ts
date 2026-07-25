@@ -7,16 +7,14 @@ import {
 
 import type { AuthPrincipal } from "../auth";
 import { prisma } from "../db";
-import { onchainCheckSpend } from "@/lib/policy/onchain";
 import { resolveSigner } from "../signing";
 import {
   TrustLineHubClient,
   trustlineConfigured,
 } from "../trustline/client";
 import {
-  APP_URL,
+  appUrl,
   formatAmt,
-  loadEffectiveCaps,
 } from "./context";
 
 function requireTrustline(
@@ -34,7 +32,7 @@ function requireTrustline(
     return {
       status: "rejected",
       reason:
-        "trustline_testnet_only: TrustLine is a testnet prototype (https://docs.0xtrustline.online)",
+        "fianza_testnet_only: Fianza credit is unavailable on mainnet until the pubnet API ships. Switch to testnet to use borrow/repay.",
     };
   }
   try {
@@ -148,6 +146,7 @@ export async function executeTrustlineOnboard(
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "trustline_onboard",
         destination: ctx.stellarAddress,
         amountXlm: 0,
@@ -193,7 +192,7 @@ async function gateTrustlineCredit(params: {
   ctx: ToolContext;
   policy: PolicySnapshot;
   vaultId: string;
-  /** Borrow draws credit (not wallet spend); repay is outbound USDC. */
+  /** TrustLine borrow/repay are provider-limited, not Nebula spend categories. */
   countsAsSpend: boolean;
   skipConfirmation?: boolean;
 }): Promise<ToolResult | null> {
@@ -203,27 +202,8 @@ async function gateTrustlineCredit(params: {
     return { status: "rejected", reason: "policy_paused" };
   }
 
-  if (params.countsAsSpend) {
-    const caps = await loadEffectiveCaps(principal.userId, principal.agentId);
-    if (input.amount_usdc > caps.perTxCap + 1e-9) {
-      return {
-        status: "rejected",
-        reason: `exceeds_per_tx_cap: ${input.amount_usdc} > ${caps.perTxCap}`,
-      };
-    }
-    if (policy.dailySpentUsdc + input.amount_usdc > policy.dailyCap + 1e-9) {
-      return {
-        status: "rejected",
-        reason: `exceeds_daily_cap: need ${input.amount_usdc}, daily remaining ${Math.max(policy.dailyCap - policy.dailySpentUsdc, 0)}`,
-      };
-    }
-    if (input.amount_usdc > caps.catTransfer + 1e-9) {
-      return {
-        status: "rejected",
-        reason: `exceeds_category_cap:transfer ${input.amount_usdc} > ${caps.catTransfer}`,
-      };
-    }
-  }
+  // Spend caps intentionally skipped: credit line size is the TrustLine
+  // provider's job. Nebula only pauses the agent and may ask for confirmation.
 
   const decision = evaluateConfirmation({
     destination: vaultId,
@@ -237,6 +217,7 @@ async function gateTrustlineCredit(params: {
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: toolName,
         destination: vaultId,
         amountXlm: input.amount_usdc,
@@ -252,6 +233,7 @@ async function gateTrustlineCredit(params: {
     const conf = await prisma.confirmation.create({
       data: {
         userId: principal.userId,
+        network: principal.network,
         toolName,
         input: {
           ...input,
@@ -269,7 +251,7 @@ async function gateTrustlineCredit(params: {
     return {
       status: "confirmation_required",
       confirmation_id: conf.id,
-      approve_url: `${APP_URL}/approve/${conf.id}`,
+      approve_url: `${appUrl()}/approve/${conf.id}`,
       expires_in: 15 * 60,
       summary: conf.summary,
     };
@@ -314,6 +296,7 @@ export async function executeTrustlineBorrow(
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "trustline_borrow",
         destination: vaultId,
         amountXlm: input.amount_usdc,
@@ -361,27 +344,19 @@ export async function executeTrustlineRepay(
       ctx,
       policy,
       vaultId,
-      countsAsSpend: true,
+      // Repay is not discretionary spend — provider credit + pause/confirm only.
+      countsAsSpend: false,
       skipConfirmation: opts?.skipConfirmation,
     });
     if (gate) return gate;
 
     const result = await client.repay(input.amount_usdc);
 
-    if (principal.signerStrategy === "privy") {
-      await onchainCheckSpend({
-        walletId: ctx.privyWalletId,
-        stellarAddress: ctx.stellarAddress,
-        network: ctx.network,
-        category: "transfer",
-        amountXlm: input.amount_usdc,
-      }).catch(() => null);
-    }
-
     await prisma.transaction.create({
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "trustline_repay",
         destination: vaultId,
         amountXlm: input.amount_usdc,
