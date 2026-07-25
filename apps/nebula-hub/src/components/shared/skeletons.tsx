@@ -1,16 +1,15 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export function StatCardSkeleton({ className }: { className?: string }) {
   return (
-    <Card className={cn("space-y-3 p-5", className)}>
+    <div className={cn("soft-panel space-y-3 p-5", className)}>
       <Skeleton className="h-3.5 w-24" />
       <Skeleton className="h-8 w-36" />
       <Skeleton className="h-3.5 w-28" />
-    </Card>
+    </div>
   );
 }
 
