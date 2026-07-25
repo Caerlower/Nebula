@@ -42,6 +42,7 @@ export async function executeTransfer(
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "transfer",
         destination: input.destination,
         amountXlm: input.amount_xlm,
@@ -74,9 +75,7 @@ export async function executeTransfer(
           : "xlm_usd_price_unavailable",
     };
   }
-  // Nebula's on-chain policy contract is a custodial (Privy) feature. Partner
-  // accounts (e.g. Tael cards) enforce caps on their side at signing time, so
-  // we rely on Nebula's soft DB caps + the partner's hard check instead.
+  // On-chain policy is Privy-only; partners enforce caps at their signer.
   const chain =
     principal.signerStrategy === "privy"
       ? await onchainCheckSpend({
@@ -87,6 +86,7 @@ export async function executeTransfer(
           amountXlm: amountUsdc,
           init: await loadOnchainPolicyInit(
             principal.userId,
+            principal.network,
             principal.agentId,
           ),
         })
@@ -96,6 +96,7 @@ export async function executeTransfer(
       data: {
         userId: principal.userId,
         agentId: principal.agentId,
+        network: principal.network,
         type: "transfer",
         destination: input.destination,
         amountXlm: input.amount_xlm,
@@ -117,7 +118,11 @@ export async function executeTransfer(
 
   // Prefer one on-chain tx: Blend withdraw + classic payment (no memo — Soroban rule).
   if (topUp.withdrawAmount >= MIN_TREASURY_MOVE && !input.memo) {
-    const paused = await requireNotPaused(principal.userId, principal.agentId);
+    const paused = await requireNotPaused(
+      principal.userId,
+      principal.network,
+      principal.agentId,
+    );
     if (paused) return paused;
 
     const bundled = await blendWithdrawAndPay({
@@ -134,6 +139,7 @@ export async function executeTransfer(
         data: {
           userId: principal.userId,
           agentId: principal.agentId,
+          network: principal.network,
           type: "transfer",
           destination: input.destination,
           amountXlm: input.amount_xlm,
@@ -205,6 +211,7 @@ export async function executeTransfer(
     data: {
       userId: principal.userId,
       agentId: principal.agentId,
+      network: principal.network,
       type: "transfer",
       destination: input.destination,
       amountXlm: input.amount_xlm,
