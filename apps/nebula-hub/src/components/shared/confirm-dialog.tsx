@@ -19,6 +19,7 @@ interface ConfirmDialogProps {
   title: string;
   description: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   destructive?: boolean;
   /** when set, the user must type this exact string to enable confirm */
   typeToConfirm?: string;
@@ -31,13 +32,14 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   destructive = false,
   typeToConfirm,
   onConfirm,
 }: ConfirmDialogProps) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
-  const blocked = typeToConfirm ? typed !== typeToConfirm : false;
+  const blocked = Boolean(typeToConfirm && typed !== typeToConfirm);
 
   const handleConfirm = async () => {
     setBusy(true);
@@ -60,17 +62,28 @@ export function ConfirmDialog({
         }
       }}
     >
-      <DialogContent className="max-w-[420px] gap-6">
-        <DialogHeader>
-          <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
-            CONFIRM
-          </p>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-[440px] gap-0 overflow-hidden p-0 sm:rounded-[20px]">
+        <div className="border-b border-border px-7 pt-7 pb-5">
+          <DialogHeader className="gap-3 pr-8">
+            <p
+              className={cn(
+                "font-mono text-[10px] tracking-[0.18em]",
+                destructive ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {destructive ? "CONFIRM · IRREVERSIBLE" : "CONFIRM"}
+            </p>
+            <DialogTitle className="text-[20px] leading-tight tracking-[-0.02em]">
+              {title}
+            </DialogTitle>
+            <DialogDescription className="text-[14px] leading-relaxed">
+              {description}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
         {typeToConfirm ? (
-          <div className="space-y-1.5">
+          <div className="space-y-2 border-b border-border px-7 py-5">
             <label
               htmlFor="confirm-input"
               className="block font-mono text-[10px] tracking-[0.12em] text-muted-foreground"
@@ -85,38 +98,30 @@ export function ConfirmDialog({
               onChange={(e) => setTyped(e.target.value)}
               autoComplete="off"
               aria-label={`Type ${typeToConfirm} to confirm`}
-              className="box-border h-10 w-full rounded-xl border border-border bg-[var(--panel-3)] px-3.5 font-mono text-[13px] outline-none transition-[border-color] focus:border-border-strong"
+              className="box-border h-11 w-full rounded-xl border border-border bg-[var(--panel-3)] px-3.5 font-mono text-[13px] outline-none transition-[border-color] focus:border-border-strong"
             />
           </div>
         ) : null}
 
-        <DialogFooter>
+        <DialogFooter className="gap-3 px-7 py-5 sm:justify-stretch">
           <button
             type="button"
             disabled={busy}
             onClick={() => onOpenChange(false)}
-            className="rounded-full border border-border-strong px-5 py-2.5 text-[13px] text-muted-foreground disabled:opacity-50"
+            className="h-11 flex-1 rounded-full border border-border bg-[var(--panel-3)] px-5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:opacity-50"
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"
             disabled={blocked || busy}
             onClick={() => void handleConfirm()}
             className={cn(
-              "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-medium disabled:opacity-50",
+              "inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 text-[13px] font-medium transition-opacity disabled:opacity-50",
               destructive
-                ? "border border-destructive text-destructive"
-                : undefined,
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : "bg-[var(--btn-bg)] text-[var(--btn-fg)] hover:opacity-90",
             )}
-            style={
-              destructive
-                ? undefined
-                : {
-                    background: "var(--btn-bg)",
-                    color: "var(--btn-fg)",
-                  }
-            }
           >
             {busy ? (
               <Loader2 className="size-3.5 animate-spin" aria-hidden />
