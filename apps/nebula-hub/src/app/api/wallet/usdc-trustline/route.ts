@@ -130,9 +130,13 @@ export async function POST(req: NextRequest) {
       signer: privySigner(resolved.privyWalletId, resolved.address),
       network,
     });
+    const fundedNote = result.friendbotUsed
+      ? " Funded the wallet with testnet XLM via Friendbot, then "
+      : " ";
     return Response.json({
       status: "ok",
       already_had: result.alreadyHad,
+      friendbot_used: result.friendbotUsed,
       tx_hash: result.txHash,
       explorer_url: result.txHash
         ? explorerTxUrl(network, result.txHash)
@@ -140,13 +144,19 @@ export async function POST(req: NextRequest) {
       faucet: network === "testnet" ? "https://faucet.circle.com/" : null,
       message: result.alreadyHad
         ? "USDC trustline already open"
-        : "USDC trustline opened — fund via Circle faucet next",
+        : `USDC trustline opened.${fundedNote}Fund USDC via the Circle faucet next.`,
     });
   } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    const reason = raw.includes("op_underfunded")
+      ? "insufficient_xlm: wallet needs a little XLM for fees — fund via Friendbot on testnet, then retry"
+      : raw.includes("account_unfunded") || raw.includes("Not Found")
+        ? "account_unfunded: wallet is not on the ledger yet — on testnet we auto-fund via Friendbot; retry in a moment"
+        : raw;
     return Response.json(
       {
         status: "error",
-        reason: error instanceof Error ? error.message : String(error),
+        reason,
       },
       { status: 400 },
     );

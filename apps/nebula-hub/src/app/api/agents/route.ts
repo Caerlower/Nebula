@@ -8,8 +8,9 @@ import {
   resolveAuth,
   unauthorized,
 } from "@/lib/auth";
-import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
-import { buildMcpConfig } from "@/lib/mcp-config";
+import { prisma } from "@/lib/db";
+import { rowSpendUsdc, SPEND_TX_TYPES } from "@/lib/fx";
+import { loadTreasurySettings } from "@/lib/hub-tools/context";
 import { fetchBalances } from "@/lib/stellar";
 
 const HUB_NETWORK =
@@ -104,6 +105,7 @@ async function uncachedGET(req: NextRequest) {
         where: { revokedAt: null },
         select: { id: true, label: true, lastUsedAt: true, createdAt: true },
       },
+      policy: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -123,11 +125,43 @@ async function uncachedGET(req: NextRequest) {
       }),
   );
 
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
+  const [ownerCaps, spendRows] = await Promise.all([
+    loadTreasurySettings(principal.userId),
+    prisma.transaction.findMany({
+      where: {
+        userId: principal.userId,
+        status: "confirmed",
+        type: { in: [...SPEND_TX_TYPES] },
+        createdAt: { gte: since },
+      },
+      select: { agentId: true, type: true, amountXlm: true, reason: true },
+    }),
+  ]);
+
+  const spendByAgent = new Map<string, number>();
+  for (const row of spendRows) {
+    if (!row.agentId) continue;
+    const usdc = await rowSpendUsdc(row);
+    spendByAgent.set(row.agentId, (spendByAgent.get(row.agentId) ?? 0) + usdc);
+  }
+
   // Each agent has its own wallet — report its own balance, not the owner's.
   const withBalance = await Promise.all(
     agents.map(async (a) => {
       const { xlm, usdc } = await agentBalances(a.stellarAddress);
-      return { ...a, balanceXlm: xlm, balanceUsdc: usdc };
+      const dailyCap = a.policy
+        ? Number(a.policy.dailyCap)
+        : Number(ownerCaps.dailyCap);
+      return {
+        ...a,
+        balanceXlm: xlm,
+        balanceUsdc: usdc,
+        dailyCap,
+        spendTodayUsdc: spendByAgent.get(a.id) ?? 0,
+        policy: undefined,
+      };
     }),
   );
   return Response.json({ agents: withBalance });
@@ -167,21 +201,12 @@ async function uncachedPOST(req: NextRequest) {
     agent.stellarAddress = wallet.address;
   }
 
-  const plaintext = mintNebulaTokenPlaintext();
-  const token = await prisma.nebulaToken.create({
-    data: {
-      userId: principal.userId,
-      agentId: agent.id,
-      label: body.data.label ?? body.data.name,
-      tokenHash: hashNebulaToken(plaintext),
-    },
-  });
-
   const user = await prisma.user.findUnique({
     where: { id: principal.userId },
     select: { stellar8004AgentId: true },
   });
 
+  // API/MCP keys are issued later on Connect — not at create time.
   return Response.json({
     agent,
     wallet: {
@@ -201,16 +226,6 @@ async function uncachedPOST(req: NextRequest) {
           ? "Agent row starts at 0. On-chain Stellar8004 is per wallet — call get_my_reputation to refresh from chain."
           : "Call register_identity (MCP) to mint on-chain Stellar8004 identity for this wallet.",
     },
-    token: {
-      id: token.id,
-      label: token.label,
-      token: plaintext,
-      warning: "Plaintext shown once. Store safely.",
-    },
-    // One-click MCP config for this agent — only available now (token is
-    // shown once). Paste into Cursor/Claude Code (streamable_http) or Claude
-    // Desktop (claude_desktop). Server name is always "nebula".
-    mcp: buildMcpConfig({ token: plaintext }),
   });
 }
 

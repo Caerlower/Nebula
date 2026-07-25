@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { loadEffectiveCaps } from "@/lib/hub-tools/context";
 import { fetchBalances } from "@/lib/stellar";
 
 const HUB_NETWORK =
@@ -108,6 +109,27 @@ async function uncachedPATCH(
       },
     },
   });
+
+  // Keep AgentPolicy.paused in lockstep with agent status so Overview, Policy,
+  // and Fleet never disagree on whether spend is blocked.
+  if (body.data.status !== undefined) {
+    const paused = body.data.status !== "active";
+    const current = await loadEffectiveCaps(principal.userId, id);
+    await prisma.agentPolicy.upsert({
+      where: { agentId: id },
+      create: {
+        agentId: id,
+        microThreshold: current.microThreshold,
+        perTxCap: current.perTxCap,
+        dailyCap: current.dailyCap,
+        paused,
+        catTransfer: current.catTransfer,
+        catX402: current.catX402,
+        catMpp: current.catMpp,
+      },
+      update: { paused },
+    });
+  }
 
   return Response.json({ agent });
 }

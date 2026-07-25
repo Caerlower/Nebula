@@ -11,7 +11,7 @@ import {
   onchainSetLimits,
   policyContractConfigured,
   policyContractId,
-} from "@/lib/policy-onchain";
+} from "@/lib/policy/onchain";
 import { bustRouteCache } from "@/lib/route-cache";
 
 /** Per-agent spend caps. Absent row = agent inherits owner cap values. */
