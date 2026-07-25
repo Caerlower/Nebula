@@ -1,17 +1,10 @@
 /**
- * Nebula design tokens — the single home for raw hex values in this app.
- * globals.css mirrors these as rgb()/rgba() custom properties; everything
- * else must consume CSS variables (or this module, for JS-side consumers
- * like the syntax-highlighter theme).
+ * Nebula design tokens — Claude Design Hub system (2026).
+ * globals.css mirrors these as rgb()/rgba() custom properties.
  *
- * Stellar 2026 brand system. Palette (no colors outside it):
- *   deep navy #002E5D · lavender #B7ACE8 · teal #00A7B5
- *   black #0F0F0F · off-white #F6F7F8 · sand #D6D2C4
- *   + vivid brand purple #6D28D9 (Manav's pick) as the brand-block /
- *     day-theme primary.
- * Surface/text steps are mixes of those primaries. "light" is the
- * purple-cast true-black default, "dark" is the deepest-black variant,
- * "day" is the off-white light mode.
+ * Default (data-theme="light"): near-black panels + violet accent.
+ * Dark: deeper black variant.
+ * Day: warm paper light mode (mock [data-theme=light]).
  */
 
 export type ThemeMode = "light" | "dark" | "day";
@@ -33,75 +26,66 @@ export interface AppThemeTokens {
 
 export const THEMES: Record<ThemeMode, AppThemeTokens> = {
   light: {
-    bg: "#0F0F0F",
-    surface: "#16141E",
-    surfaceElevated: "#1E1B29",
-    border: "rgba(246,247,248,0.12)",
+    bg: "#0B0B0D",
+    surface: "#121216",
+    surfaceElevated: "#16161A",
+    border: "#202027",
     text: "#F6F7F8",
-    textMuted: "#C0C0CB",
-    textSubtle: "#9695A2",
-    accent: "#B7ACE8",
+    textMuted: "#94949E",
+    textSubtle: "#5C5C65",
+    accent: "#8B5CF6",
     accentGradientEnd: "#B7ACE8",
-    accent2: "#34B7C3",
+    accent2: "#8FBF9F",
     accent3: "#D6D2C4",
-    destructive: "#E05C60",
+    destructive: "#E05A47",
   },
   dark: {
-    bg: "#0A0A0A",
-    surface: "#131217",
-    surfaceElevated: "#1A1920",
-    border: "rgba(246,247,248,0.12)",
+    bg: "#08080A",
+    surface: "#0E0E12",
+    surfaceElevated: "#141418",
+    border: "#1A1A22",
     text: "#F6F7F8",
-    textMuted: "#BCBCC7",
-    textSubtle: "#92919E",
-    accent: "#B7ACE8",
+    textMuted: "#8A8A94",
+    textSubtle: "#52525A",
+    accent: "#8B5CF6",
     accentGradientEnd: "#B7ACE8",
-    accent2: "#34B7C3",
+    accent2: "#8FBF9F",
     accent3: "#D6D2C4",
-    destructive: "#E05C60",
+    destructive: "#E05A47",
   },
   day: {
-    bg: "#F6F7F8",
-    surface: "#FFFFFF",
-    surfaceElevated: "#EEEBF8",
-    border: "#CEC7EB",
-    text: "#0F0F0F",
-    textMuted: "#383D46",
-    textSubtle: "#646972",
+    bg: "#EFEFEC",
+    surface: "#FBFBF9",
+    surfaceElevated: "#FFFFFF",
+    border: "#E4E3DC",
+    text: "#111112",
+    textMuted: "#66665F",
+    textSubtle: "#9A9A92",
     accent: "#6D28D9",
-    accentGradientEnd: "#6D28D9",
-    accent2: "#007A85",
-    accent3: "#736E5C",
-    destructive: "#B23434",
+    accentGradientEnd: "#5C4EA8",
+    accent2: "#3F7A55",
+    accent3: "#A9A392",
+    destructive: "#B23D2A",
   },
 };
 
-/**
- * Chart palette — brand hues only, stepped per surface (the light mode
- * needs darker steps for contrast on off-white; dark modes use the raw
- * brand tints). Only chart-2 (balance / teal) and chart-3 (yield /
- * lavender·navy) currently render; the rest are palette-derived spares.
- * The shipping 2↔3 pair passes CVD separation, normal-vision ΔE, and
- * surface contrast on both surfaces.
- */
 export const CHART_HEX = {
   dark: {
     chart1: "#6F88A3",
-    chart2: "#00A7B5",
-    chart3: "#B7ACE8",
+    chart2: "#8FBF9F",
+    chart3: "#8B5CF6",
     chart4: "#D6D2C4",
-    chart5: "#7B7B7C",
+    chart5: "#5C5C65",
   },
   day: {
     chart1: "#4A6B8C",
-    chart2: "#00939F",
+    chart2: "#3F7A55",
     chart3: "#6D28D9",
-    chart4: "#75736B",
-    chart5: "#838384",
+    chart4: "#A9A392",
+    chart5: "#9A9A92",
   },
 } as const;
 
-/** CSS-variable form — prefer these inside components. */
 export const CHART_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",

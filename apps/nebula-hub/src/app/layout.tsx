@@ -1,24 +1,19 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { Archivo, JetBrains_Mono } from "next/font/google";
 
 import { Providers } from "@/app/providers";
 
 import "./globals.css";
 
-const sans = Inter_Tight({
+const sans = Archivo({
   subsets: ["latin"],
-  variable: "--font-inter-tight",
-});
-
-const display = Instrument_Serif({
-  weight: "400",
-  style: ["normal", "italic"],
-  subsets: ["latin"],
-  variable: "--font-instrument-serif",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-archivo",
 });
 
 const mono = JetBrains_Mono({
   subsets: ["latin"],
+  weight: ["400", "500", "700"],
   variable: "--font-jetbrains-mono",
 });
 
@@ -37,12 +32,12 @@ const themeInitScript = `try{var m=document.cookie.match(/(?:^|; )nebula_theme=(
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light" suppressHydrationWarning>
+    <html lang="en" data-theme="light" className="h-full" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body
-        className={`${sans.variable} ${display.variable} ${mono.variable} font-sans antialiased`}
+        className={`${sans.variable} ${mono.variable} h-full font-sans antialiased`}
       >
         <Providers>{children}</Providers>
       </body>

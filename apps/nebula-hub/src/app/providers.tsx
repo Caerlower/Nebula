@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { useEffect } from "react";
 
@@ -9,12 +8,6 @@ import { PrivyAvatarSync } from "@/components/shared/privy-avatar-sync";
 import { THEMES } from "@/lib/theme";
 import { useUIStore } from "@/stores/ui";
 import { useAuthStore } from "@/stores/auth";
-
-const CommandPalette = dynamic(
-  () =>
-    import("@/components/shell/command-palette").then((m) => m.CommandPalette),
-  { ssr: false },
-);
 
 /** Theme is shared with the landing page: nebula_theme cookie + live channel. */
 const THEME_CHANNEL = "nebula_theme";
@@ -88,7 +81,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const inner = (
     <ThemeSync>
       {children}
-      <CommandPalette />
       <Toaster position="bottom-right" />
     </ThemeSync>
   );
