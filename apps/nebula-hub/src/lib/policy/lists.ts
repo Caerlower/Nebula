@@ -15,7 +15,11 @@ export async function resolveListAgentId(
   const agentId = requestedAgentId?.trim() || null;
   if (!agentId) return null;
   const agent = await prisma.agent.findFirst({
-    where: { id: agentId, userId: principal.userId },
+    where: {
+      id: agentId,
+      userId: principal.userId,
+      network: principal.network,
+    },
     select: { id: true },
   });
   return agent?.id ?? null;
