@@ -4,12 +4,13 @@ import { after } from "next/server";
 import type { AuthPrincipal } from "../auth";
 import { privyConfigured } from "../auth";
 import {
-  blendDepositXlm,
-  blendWithdrawXlm,
+  blendDeposit,
+  blendWithdraw,
   floorXlm,
   getTreasuryBalances,
   roundXlm,
 } from "../blend";
+import type { BlendAsset } from "../blend";
 import { liquidBandToXlm } from "../fx";
 import { explorerTxUrl } from "../stellar";
 import {
@@ -28,11 +29,16 @@ const PARK_ATTEMPT_COOLDOWN_MS = 60_000;
 const PARK_SUCCESS_COOLDOWN_MS = 5 * 60_000;
 
 export async function executeBlendDeposit(
-  input: { amount_xlm: number; pool_id?: string },
+  input: {
+    amount?: number;
+    amount_xlm?: number;
+    asset?: BlendAsset;
+    pool_id?: string;
+  },
   principal: AuthPrincipal,
   ctx: ToolContext,
 ): Promise<ToolResult> {
-  const paused = await requireNotPaused(principal.userId);
+  const paused = await requireNotPaused(principal.userId, principal.network);
   if (paused) return paused;
 
   if (!privyConfigured()) {
@@ -43,11 +49,18 @@ export async function executeBlendDeposit(
     };
   }
 
-  const result = await blendDepositXlm({
+  const amount = input.amount ?? input.amount_xlm;
+  if (amount == null) {
+    return { status: "error", reason: "amount_required" };
+  }
+  const asset: BlendAsset = input.asset ?? "XLM";
+
+  const result = await blendDeposit({
     publicKey: ctx.stellarAddress,
     walletId: ctx.privyWalletId,
-    amount: input.amount_xlm,
+    amount,
     network: ctx.network,
+    asset,
     poolId: input.pool_id,
   });
 
@@ -55,7 +68,7 @@ export async function executeBlendDeposit(
     await recordBlendTx({
       principal,
       type: "blend_deposit",
-      amount: input.amount_xlm,
+      amount,
       poolId: input.pool_id ?? "blend",
       txHash: null,
       status: "rejected",
@@ -71,7 +84,7 @@ export async function executeBlendDeposit(
     poolId: result.poolId,
     txHash: result.hash,
     status: "confirmed",
-    reason: "treasury_deposit",
+    reason: `treasury_deposit:${asset}`,
   });
 
   const balances = await getTreasuryBalances(ctx.stellarAddress, ctx.network);
@@ -80,21 +93,30 @@ export async function executeBlendDeposit(
     tx_hash: result.hash,
     explorer_url: explorerTxUrl(ctx.network, result.hash),
     data: {
-      amount_xlm: result.amount,
+      amount: result.amount,
+      amount_xlm: asset === "XLM" ? result.amount : undefined,
+      asset,
       pool_id: result.poolId,
       liquid: balances.liquid,
       blend_deposited: balances.blendDeposited,
+      blend_usdc_deposited: balances.blendUsdcDeposited,
+      positions: balances.positions,
     },
-    message: `Deposited ${formatAmt(result.amount)} XLM to Blend`,
+    message: `Deposited ${formatAmt(result.amount)} ${asset} to Blend`,
   };
 }
 
 export async function executeBlendWithdraw(
-  input: { amount_xlm: number; pool_id?: string },
+  input: {
+    amount?: number;
+    amount_xlm?: number;
+    asset?: BlendAsset;
+    pool_id?: string;
+  },
   principal: AuthPrincipal,
   ctx: ToolContext,
 ): Promise<ToolResult> {
-  const paused = await requireNotPaused(principal.userId);
+  const paused = await requireNotPaused(principal.userId, principal.network);
   if (paused) return paused;
 
   if (!privyConfigured()) {
@@ -105,11 +127,18 @@ export async function executeBlendWithdraw(
     };
   }
 
-  const result = await blendWithdrawXlm({
+  const amount = input.amount ?? input.amount_xlm;
+  if (amount == null) {
+    return { status: "error", reason: "amount_required" };
+  }
+  const asset: BlendAsset = input.asset ?? "XLM";
+
+  const result = await blendWithdraw({
     publicKey: ctx.stellarAddress,
     walletId: ctx.privyWalletId,
-    amount: input.amount_xlm,
+    amount,
     network: ctx.network,
+    asset,
     poolId: input.pool_id,
   });
 
@@ -117,7 +146,7 @@ export async function executeBlendWithdraw(
     await recordBlendTx({
       principal,
       type: "blend_withdraw",
-      amount: input.amount_xlm,
+      amount,
       poolId: input.pool_id ?? "blend",
       txHash: null,
       status: "rejected",
@@ -133,7 +162,7 @@ export async function executeBlendWithdraw(
     poolId: result.poolId,
     txHash: result.hash,
     status: "confirmed",
-    reason: "treasury_withdraw",
+    reason: `treasury_withdraw:${asset}`,
   });
 
   const balances = await getTreasuryBalances(ctx.stellarAddress, ctx.network);
@@ -142,12 +171,16 @@ export async function executeBlendWithdraw(
     tx_hash: result.hash,
     explorer_url: explorerTxUrl(ctx.network, result.hash),
     data: {
-      amount_xlm: result.amount,
+      amount: result.amount,
+      amount_xlm: asset === "XLM" ? result.amount : undefined,
+      asset,
       pool_id: result.poolId,
       liquid: balances.liquid,
       blend_deposited: balances.blendDeposited,
+      blend_usdc_deposited: balances.blendUsdcDeposited,
+      positions: balances.positions,
     },
-    message: `Withdrew ${formatAmt(result.amount)} XLM from Blend`,
+    message: `Withdrew ${formatAmt(result.amount)} ${asset} from Blend`,
   };
 }
 
@@ -162,10 +195,13 @@ export async function executeOptimizeTreasury(
     minMove?: number;
   },
 ): Promise<ToolResult> {
-  const paused = await requireNotPaused(principal.userId);
+  const paused = await requireNotPaused(principal.userId, principal.network);
   if (paused) return paused;
 
-  const settings = await loadTreasurySettings(principal.userId);
+  const settings = await loadTreasurySettings(
+    principal.userId,
+    principal.network,
+  );
   const requireAutoYield = opts?.requireAutoYield !== false;
   if (requireAutoYield && !settings.autoYield) {
     return {
@@ -277,7 +313,10 @@ export async function computeSpendTopUp(
   | { ok: true; withdrawAmount: number; liquid: number; blend: number }
   | { ok: false; reason: string }
 > {
-  const settings = await loadTreasurySettings(principal.userId);
+  const settings = await loadTreasurySettings(
+    principal.userId,
+    principal.network,
+  );
   const amount = roundXlm(amountXlm);
   const bal = await getTreasuryBalances(ctx.stellarAddress, ctx.network);
 
@@ -367,9 +406,13 @@ const parkTailByUser = new Map<string, Promise<void>>();
 /** Last time we *attempted* an auto-park (including no-ops). */
 const lastParkAttemptAt = new Map<string, number>();
 
-async function shouldSkipAutoPark(userId: string): Promise<string | null> {
+async function shouldSkipAutoPark(
+  userId: string,
+  network: string,
+): Promise<string | null> {
   const now = Date.now();
-  const lastAttempt = lastParkAttemptAt.get(userId);
+  const cooldownKey = `${userId}:${network}`;
+  const lastAttempt = lastParkAttemptAt.get(cooldownKey);
   if (lastAttempt != null && now - lastAttempt < PARK_ATTEMPT_COOLDOWN_MS) {
     return `attempt_cooldown_${Math.ceil((PARK_ATTEMPT_COOLDOWN_MS - (now - lastAttempt)) / 1000)}s`;
   }
@@ -377,6 +420,7 @@ async function shouldSkipAutoPark(userId: string): Promise<string | null> {
   const recentDeposit = await prisma.transaction.findFirst({
     where: {
       userId,
+      network,
       type: "blend_deposit",
       status: "confirmed",
       createdAt: { gt: new Date(now - PARK_SUCCESS_COOLDOWN_MS) },
@@ -386,7 +430,7 @@ async function shouldSkipAutoPark(userId: string): Promise<string | null> {
   });
   if (recentDeposit) {
     // Avoid a DB hit on every subsequent tool call during the success window.
-    lastParkAttemptAt.set(userId, now);
+    lastParkAttemptAt.set(cooldownKey, now);
     return "recent_blend_deposit";
   }
   return null;
@@ -398,18 +442,22 @@ export function scheduleAutoRebalance(
   reason: string,
   opts?: { depositOnly?: boolean; minMove?: number },
 ): void {
-  const prev = parkTailByUser.get(principal.userId) ?? Promise.resolve();
+  const cooldownKey = `${principal.userId}:${principal.network}`;
+  const prev = parkTailByUser.get(cooldownKey) ?? Promise.resolve();
   const next = prev
     .catch(() => {})
     .then(async () => {
-      const skip = await shouldSkipAutoPark(principal.userId);
+      const skip = await shouldSkipAutoPark(
+        principal.userId,
+        principal.network,
+      );
       if (skip) {
         console.error(
           `[treasury] auto-rebalance (${reason}) skipped: ${skip}`,
         );
         return;
       }
-      lastParkAttemptAt.set(principal.userId, Date.now());
+      lastParkAttemptAt.set(cooldownKey, Date.now());
 
       const result = await executeOptimizeTreasury(principal, ctx, {
         depositOnly: opts?.depositOnly,
@@ -430,11 +478,11 @@ export function scheduleAutoRebalance(
       console.error(`[treasury] auto-rebalance (${reason}) failed`, error);
     })
     .finally(() => {
-      if (parkTailByUser.get(principal.userId) === next) {
-        parkTailByUser.delete(principal.userId);
+      if (parkTailByUser.get(cooldownKey) === next) {
+        parkTailByUser.delete(cooldownKey);
       }
     });
-  parkTailByUser.set(principal.userId, next);
+  parkTailByUser.set(cooldownKey, next);
 
   // Keep the serverless invocation alive until Blend park finishes.
   try {
