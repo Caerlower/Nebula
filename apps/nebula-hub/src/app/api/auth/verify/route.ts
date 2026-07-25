@@ -6,7 +6,7 @@ import {
   mintWalletSessionToken,
   sessionCookie,
   verifyChallenge,
-} from "@/lib/wallet-auth";
+} from "@/lib/wallet/auth";
 
 const schema = z.object({
   address: z.string().min(56).max(56),

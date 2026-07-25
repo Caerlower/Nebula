@@ -1,4 +1,4 @@
-import { clearSessionCookie } from "@/lib/wallet-auth";
+import { clearSessionCookie } from "@/lib/wallet/auth";
 
 /** Clear the wallet session cookie. */
 export async function POST() {

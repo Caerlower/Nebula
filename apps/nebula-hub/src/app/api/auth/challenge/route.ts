@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { buildChallenge } from "@/lib/wallet-auth";
+import { buildChallenge } from "@/lib/wallet/auth";
 
 const schema = z.object({
   address: z.string().min(56).max(56),
