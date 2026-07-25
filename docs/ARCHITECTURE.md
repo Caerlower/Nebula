@@ -54,15 +54,17 @@ flowchart LR
 | Tool pipeline `POST /api/tools/:name` | Done |
 | Human approve → Privy sign+submit | Done |
 | Policy whitelist / denylist / caps (Hub DB) | Done |
-| On-chain policy (`POLICY_CONTRACT_ID` → `check_spend`) | Done when configured |
+| On-chain policy (`POLICY_CONTRACT_ID_TESTNET` / `_MAINNET` → `check_spend`) | Done when configured per ledger |
+| Testnet / mainnet twin agents (NetworkChip) | Done |
 | Dashboard live data | Done |
 | Remote Streamable HTTP MCP + OAuth DCR | Done |
-| Blend XLM treasury + activity-triggered auto-yield | Done |
+| Blend treasury (testnet XLM; mainnet XLM + USDC pools) | Done |
 | x402 tools | Done |
 | MPP session tools + Hub demo merchant | Done |
 | Stellar8004 reputation (Hub provision) | Done — on-chain sync still pending |
-| Publish `nebulamcp-stdio` / `nebulamcp-core` | Both published (`0.1.1`) |
-| Blend USDC + background yield loop | Pending |
+| Publish `nebulamcp-stdio` / `nebulamcp-core` | Published (`0.1.0` on npm; repo at `0.1.1`) |
+| Fianza / TrustLine credit on mainnet | Pending (testnet only) |
+| Blend background yield loop | Pending |
 | Approval inbox / notify polish | Partial (`await_confirmation` works) |
 
 Env template: `apps/nebula-hub/.env.example`.

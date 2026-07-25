@@ -10,6 +10,7 @@
 
 - [Overview](#overview)
 - [Architecture](#architecture)
+- [Networks (testnet / mainnet)](#networks-testnet--mainnet)
 - [Monorepo](#monorepo)
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
@@ -29,8 +30,9 @@ Agents can plan and call tools; they still need a place for capital to live, ear
 Private keys never leave the Hub. Agents and MCP clients only present a `nbl_live_…` token (or OAuth). The Hub enforces policy, confirms when required, signs with Privy custody, and submits to Stellar — the agent only expresses intent.
 
 - **Custody** — Privy-managed Stellar wallets, one per agent, isolated from each other and the owner.
-- **Treasury** — liquid band + Blend auto-yield: keep enough spendable, park the rest.
-- **Policy** — per-transaction / daily / per-category USDC caps, allow/deny lists, emergency pause — Postgres and (optionally) on-chain via Soroban.
+- **Twin ledgers** — testnet and mainnet are fully separate agent sets (wallets, policy, history, MCP scope). Switch with the dashboard NetworkChip.
+- **Treasury** — liquid band + Blend auto-yield: keep enough spendable, park the rest (XLM on testnet; XLM + USDC pools on mainnet).
+- **Policy** — per-transaction / daily / per-category USDC caps, allow/deny lists, emergency pause — Postgres and on-chain via Soroban when a network’s policy contract id is set.
 - **Payment rails** — transfers, XLM ↔ USDC swaps, x402 pay-walled HTTP, MPP session channels — spend from the treasury, not a separate wallet product.
 - **Reputation** — Stellar8004-backed on-chain agent identity and score.
 
@@ -51,7 +53,7 @@ flowchart TB
   end
 
   subgraph hub [Nebula Hub — apps/nebula-hub]
-    UI[Dashboard · Treasury · Policy · Connect]
+    UI[Dashboard · NetworkChip · Treasury · Policy]
     API["/api/tools/* · /api/wallet · /api/agents"]
     MCP["POST /mcp · OAuth DCR"]
     PIPE[Tool pipeline + confirmations]
@@ -59,7 +61,8 @@ flowchart TB
   end
 
   subgraph chain [Stellar]
-    POL[Policy contract]
+    POLT[Policy · testnet]
+    POLM[Policy · mainnet]
     TREAS[Blend liquid / yield]
     NET[Payments · x402 · MPP]
   end
@@ -76,7 +79,8 @@ flowchart TB
   API --> PIPE
   UI --> API
   PIPE --> PRIVY
-  PIPE --> POL
+  PIPE --> POLT
+  PIPE --> POLM
   PRIVY --> TREAS
   PRIVY --> NET
   PIPE --> SB
@@ -89,9 +93,27 @@ flowchart TB
 | `nebulamcp-core` | Shared Zod tool schemas + confirmation / policy matrix |
 | `nebulamcp-stdio` | Thin stdio MCP client → Hub (`npx nebulamcp-stdio`) |
 | **Landing** (`apps/landing`) | Marketing site; built into Hub `public/landing` for deploy |
-| **Policy contract** (`contracts/policy`) | On-chain spend caps / treasury bands when `POLICY_CONTRACT_ID` is set |
+| **Policy contract** (`contracts/policy`) | Shared multi-tenant Soroban policy; **one deploy per ledger** (`POLICY_CONTRACT_ID_TESTNET` / `_MAINNET`) |
 
 Full phase status and stack map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Networks (testnet / mainnet)
+
+Switching the **NetworkChip** (dashboard) updates `User.preferredNetwork` and reloads the Hub against that ledger.
+
+| | Testnet | Mainnet |
+| - | ------- | ------- |
+| Agents | Own rows + Privy wallets | Separate twin agents (not auto-cloned) |
+| Policy / treasury / history | Scoped to `network=testnet` | Scoped to `network=mainnet` |
+| On-chain policy | `CAWKC7IEHVKM5V5JVXJE4HNWCM5CHZZHFYH33W5O7EEEQIND6TJ3CD2F` | `CCPXPACO3V2FISPN5CY5LGFSU7XI5QBVMHOC25ITJVTCIF2P3OCNILWU` |
+| Blend | TestnetV2 (XLM) | Fixed + YieldBlox (XLM + USDC) |
+| Fianza / TrustLine credit | Available | Not enabled until Fianza pubnet API |
+
+MCP tokens bound to an agent always use **that agent’s ledger**, not the owner’s NetworkChip preference.
+
+Deploy notes and invoke examples: [contracts/policy/README.md](contracts/policy/README.md). Schema backfill SQL: `apps/nebula-hub/prisma/sql/20260725_network_isolation.sql`.
 
 ---
 
@@ -129,13 +151,15 @@ pnpm --filter nebulamcp-core build && pnpm --filter nebula-landing build
 pnpm --filter nebula-landing preview
 ```
 
+Avoid running local Hub and production against the same Supabase project at once — they share the Prisma pool and can time out.
+
 ---
 
 ## Configuration
 
-**Env template:** `[apps/nebula-hub/.env.example](apps/nebula-hub/.env.example)` — copy to `apps/nebula-hub/.env.local`.
+**Env template:** [`apps/nebula-hub/.env.example`](apps/nebula-hub/.env.example) — copy to `apps/nebula-hub/.env.local`.
 
-**Database:** Supabase Postgres — see [docs/SUPABASE.md](docs/SUPABASE.md). Apply `apps/nebula-hub/supabase/hub.sql`.
+**Database:** Supabase Postgres — see [docs/SUPABASE.md](docs/SUPABASE.md). Apply `apps/nebula-hub/supabase/hub.sql`, then the network-isolation SQL if upgrading an older DB.
 
 Minimum for a working Hub:
 
@@ -145,21 +169,31 @@ Minimum for a working Hub:
 | Privy custody | `NEXT_PUBLIC_PRIVY_APP_ID`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_AUTHORIZATION_PRIVATE_KEY` |
 | App origin | `NEXT_PUBLIC_APP_URL`, `APP_BASE_URL` |
 | Wallet sign-in | `WALLET_SESSION_SECRET` (HMAC for Freighter/EOA SIWS — required in production) |
+| Deploy default ledger | `STELLAR_NETWORK=testnet` (per-user NetworkChip overrides this) |
 
-Optional: `POLICY_CONTRACT_ID` (on-chain caps + treasury band), `TAEL_PARTNER_SIGN_URL` / `TAEL_HMAC_SECRET` (partner signing), Upstash Redis (rate limits). The template documents every variable.
+On-chain policy (recommended for production):
+
+| Variable | Ledger | Contract |
+| -------- | ------ | -------- |
+| `POLICY_CONTRACT_ID_TESTNET` | testnet | `CAWKC7IEHVKM5V5JVXJE4HNWCM5CHZZHFYH33W5O7EEEQIND6TJ3CD2F` |
+| `POLICY_CONTRACT_ID_MAINNET` | mainnet | `CCPXPACO3V2FISPN5CY5LGFSU7XI5QBVMHOC25ITJVTCIF2P3OCNILWU` |
+
+Legacy `POLICY_CONTRACT_ID` is still accepted as a **testnet-only** fallback. It is never applied to mainnet.
+
+Optional: `MAINNET_ENABLED=0` (kill-switch), `TAEL_PARTNER_SIGN_URL` / `TAEL_HMAC_SECRET` (partner signing), Upstash Redis (rate limits). The template documents every variable.
 
 ---
 
 ## Connect an agent (MCP)
 
-1. Sign in at [nebulaonchain.xyz](https://nebulaonchain.xyz) → **Connect** → create an agent → copy its `nbl_live_…` token.
+1. Sign in at [nebulaonchain.xyz](https://nebulaonchain.xyz) → pick **TESTNET** or **MAINNET** → **Connect** → create an agent on that ledger → copy its `nbl_live_…` token.
 2. Pick a path below. Prefer the **www** Hub host so Bearer tokens survive redirects.
 
 > **Never put a Stellar secret key in MCP config** — only `NEBULA_TOKEN`.
 
 ### npm package (Claude Desktop / Cursor)
 
-Published: `[nebulamcp-stdio](https://www.npmjs.com/package/nebulamcp-stdio)` (depends on `[nebulamcp-core](https://www.npmjs.com/package/nebulamcp-core)`). Use this when the client only speaks **local stdio MCP** — it runs `npx` and forwards tools to the Hub. You do **not** need it for Claude Code or custom agents that can call HTTP.
+Published: [`nebulamcp-stdio`](https://www.npmjs.com/package/nebulamcp-stdio) (depends on [`nebulamcp-core`](https://www.npmjs.com/package/nebulamcp-core)). Use this when the client only speaks **local stdio MCP** — it runs `npx` and forwards tools to the Hub. You do **not** need it for Claude Code or custom agents that can call HTTP.
 
 ```json
 {
@@ -203,14 +237,14 @@ OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/
 
 | Capability | Tools / surface |
 | ---------- | --------------- |
-| Treasury | Blend XLM deposit/withdraw, liquid band, auto-yield on activity |
-| Credit | TrustLine revenue-underwritten USDC credit (testnet): `trustline_*` |
+| Treasury | Blend deposit/withdraw, liquid band, auto-yield on activity |
+| Credit | Fianza / TrustLine revenue-underwritten USDC credit (**testnet only**): `trustline_*` |
 | Wallet | Balances, identity, fund (testnet), transfer |
-| Policy | Caps, allow/deny lists; on-chain when policy contract configured |
+| Policy | Caps, allow/deny lists; on-chain `check_spend` when that ledger’s contract id is set |
 | Swap | XLM ↔ Circle USDC on Stellar DEX (`get_swap_quote`, `swap`) |
-| Confirmations | Human approve flow + `await_confirmation` |
+| Confirmations | Human approve flow + `await_confirmation` (ledger-stamped) |
 | x402 | Pay-walled HTTP via Stellar USDC |
-| MPP | Open session → fetch → close / settle |
+| MPP | Open session → fetch → close / settle (per network) |
 | Reputation | Stellar8004-backed agent reputation (Hub-provisioned) |
 
 ---
@@ -219,7 +253,7 @@ OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/
 
 **[Tael Protocol](https://taelprotocol.xyz/)** — Nebula's capabilities are listed on Tael so Tael agents can discover and call them, paying per call in USDC on Stellar. Read-only capabilities are live; agent-spend signing (Tael card via `partner_callback`) is rolling out next.
 
-**[TrustLine](https://docs.0xtrustline.online/)** — revenue-underwritten, uncollateralized USDC credit for AI agents on Stellar (testnet prototype). Nebula MCP exposes `trustline_*` tools; the Hub signs with Privy instead of handing agents a secret key ([SDK v0.2](https://github.com/TechnicallyKiller/TrustLine/releases/tag/v0.2.0)).
+**[TrustLine / Fianza](https://docs.0xtrustline.online/)** — revenue-underwritten, uncollateralized USDC credit for AI agents on Stellar (testnet). Nebula MCP exposes `trustline_*` tools; the Hub signs with Privy instead of handing agents a secret key ([SDK v0.2](https://github.com/TechnicallyKiller/TrustLine/releases/tag/v0.2.0)).
 
 ---
 
@@ -231,7 +265,7 @@ OAuth DCR for hosted connectors is also on the Hub (`/api/oauth/register` → `/
 | [STRUCTURE.md](docs/STRUCTURE.md) | Repo layout |
 | [SUPABASE.md](docs/SUPABASE.md) | Database setup |
 | [MCP-DEV.md](docs/MCP-DEV.md) | MCP testing (x402, MPP, confirmations) |
-| [contracts/policy](contracts/policy/README.md) | Soroban policy + treasury-band API + deploy |
+| [contracts/policy](contracts/policy/README.md) | Soroban policy + treasury-band API + testnet/mainnet deploy |
 | [packages/nebulamcp](packages/nebulamcp/README.md) | stdio MCP client |
 
 ---
