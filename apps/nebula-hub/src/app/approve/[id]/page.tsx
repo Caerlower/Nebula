@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
-import { hubFetch } from "@/lib/hub-session";
+import { hubFetch } from "@/lib/auth/session";
 import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/shell/wordmark";

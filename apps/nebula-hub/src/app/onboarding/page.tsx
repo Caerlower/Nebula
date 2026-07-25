@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import * as api from "@/lib/api";
 import { truncMiddle } from "@/lib/utils";
-import { applyPrivySession } from "@/lib/hub-session";
+import { applyPrivySession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import type { Framework } from "@/types/domain";
 import { FRAMEWORK_META } from "@/components/shared/status-badges";

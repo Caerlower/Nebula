@@ -7,7 +7,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { Bot, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { hubFetch } from "@/lib/hub-session";
+import { hubFetch } from "@/lib/auth/session";
 import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/shell/wordmark";
 import { useAuthStore } from "@/stores/auth";
