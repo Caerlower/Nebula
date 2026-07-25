@@ -31,7 +31,7 @@ if (TOKEN.startsWith("S") && TOKEN.length > 50) {
 }
 
 const server = new Server(
-  { name: "nebula", version: "0.1.0" },
+  { name: "nebula", version: "0.1.1" },
   { capabilities: { tools: {} } },
 );
 
