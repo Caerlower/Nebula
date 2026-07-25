@@ -69,7 +69,7 @@ export interface WalletSummary {
   idleXLM: number;
   /** Blend XLM supply APY as a percent (e.g. 6.5). */
   apyPct: number;
-  yield30dXLM: number;
+  yield30dXLM: number; // realized Blend interest (XLM); 0 until indexed — not an APY projection
   spendTodayUSD: number;
   /** Confirmed spend today by policy category (USDC face value). */
   spendTodayByCategory?: {
