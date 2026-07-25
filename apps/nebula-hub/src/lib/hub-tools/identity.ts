@@ -6,12 +6,12 @@ import { resolveSigner, type HashSigner } from "../signing";
 import {
   formatRegisterIdentityResult,
   registerAgentIdentity,
-} from "../8004/identity";
+} from "../stellar8004/identity";
 import {
   formatMyReputation,
   getMyReputation,
   hubScoreFrom8004,
-} from "../8004/reputation";
+} from "../stellar8004/reputation";
 import { prisma } from "../db";
 import { buildToolContext } from "./context";
 

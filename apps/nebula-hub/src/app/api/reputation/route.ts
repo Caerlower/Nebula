@@ -3,8 +3,8 @@ import { NextRequest } from "next/server";
 import { cachedJsonResponse } from "@/lib/route-cache";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
-import { hubNetwork } from "@/lib/8004/config";
-import { getMyReputation, hubScoreFrom8004 } from "@/lib/8004/reputation";
+import { hubNetwork } from "@/lib/stellar8004/config";
+import { getMyReputation, hubScoreFrom8004 } from "@/lib/stellar8004/reputation";
 import { prisma } from "@/lib/db";
 import { privyConfigured } from "@/lib/auth";
 import { privySigner } from "@/lib/signing";
