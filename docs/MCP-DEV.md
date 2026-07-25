@@ -8,7 +8,7 @@ Internal reference for monorepo contributors.
 
 | Package | Version |
 |---------|---------|
-| `nebulamcp-core` / `nebulamcp-stdio` | 0.1.0 |
+| `nebulamcp-core` / `nebulamcp-stdio` | 0.1.1 |
 | `@trionlabs/stellar8004` | 0.0.11 |
 | `@stellar/mpp` | 0.7.1 |
 | `mppx` | 0.8.6 |
