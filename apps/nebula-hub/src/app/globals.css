@@ -156,11 +156,6 @@
   --btn-fg: rgb(250 250 248);
 }
 
-/* motion language: one soft ease */
-:root {
-  --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
 /* brand constants */
 :root {
   --brand-lavender: rgb(183 172 232);
