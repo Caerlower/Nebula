@@ -6,7 +6,7 @@ import { usePrivy } from "@privy-io/react-auth";
 
 import { AppShell } from "@/components/shell/app-shell";
 import { AuthSplash } from "@/components/shared/auth-splash";
-import { applyPrivySession } from "@/lib/hub-session";
+import { applyPrivySession } from "@/lib/auth/session";
 import { useAuthStore } from "@/stores/auth";
 
 function GateSkeleton() {
