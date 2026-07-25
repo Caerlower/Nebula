@@ -14,17 +14,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import * as api from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, fmtUsdc } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 import type { Framework } from "@/types/domain";
 
 const FIELD =
   "box-border h-11 w-full border border-border-strong bg-[var(--panel-2)] px-3.5 font-mono text-[15px] text-foreground outline-none transition-[border-color] placeholder:text-subtle focus:border-primary/50";
-
-const NETWORK_LABEL =
-  (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "testnet") === "mainnet"
-    ? "STELLAR MAINNET"
-    : "STELLAR TESTNET";
 
 function slugifyName(raw: string): string {
   return raw
@@ -54,13 +49,6 @@ function frameworkFromModel(model: string): Framework {
 function parseUsd(raw: string): number | null {
   const n = Number.parseFloat(raw.replace(/,/g, "").replace(/[^\d.]/g, ""));
   return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-function fmtUsdc(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 }
 
 type WizardState = {
@@ -108,6 +96,9 @@ function WizardField({
 function CreateAgentWizard({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { reloadAgents, setSelectedAgentId } = useAgentScope();
+  const network = useUIStore((s) => s.network);
+  const networkLabel =
+    network === "mainnet" ? "STELLAR MAINNET" : "STELLAR TESTNET";
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<WizardState>(DEFAULTS);
@@ -425,7 +416,7 @@ function CreateAgentWizard({ onClose }: { onClose: () => void }) {
         {(
           [
             { label: "WALLET", val: "PRIVY CUSTODIAL" },
-            { label: "NETWORK", val: NETWORK_LABEL },
+            { label: "NETWORK", val: networkLabel },
             {
               label: "PER-TX CAP",
               val:
