@@ -49,7 +49,7 @@ export async function POST(
   const { amount, asset } = parsed.data;
 
   const agent = await prisma.agent.findFirst({
-    where: { id, userId: principal.userId },
+    where: { id, userId: principal.userId, network: principal.network },
   });
   if (!agent) {
     return Response.json(
@@ -85,9 +85,7 @@ export async function POST(
     );
   }
 
-  const network =
-    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-    "testnet";
+  const network = principal.network;
 
   // USDC needs a trustline on the agent side before it can receive funds.
   if (asset === "USDC" && !(await hasUsdcTrustline(agent.stellarAddress, network))) {
@@ -165,6 +163,7 @@ export async function POST(
       data: {
         userId: principal.userId,
         agentId: agent.id,
+        network: principal.network,
         type: "fund",
         destination: agent.stellarAddress,
         amountXlm: amount,
