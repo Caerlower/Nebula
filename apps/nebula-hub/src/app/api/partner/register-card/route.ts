@@ -2,9 +2,9 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
+import { appBaseUrl } from "@/lib/app-url";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
 import { buildMcpConfig } from "@/lib/mcp/config";
-import { appBaseUrl } from "@/lib/auth/oauth";
 import { bustRouteCache } from "@/lib/route-cache";
 import { partnerSignerConfigFromEnv } from "@/lib/signing";
 import { isStellarPublicKey } from "@/lib/wallet/auth";
@@ -56,12 +56,17 @@ export async function POST(req: NextRequest) {
 
   // Reuse an existing card agent for this company account if present.
   let agent = await prisma.agent.findFirst({
-    where: { userId: principal.userId, stellarAddress: card_address },
+    where: {
+      userId: principal.userId,
+      stellarAddress: card_address,
+      network: principal.network,
+    },
   });
   if (!agent) {
     agent = await prisma.agent.create({
       data: {
         userId: principal.userId,
+        network: principal.network,
         name: name ?? `Tael card ${card_address.slice(0, 4)}…${card_address.slice(-4)}`,
         framework: "custom",
         status: "active",
