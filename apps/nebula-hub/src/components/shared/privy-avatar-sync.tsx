@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useOAuthTokens, usePrivy } from "@privy-io/react-auth";
 
-import { imageUrlFromPrivy } from "@/lib/hub-session";
+import { imageUrlFromPrivy } from "@/lib/auth/session";
 import { flushAuthStorage, useAuthStore } from "@/stores/auth";
 
 function setUserImageUrl(imageUrl: string) {

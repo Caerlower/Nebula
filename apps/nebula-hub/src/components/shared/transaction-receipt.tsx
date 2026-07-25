@@ -14,10 +14,15 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn, fmtDateTime, fmtXLM, truncMiddle } from "@/lib/utils";
+import { cn, fmtAmount, fmtDateTime, truncMiddle } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
 import type { Transaction } from "@/types/domain";
 
-const STELLAR_EXPERT = "https://stellar.expert/explorer/testnet";
+function stellarExpertBase(network: "testnet" | "mainnet") {
+  return network === "mainnet"
+    ? "https://stellar.expert/explorer/public"
+    : "https://stellar.expert/explorer/testnet";
+}
 
 /**
  * Dashed perforation. With notches, the strip masks true half-circle holes
@@ -27,17 +32,17 @@ const STELLAR_EXPERT = "https://stellar.expert/explorer/testnet";
 function Perforation({ notches = true }: { notches?: boolean }) {
   if (!notches) {
     return (
-      <div className="border-x border-border-strong bg-card py-1" aria-hidden>
+      <div className="border-x border-border-strong bg-surface py-1" aria-hidden>
         <div className="mx-6 border-t border-dashed border-border" />
       </div>
     );
   }
   return (
     <div className="relative flex h-5 items-stretch" aria-hidden>
-      <div className="receipt-notch-left relative flex-1 border-l border-border-strong bg-card">
+      <div className="receipt-notch-left relative flex-1 border-l border-border-strong bg-surface">
         <span className="absolute -left-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full border border-border-strong" />
       </div>
-      <div className="receipt-notch-right relative flex-1 border-r border-border-strong bg-card">
+      <div className="receipt-notch-right relative flex-1 border-r border-border-strong bg-surface">
         <span className="absolute -right-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full border border-border-strong" />
       </div>
       <div className="absolute inset-x-8 top-1/2 border-t border-dashed border-border" />
@@ -54,8 +59,10 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <dt className="stat-label">{label}</dt>
-      <dd className="text-right text-[13px]">{children}</dd>
+      <dt className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+        {label}
+      </dt>
+      <dd className="text-right font-mono text-[13px]">{children}</dd>
     </div>
   );
 }
@@ -109,40 +116,47 @@ function ReceiptBody({
   const outgoing = agentAddress ? tx.from === agentAddress : true;
   const headline = isPolicy ? "Policy update" : outgoing ? "Sent" : "Received";
   const zero = isPolicy || tx.amount === 0;
+  const network = useUIStore((s) => s.network);
+  const explorer = stellarExpertBase(network);
 
   return (
     <div className="text-foreground">
       {/* header band */}
-      <div className="relative overflow-hidden rounded-t-2xl border border-b-0 border-border-strong bg-card px-6 pb-7 pt-7 text-center">
+      <div className="relative overflow-hidden rounded-t-2xl border border-b-0 border-border-strong bg-surface px-6 pb-7 pt-7 text-center shadow-[var(--card-shadow)]">
         <div className="relative">
           <DialogTitle className="sr-only">
             Receipt · {meta.label} from {agentName}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            {headline} {fmtXLM(Math.abs(tx.amount))} {tx.asset} on{" "}
+            {headline} {fmtAmount(Math.abs(tx.amount), tx.asset)} on{" "}
             {fmtDateTime(tx.time)}
           </DialogDescription>
 
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-3">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-elevated py-1 pl-1 pr-3">
             <AgentAvatar name={agentName} color={agentColor} size="sm" />
             <div className="text-left leading-tight">
-              <p className="text-[13px] font-semibold">{agentName}</p>
-              <p className="text-[11px] text-muted-foreground">Nebula agent</p>
+              <p className="font-mono text-[13px] font-semibold">{agentName}</p>
+              <p className="font-mono text-[10px] tracking-[0.08em] text-subtle">
+                NEBULA AGENT
+              </p>
             </div>
           </div>
 
-          <p className="stat-label mt-6 flex items-center justify-center gap-1.5">
+          <p className="mt-6 flex items-center justify-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
             <Icon className="size-3.5" aria-hidden />
             {headline}
           </p>
           <div className="mt-1 flex items-end justify-center gap-1.5">
             <span
               className={cn(
-                "hero-number",
+                "font-mono text-[clamp(2rem,4vw,2.75rem)] font-bold tracking-[-0.03em] tabular-nums",
                 !zero && !outgoing && "text-success",
               )}
             >
-              {fmtXLM(Math.abs(tx.amount))}
+              {fmtAmount(Math.abs(tx.amount), tx.asset).replace(
+                new RegExp(`\\s*${tx.asset}$`),
+                "",
+              )}
             </span>
             <span className="mb-1 font-mono text-sm text-muted-foreground">
               {tx.asset}
@@ -157,7 +171,7 @@ function ReceiptBody({
       <Perforation />
 
       {/* itemized body */}
-      <dl className="space-y-3 border-x border-border-strong bg-card px-6 py-5">
+      <dl className="space-y-3 border-x border-border-strong bg-surface px-6 py-5">
         <Row label="Type">
           <span className="inline-flex items-center gap-1.5">
             <Icon className="size-3.5 text-muted-foreground" aria-hidden />
@@ -178,7 +192,9 @@ function ReceiptBody({
           </span>
         </Row>
         <Row label="Network fee">
-          <span className="font-mono tabular">{fmtXLM(tx.fee)} XLM</span>
+          <span className="font-mono tabular-nums">
+            {fmtAmount(tx.fee, "XLM")}
+          </span>
         </Row>
         <Row label="Memo">
           <span className={cn(!tx.memo && "text-subtle")}>
@@ -190,8 +206,10 @@ function ReceiptBody({
       {tx.operations.length > 0 ? (
         <>
           <Perforation notches={false} />
-          <div className="border-x border-border-strong bg-card px-6 py-5">
-            <p className="stat-label mb-2.5">Operations</p>
+          <div className="border-x border-border-strong bg-surface px-6 py-5">
+            <p className="mb-2.5 font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+              Operations
+            </p>
             <ul className="space-y-1.5">
               {tx.operations.map((op, i) => (
                 <li
@@ -212,10 +230,12 @@ function ReceiptBody({
       <Perforation notches={false} />
 
       {/* footer — hash + explorer */}
-      <div className="rounded-b-2xl border border-t-0 border-border-strong bg-card px-6 pb-6 pt-4">
+      <div className="rounded-b-2xl border border-t-0 border-border-strong bg-surface px-6 pb-6 pt-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="stat-label">Transaction hash</p>
+            <p className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+              Transaction hash
+            </p>
             <div className="flex items-center font-mono text-[13px]">
               <span className="truncate">{truncMiddle(tx.hash, 6, 6)}</span>
               <CopyButton value={tx.hash} label="Copy transaction hash" />
@@ -223,10 +243,10 @@ function ReceiptBody({
           </div>
           {isOnchain ? (
             <a
-              href={`${STELLAR_EXPERT}/tx/${tx.hash}`}
+              href={`${explorer}/tx/${tx.hash}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-elevated/50 px-3 py-2 text-[13px] font-medium transition-colors hover:bg-elevated"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-elevated/50 px-3 py-2 font-mono text-[12px] font-medium transition-colors hover:bg-elevated"
             >
               Stellar Expert
               <ExternalLink className="size-3.5" aria-hidden />

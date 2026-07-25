@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 /* ------------------------------ status dot ------------------------------ */
 
-export function StatusDot({
+function StatusDot({
   tone,
   pulse = false,
   className,
@@ -59,16 +59,6 @@ const BADGE_TONE_CLASS = {
   muted: "border-border bg-elevated/60 text-muted-foreground",
 } as const;
 
-export function AgentStatusBadge({ status }: { status: AgentStatus }) {
-  const meta = AGENT_STATUS_META[status];
-  return (
-    <Badge variant="outline" className={cn("gap-1.5 font-medium", BADGE_TONE_CLASS[meta.tone])}>
-      <StatusDot tone={meta.tone} pulse={status === "active"} />
-      {meta.label}
-    </Badge>
-  );
-}
-
 /* -------------------------------- tx status ----------------------------- */
 
 export const TX_STATUS_META: Record<
@@ -102,17 +92,6 @@ export const TX_TYPE_META: Record<TxType, { label: string; icon: LucideIcon }> =
   policy_change: { label: "Policy change", icon: Shield },
 };
 
-export function TxTypeLabel({ type }: { type: TxType }) {
-  const meta = TX_TYPE_META[type];
-  const Icon = meta.icon;
-  return (
-    <span className="inline-flex items-center gap-1.5 text-sm">
-      <Icon className="size-3.5 text-muted-foreground" aria-hidden />
-      {meta.label}
-    </span>
-  );
-}
-
 /* -------------------------------- framework ----------------------------- */
 
 export const FRAMEWORK_META: Record<Framework, { label: string; icon: LucideIcon }> = {
@@ -122,13 +101,12 @@ export const FRAMEWORK_META: Record<Framework, { label: string; icon: LucideIcon
   "openai-sdk": { label: "OpenAI SDK", icon: Layers },
 };
 
-export function FrameworkLabel({ framework }: { framework: Framework }) {
-  const meta = FRAMEWORK_META[framework];
-  const Icon = meta.icon;
-  return (
-    <span className="inline-flex items-center gap-1.5 text-sm">
-      <Icon className="size-3.5 text-muted-foreground" aria-hidden />
-      {meta.label}
-    </span>
-  );
+/** Model / purpose line for an agent — prefers wizard attribution over MCP client. */
+export function agentAttribution(agent: {
+  description?: string | null;
+  framework: Framework;
+}): string {
+  const model = agent.description?.trim();
+  if (model) return model;
+  return FRAMEWORK_META[agent.framework].label;
 }

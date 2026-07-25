@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -61,42 +60,69 @@ export function ConfirmDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-[420px] gap-6">
         <DialogHeader>
+          <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
+            CONFIRM
+          </p>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+
         {typeToConfirm ? (
-          <div className="space-y-2">
-            <Label htmlFor="confirm-input" className="text-muted-foreground">
-              Type <span className="font-mono text-foreground">{typeToConfirm}</span> to continue
-            </Label>
-            <Input
+          <div className="space-y-1.5">
+            <label
+              htmlFor="confirm-input"
+              className="block font-mono text-[10px] tracking-[0.12em] text-muted-foreground"
+            >
+              TYPE{" "}
+              <span className="text-foreground">{typeToConfirm}</span> TO
+              CONTINUE
+            </label>
+            <input
               id="confirm-input"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               autoComplete="off"
               aria-label={`Type ${typeToConfirm} to confirm`}
+              className="box-border h-10 w-full rounded-xl border border-border bg-[var(--panel-3)] px-3.5 font-mono text-[13px] outline-none transition-[border-color] focus:border-border-strong"
             />
           </div>
         ) : null}
+
         <DialogFooter>
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
             disabled={busy}
+            onClick={() => onOpenChange(false)}
+            className="rounded-full border border-border-strong px-5 py-2.5 text-[13px] text-muted-foreground disabled:opacity-50"
           >
             Cancel
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
-            variant={destructive ? "destructive" : "default"}
-            onClick={() => void handleConfirm()}
             disabled={blocked || busy}
+            onClick={() => void handleConfirm()}
+            className={cn(
+              "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-medium disabled:opacity-50",
+              destructive
+                ? "border border-destructive text-destructive"
+                : undefined,
+            )}
+            style={
+              destructive
+                ? undefined
+                : {
+                    background: "var(--btn-bg)",
+                    color: "var(--btn-fg)",
+                  }
+            }
           >
+            {busy ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            ) : null}
             {busy ? "Working…" : confirmLabel}
-          </Button>
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
