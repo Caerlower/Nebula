@@ -17,6 +17,8 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 
 import { Keypair } from "@stellar/stellar-sdk";
 
+import { appBaseUrl } from "@/lib/app-url";
+
 export const SESSION_COOKIE = "nebula_session";
 
 /** SEP-53 fixed prefix for off-chain message signing. */
@@ -34,11 +36,11 @@ function sep53MessageHash(message: string): Buffer {
 const CHALLENGE_TTL_MS = 5 * 60_000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60_000;
 
-const SIGN_IN_DOMAIN = (
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://www.nebulaonchain.xyz"
-)
-  .replace(/^https?:\/\//, "")
-  .replace(/\/$/, "");
+function signInDomain(): string {
+  return appBaseUrl()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
+}
 
 /** Stable HMAC secret for challenge + session tokens. */
 function sessionSecret(): string {
@@ -107,7 +109,7 @@ export function buildChallenge(address: string): WalletChallenge | null {
   const issuedAt = Date.now();
   const exp = issuedAt + CHALLENGE_TTL_MS;
   const message = [
-    `${SIGN_IN_DOMAIN} wants you to sign in with your Stellar account:`,
+    `${signInDomain()} wants you to sign in with your Stellar account:`,
     address,
     "",
     "Sign this message to prove you own this wallet. This does not create a transaction or cost any fees.",
