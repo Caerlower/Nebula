@@ -1,14 +1,18 @@
 import type { PolicySnapshot, ToolContext, ToolResult } from "nebulamcp-core";
 
 import type { AuthPrincipal } from "../auth";
+import { appBaseUrl } from "@/lib/app-url";
 import { prisma } from "../db";
 import { sumSpendUsdcSince } from "../fx";
+import type { HubNetwork } from "@/lib/network";
+import { loadTreasurySettings } from "@/lib/policy/settings";
 
 export { SPEND_TX_TYPES } from "../fx";
+export { loadTreasurySettings };
 
-export const APP_URL = (
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://nebulaonchain.xyz"
-).replace(/\/$/, "");
+export function appUrl(): string {
+  return appBaseUrl();
+}
 
 export const MIN_TREASURY_MOVE = 0.000001;
 /** Ignore dust rebalances after transfers (float / tiny deficits). */
@@ -47,6 +51,7 @@ export type EffectiveCaps = {
 
 export async function loadEffectiveCaps(
   userId: string,
+  network: HubNetwork,
   agentId?: string | null,
 ): Promise<EffectiveCaps> {
   if (agentId) {
@@ -63,7 +68,7 @@ export async function loadEffectiveCaps(
       };
     }
   }
-  const s = await loadTreasurySettings(userId);
+  const s = await loadTreasurySettings(userId, network);
   return {
     microThreshold: Number(s.microThreshold),
     perTxCap: Number(s.perTxCap),
@@ -76,14 +81,15 @@ export async function loadEffectiveCaps(
 }
 
 /** Build the on-chain policy init payload for a scope: agent-scoped spend caps
- * combined with the owner's (per-user) treasury band + autoYield. */
+ * combined with the owner's (per-network) treasury band + autoYield. */
 export async function loadOnchainPolicyInit(
   userId: string,
+  network: HubNetwork,
   agentId?: string | null,
 ) {
   const [caps, t] = await Promise.all([
-    loadEffectiveCaps(userId, agentId),
-    loadTreasurySettings(userId),
+    loadEffectiveCaps(userId, network, agentId),
+    loadTreasurySettings(userId, network),
   ]);
   return {
     maxPerCallXlm: caps.perTxCap,
@@ -101,19 +107,20 @@ export async function loadOnchainPolicyInit(
 
 export async function loadPolicySnapshot(
   userId: string,
+  network: HubNetwork,
   agentId?: string | null,
 ): Promise<PolicySnapshot> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   // No agent scope → empty lists (never fall back to account-wide).
   const [caps, whitelist, denylist, spend] = await Promise.all([
-    loadEffectiveCaps(userId, agentId),
+    loadEffectiveCaps(userId, network, agentId),
     agentId
       ? prisma.whitelistEntry.findMany({ where: { userId, agentId } })
       : Promise.resolve([]),
     agentId
       ? prisma.denylistEntry.findMany({ where: { userId, agentId } })
       : Promise.resolve([]),
-    sumSpendUsdcSince(userId, since, { agentId }),
+    sumSpendUsdcSince(userId, since, { agentId, network }),
   ]);
 
   return {
@@ -127,13 +134,6 @@ export async function loadPolicySnapshot(
   };
 }
 
-export async function loadTreasurySettings(userId: string) {
-  return (
-    (await prisma.policySettings.findUnique({ where: { userId } })) ??
-    (await prisma.policySettings.create({ data: { userId } }))
-  );
-}
-
 export function buildToolContext(principal: AuthPrincipal): ToolContext | null {
   // Every account needs a Stellar address; only custodial (Privy) accounts
   // need a Privy wallet id. Partner / EOA accounts sign via other strategies.
@@ -144,9 +144,7 @@ export function buildToolContext(principal: AuthPrincipal): ToolContext | null {
     return null;
   }
 
-  const network =
-    (process.env.STELLAR_NETWORK as "testnet" | "mainnet" | undefined) ??
-    "testnet";
+  const network = principal.network;
 
   return {
     userId: principal.userId,
@@ -169,9 +167,10 @@ export function buildToolContext(principal: AuthPrincipal): ToolContext | null {
 
 export async function requireNotPaused(
   userId: string,
+  network: HubNetwork,
   agentId?: string | null,
 ): Promise<ToolResult | null> {
-  const caps = await loadEffectiveCaps(userId, agentId);
+  const caps = await loadEffectiveCaps(userId, network, agentId);
   if (caps.paused) {
     return { status: "rejected", reason: "policy_paused" };
   }
@@ -191,6 +190,7 @@ export async function recordBlendTx(params: {
     data: {
       userId: params.principal.userId,
       agentId: params.principal.agentId,
+      network: params.principal.network,
       type: params.type,
       destination: params.poolId,
       amountXlm: params.amount,
