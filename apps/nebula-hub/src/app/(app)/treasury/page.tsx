@@ -38,9 +38,9 @@ export default function TreasuryPage() {
     () => api.getWallet(),
     [selectedAgentId],
   );
-  const { data: positions, loading: positionsLoading, setData: setPositions, reload: reloadPositions } =
+  const { data: positions, setData: setPositions, reload: reloadPositions } =
     useLoad(() => api.getBlendPositions(), [selectedAgentId]);
-  const { data: settings, loading: settingsLoading, setData: setSettings } = useLoad(
+  const { data: settings, setData: setSettings } = useLoad(
     () => api.getTreasurySettings(),
     [selectedAgentId],
   );
@@ -372,20 +372,41 @@ export default function TreasuryPage() {
                   <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">
                     YIELD BAND
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => void toggleBandEdit()}
-                    disabled={saving}
-                    className="shrink-0 rounded-full border border-border-strong px-3 py-[5px] font-mono text-[10px] tracking-[0.12em] text-muted-foreground disabled:opacity-50"
-                  >
-                    {saving
-                      ? "SAVING…"
-                      : editingBand
-                        ? dirty
-                          ? "SAVE BAND"
-                          : "DONE"
-                        : "EDIT BAND"}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {!settings.autoYield ? (
+                      <button
+                        type="button"
+                        onClick={() => void enableAutoYield()}
+                        disabled={switchBusy}
+                        className="rounded-full border border-primary/40 px-3 py-[5px] font-mono text-[10px] tracking-[0.12em] text-primary-2 disabled:opacity-50"
+                      >
+                        {switchBusy ? "ENABLING…" : "ENABLE AUTO-YIELD"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void requestDisableAutoYield()}
+                        disabled={switchBusy}
+                        className="rounded-full border border-border-strong px-3 py-[5px] font-mono text-[10px] tracking-[0.12em] text-muted-foreground hover:border-destructive/50 hover:text-destructive disabled:opacity-50"
+                      >
+                        {switchBusy ? "UPDATING…" : "AUTO-YIELD ON · TURN OFF"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void toggleBandEdit()}
+                      disabled={saving}
+                      className="rounded-full border border-border-strong px-3 py-[5px] font-mono text-[10px] tracking-[0.12em] text-muted-foreground disabled:opacity-50"
+                    >
+                      {saving
+                        ? "SAVING…"
+                        : editingBand
+                          ? dirty
+                            ? "SAVE BAND"
+                            : "DONE"
+                          : "EDIT BAND"}
+                    </button>
+                  </div>
                 </div>
                 <p className="mt-2.5 max-w-[520px] text-[13px] text-pretty text-muted-foreground">
                   Nebula keeps the liquid balance inside this band. Below the floor it
@@ -476,26 +497,6 @@ export default function TreasuryPage() {
                     High must be greater than or equal to low.
                   </p>
                 ) : null}
-
-                {!settings.autoYield ? (
-                  <button
-                    type="button"
-                    onClick={() => void enableAutoYield()}
-                    disabled={switchBusy}
-                    className="mt-4 font-mono text-[10px] tracking-[0.14em] text-primary-2 hover:underline"
-                  >
-                    {switchBusy ? "ENABLING…" : "ENABLE AUTO-YIELD"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void requestDisableAutoYield()}
-                    disabled={switchBusy}
-                    className="mt-4 font-mono text-[10px] tracking-[0.14em] text-subtle hover:text-muted-foreground hover:underline"
-                  >
-                    AUTO-YIELD ON · TURN OFF
-                  </button>
-                )}
               </div>
 
               <div className="mt-8 border-t border-border pt-6">
@@ -512,7 +513,7 @@ export default function TreasuryPage() {
                     },
                     {
                       label: "EARNED · 30D",
-                      val: `+${fmtUSD(wallet.yield30dXLM * (rate || 0) || est30d)}`,
+                      val: `+${fmtUSD((wallet.yield30dXLM || 0) * (rate || 0))}`,
                       fg: "text-primary",
                     },
                     { label: "UNWIND TIME", val: "~5S", fg: undefined },
@@ -581,8 +582,8 @@ export default function TreasuryPage() {
                 AGENT DEPOSIT ADDRESS
               </p>
               <p className="mt-2 text-[13px] text-pretty text-muted-foreground">
-                Send XLM or Circle USDC to this address. Idle XLM can earn on Blend;
-                USDC funds x402 / MPP.
+                Send XLM or Circle USDC to this address. On mainnet, idle XLM and
+                USDC can earn in Blend (Fixed / YieldBlox); USDC also funds x402 / MPP.
               </p>
 
               {depositAddress ? (
@@ -866,8 +867,8 @@ export default function TreasuryPage() {
         title="Turn off auto-yield?"
         description={
           blendInYield > 0
-            ? `This withdraws about ${fmtXLM(blendInYield)} XLM from Blend back to your liquid balance, and stops parking idle funds. Yield stops accruing on that position after the withdraw.`
-            : "This stops parking idle funds into Blend. If any XLM is still in Blend, it will be withdrawn to your liquid balance."
+            ? `This withdraws about ${fmtXLM(blendInYield)} XLM from Blend back to liquid and stops parking idle funds. Yield stops accruing after the withdraw.`
+            : "This stops parking idle funds into Blend. Any XLM still in Blend will be withdrawn to liquid."
         }
         confirmLabel={
           blendInYield > 0 ? "Withdraw & turn off" : "Turn off auto-yield"
@@ -875,7 +876,6 @@ export default function TreasuryPage() {
         destructive
         onConfirm={() => confirmDisableAutoYield()}
       />
-
 
       <ConfirmDialog
         open={withdrawTarget != null}
