@@ -2,10 +2,18 @@
 
 import {
   getAddress,
+  getNetwork,
   isConnected,
   requestAccess,
   signMessage,
 } from "@stellar/freighter-api";
+import { Networks } from "@stellar/stellar-sdk";
+
+import {
+  envHubNetwork,
+  networkFromHostname,
+  type HubNetwork,
+} from "@/lib/network";
 
 export class WalletConnectError extends Error {
   constructor(
@@ -16,7 +24,8 @@ export class WalletConnectError extends Error {
       | "no_address"
       | "sign_rejected"
       | "challenge_failed"
-      | "verify_failed",
+      | "verify_failed"
+      | "network_mismatch",
   ) {
     super(message);
     this.name = "WalletConnectError";
@@ -40,6 +49,60 @@ function toBase64Signature(sm: unknown): string {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
+}
+
+/** Hub ledger for this page (Host subdomain, else deploy/env default). */
+function expectedHubNetwork(): HubNetwork {
+  if (typeof window !== "undefined") {
+    const fromHost = networkFromHostname(window.location.hostname);
+    if (fromHost) return fromHost;
+  }
+  return envHubNetwork();
+}
+
+function freighterToHub(
+  network: string,
+  passphrase?: string,
+): HubNetwork | null {
+  const n = network.trim().toUpperCase();
+  if (n === "PUBLIC" || n === "PUBLIC_NETWORK" || n === "MAINNET") {
+    return "mainnet";
+  }
+  if (n === "TESTNET" || n === "TEST") return "testnet";
+  if (passphrase === Networks.PUBLIC) return "mainnet";
+  if (passphrase === Networks.TESTNET) return "testnet";
+  return null;
+}
+
+/**
+ * Refuse Freighter sign-in when the extension is on the other Stellar ledger
+ * than this Hub host (e.g. Freighter TESTNET on mainnet.nebulaonchain.xyz).
+ */
+async function assertFreighterMatchesHub(): Promise<HubNetwork> {
+  const expected = expectedHubNetwork();
+  const details = await getNetwork();
+  if (details.error) {
+    throw new WalletConnectError(
+      details.error.message ?? "Couldn't read Freighter's network.",
+      "network_mismatch",
+    );
+  }
+  const walletNet = freighterToHub(details.network, details.networkPassphrase);
+  if (!walletNet) {
+    throw new WalletConnectError(
+      `Freighter is on an unsupported network (${details.network}). Switch to ${expected === "mainnet" ? "Mainnet (PUBLIC)" : "Testnet"} and try again.`,
+      "network_mismatch",
+    );
+  }
+  if (walletNet !== expected) {
+    throw new WalletConnectError(
+      expected === "mainnet"
+        ? "This Hub is mainnet — switch Freighter to Mainnet (PUBLIC), then try again."
+        : "This Hub is testnet — switch Freighter to Testnet, then try again.",
+      "network_mismatch",
+    );
+  }
+  return expected;
 }
 
 /** Connect Freighter, retrieve the address (prompting for access if needed). */
@@ -74,7 +137,10 @@ export async function signInWithFreighter(): Promise<{
   userId: string;
   address: string;
 }> {
+  const hubNetwork = await assertFreighterMatchesHub();
   const address = await connectFreighter();
+  const networkPassphrase =
+    hubNetwork === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
 
   const challengeRes = await fetch("/api/auth/challenge", {
     method: "POST",
@@ -89,7 +155,7 @@ export async function signInWithFreighter(): Promise<{
     challengeToken: string;
   };
 
-  const signed = await signMessage(message, { address });
+  const signed = await signMessage(message, { address, networkPassphrase });
   if (signed.error) {
     throw new WalletConnectError(
       signed.error.message ?? "Message signing was rejected.",
