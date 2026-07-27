@@ -18,6 +18,11 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import { Keypair } from "@stellar/stellar-sdk";
 
 import { appBaseUrl } from "@/lib/app-url";
+import {
+  envHubNetwork,
+  networkFromHostname,
+  type HubNetwork,
+} from "@/lib/network";
 
 export const SESSION_COOKIE = "nebula_session";
 
@@ -36,10 +41,20 @@ function sep53MessageHash(message: string): Buffer {
 const CHALLENGE_TTL_MS = 5 * 60_000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60_000;
 
-function signInDomain(): string {
-  return appBaseUrl()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/$/, "");
+function domainFromOrigin(origin: string): string {
+  return origin.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+function defaultSignInDomain(): string {
+  return domainFromOrigin(appBaseUrl());
+}
+
+function ledgerLabel(network: HubNetwork): string {
+  return network === "mainnet" ? "Mainnet" : "Testnet";
+}
+
+function shortAddress(address: string): string {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
 /** Stable HMAC secret for challenge + session tokens. */
@@ -102,23 +117,62 @@ export type WalletChallenge = {
   expiresAt: number;
 };
 
+export type BuildChallengeOpts = {
+  /** Hostname or full origin for this Hub (e.g. mainnet.nebulaonchain.xyz). */
+  host?: string | null;
+  network?: HubNetwork | null;
+};
+
 /** Build a signable challenge message + a bound, stateless challenge token. */
-export function buildChallenge(address: string): WalletChallenge | null {
+export function buildChallenge(
+  address: string,
+  opts?: BuildChallengeOpts,
+): WalletChallenge | null {
   if (!isStellarPublicKey(address)) return null;
+
+  const hostRaw = opts?.host?.trim() || "";
+  const hostname = hostRaw
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    ?.split(":")[0]
+    ?.toLowerCase();
+  const domain = hostname
+    ? domainFromOrigin(`https://${hostname}`)
+    : defaultSignInDomain();
+  const network =
+    opts?.network ??
+    networkFromHostname(hostname) ??
+    envHubNetwork();
+
   const nonce = randomBytes(16).toString("hex");
   const issuedAt = Date.now();
   const exp = issuedAt + CHALLENGE_TTL_MS;
+
+  // Blank lines help Freighter's message pane; keep fields scannable.
   const message = [
-    `${signInDomain()} wants you to sign in with your Stellar account:`,
+    "Nebula Hub",
+    `Network: ${ledgerLabel(network)}`,
+    `Site: ${domain}`,
+    "",
+    "Sign in with your Stellar account",
+    shortAddress(address),
     address,
     "",
-    "Sign this message to prove you own this wallet. This does not create a transaction or cost any fees.",
+    "This proves you own this wallet.",
+    "It does not create a transaction or cost any fees.",
     "",
     `Nonce: ${nonce}`,
-    `Issued At: ${new Date(issuedAt).toISOString()}`,
-    `Expires At: ${new Date(exp).toISOString()}`,
+    `Issued: ${new Date(issuedAt).toISOString()}`,
+    `Expires: ${new Date(exp).toISOString()}`,
   ].join("\n");
-  const challengeToken = signToken({ address, nonce, exp });
+
+  const challengeToken = signToken({
+    address,
+    nonce,
+    exp,
+    domain,
+    network,
+  });
   return { message, challengeToken, expiresAt: exp };
 }
 
@@ -132,19 +186,38 @@ export function verifyChallenge(params: {
   message: string;
   signature: string;
   challengeToken: string;
-}): { ok: true } | { ok: false; reason: string } {
+  /** Expected Host domain for this request (optional hardening). */
+  expectedDomain?: string | null;
+}): { ok: true; network: HubNetwork } | { ok: false; reason: string } {
   if (!isStellarPublicKey(params.address)) {
     return { ok: false, reason: "invalid_address" };
   }
-  const claim = verifyToken<{ address: string; nonce: string; exp: number }>(
-    params.challengeToken,
-  );
+  const claim = verifyToken<{
+    address: string;
+    nonce: string;
+    exp: number;
+    domain?: string;
+    network?: string;
+  }>(params.challengeToken);
   if (!claim) return { ok: false, reason: "challenge_invalid_or_expired" };
   if (claim.address !== params.address) {
     return { ok: false, reason: "challenge_address_mismatch" };
   }
   if (!params.message.includes(claim.nonce)) {
     return { ok: false, reason: "challenge_nonce_mismatch" };
+  }
+  if (claim.domain && !params.message.includes(claim.domain)) {
+    return { ok: false, reason: "challenge_domain_mismatch" };
+  }
+  if (params.expectedDomain) {
+    const expected = domainFromOrigin(
+      params.expectedDomain.includes("://")
+        ? params.expectedDomain
+        : `https://${params.expectedDomain}`,
+    );
+    if (claim.domain && claim.domain !== expected) {
+      return { ok: false, reason: "challenge_host_mismatch" };
+    }
   }
 
   let signatureBuf: Buffer;
@@ -163,7 +236,12 @@ export function verifyChallenge(params: {
     return { ok: false, reason: "signature_verify_failed" };
   }
 
-  return { ok: true };
+  const network =
+    (claim.network === "mainnet" || claim.network === "testnet"
+      ? claim.network
+      : null) ?? envHubNetwork();
+
+  return { ok: true, network };
 }
 
 export type WalletSessionClaims = {

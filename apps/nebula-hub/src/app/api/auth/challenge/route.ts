@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
+import { hostFromHeaders } from "@/lib/app-url";
+import { networkFromHostname, resolveHubNetwork } from "@/lib/network";
 import { buildChallenge } from "@/lib/wallet/auth";
 
 const schema = z.object({
@@ -17,7 +19,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const challenge = buildChallenge(parsed.data.address);
+  const host = hostFromHeaders(req.headers);
+  const network = resolveHubNetwork({
+    hostname: host,
+    preferred: networkFromHostname(host),
+  });
+
+  const challenge = buildChallenge(parsed.data.address, { host, network });
   if (!challenge) {
     return Response.json(
       { status: "error", reason: "invalid_address" },

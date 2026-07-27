@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
+import { hostFromHeaders } from "@/lib/app-url";
 import { prisma } from "@/lib/db";
-import { networkFromPrincipal, parseHubNetwork } from "@/lib/network";
 import {
   mintWalletSessionToken,
   sessionCookie,
@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = verifyChallenge(parsed.data);
+  const host = hostFromHeaders(req.headers);
+  const result = verifyChallenge({
+    ...parsed.data,
+    expectedDomain: host,
+  });
   if (!result.ok) {
     return Response.json(
       { status: "rejected", reason: result.reason },
@@ -52,12 +56,9 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const network = networkFromPrincipal({
-    network: parseHubNetwork(user.preferredNetwork),
-  });
   await prisma.policySettings.upsert({
-    where: { userId_network: { userId: user.id, network } },
-    create: { userId: user.id, network },
+    where: { userId_network: { userId: user.id, network: result.network } },
+    create: { userId: user.id, network: result.network },
     update: {},
   });
 
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
       status: "ok",
       userId: user.id,
       address,
+      network: result.network,
       expiresAt,
     },
     { headers: { "Set-Cookie": sessionCookie(token) } },
