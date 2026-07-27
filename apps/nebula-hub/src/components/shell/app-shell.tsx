@@ -33,10 +33,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useNebulaSignOut } from "@/hooks/use-nebula-sign-out";
 import { warmHubCaches } from "@/lib/api";
-import * as api from "@/lib/api";
 import { cn, truncMiddle } from "@/lib/utils";
+import {
+  hubOriginFor,
+  mainnetPreferenceAllowed,
+} from "@/lib/network";
 import { useAuthStore } from "@/stores/auth";
-import { syncAgentSelectionToNetwork } from "@/stores/agent";
 import { useUIStore } from "@/stores/ui";
 import { toast } from "sonner";
 
@@ -157,62 +159,28 @@ function HeaderAvatar() {
 
 function NetworkChip() {
   const network = useUIStore((s) => s.network);
-  const setNetwork = useUIStore((s) => s.setNetwork);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<"testnet" | "mainnet" | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // Hydrate from account preference (drives Hub + MCP for this user).
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const ws = await api.getWorkspace();
-        if (cancelled) return;
-        setNetwork(ws.network);
-        syncAgentSelectionToNetwork(ws.network);
-      } catch {
-        /* keep NEXT_PUBLIC_STELLAR_NETWORK / store default */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [setNetwork]);
+  const mainnetAllowed = mainnetPreferenceAllowed();
 
   const label = network === "mainnet" ? "MAINNET" : "TESTNET";
 
   const choose = (option: "testnet" | "mainnet") => {
     if (option === network || busy) return;
+    if (option === "mainnet" && !mainnetAllowed) {
+      toast.error("Mainnet is temporarily disabled");
+      return;
+    }
     setOpen(false);
     setPending(option);
   };
 
-  const confirmSwitch = async () => {
+  const confirmSwitch = () => {
     if (!pending) return;
     setBusy(true);
-    try {
-      const ws = await api.setNetwork(pending);
-      // Swap to the target ledger's saved agent (or null). Do not keep the
-      // previous network's agent id active across the reload boundary.
-      setNetwork(ws.network);
-      syncAgentSelectionToNetwork(ws.network);
-      toast.success(
-        ws.network === "mainnet"
-          ? "Switched to Stellar mainnet"
-          : "Switched to Stellar testnet",
-      );
-      // Full reload so wallet, policy, 8004, treasury, and explorer links
-      // all remount against the new ledger (agents list is network-scoped).
-      window.location.reload();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not switch network",
-      );
-      setPending(null);
-    } finally {
-      setBusy(false);
-    }
+    const dest = `${hubOriginFor(pending)}${window.location.pathname}${window.location.search}`;
+    window.location.assign(dest);
   };
 
   return (
@@ -236,22 +204,25 @@ function NetworkChip() {
               STELLAR NETWORK
             </p>
             <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-              Switches wallet, policy, Stellar8004, payments, Blend, and
-              explorers for this account. Fianza credit stays testnet-only
-              until their pubnet API ships.
+              Opens the other Hub host (
+              {hubOriginFor("testnet").replace("https://", "")} /{" "}
+              {hubOriginFor("mainnet").replace("https://", "")}). Sessions are
+              separate — you sign in again on the other ledger.
             </p>
           </div>
           <ul className="space-y-1.5 px-3 py-3">
             {(["testnet", "mainnet"] as const).map((option) => {
               const active = network === option;
+              const disabled =
+                busy || (option === "mainnet" && !mainnetAllowed);
               return (
                 <li key={option}>
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={disabled}
                     onClick={() => choose(option)}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
+                      "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors disabled:opacity-50",
                       active
                         ? "border-border-strong bg-[var(--panel-3)]"
                         : "border-border hover:border-border-strong hover:bg-[var(--panel-3)]/60",
@@ -270,10 +241,12 @@ function NetworkChip() {
                       </span>
                       <span className="mt-0.5 block font-mono text-[10px] tracking-[0.06em] text-muted-foreground">
                         {active
-                          ? "ACTIVE · THIS ACCOUNT"
+                          ? "ACTIVE · THIS HOST"
                           : option === "mainnet"
-                            ? "PUBNET · REAL FUNDS"
-                            : "SDF TESTNET"}
+                            ? mainnetAllowed
+                              ? "PUBNET · SIGN IN AGAIN"
+                              : "DISABLED"
+                            : "SDF TESTNET · SIGN IN AGAIN"}
                       </span>
                     </span>
                   </button>
@@ -291,15 +264,15 @@ function NetworkChip() {
         }}
         title={
           pending === "mainnet"
-            ? "Switch to Stellar mainnet?"
-            : "Switch to Stellar testnet?"
+            ? "Open mainnet Hub?"
+            : "Open testnet Hub?"
         }
         description={
           pending === "mainnet"
-            ? "Balances, policy, Stellar8004 identity, Blend yield, and payments will use pubnet. Fianza credit remains unavailable on mainnet until their API reports pubnet."
-            : "Balances, policy, Stellar8004 identity, Blend yield, and payments will use SDF testnet. Friendbot and Circle faucet links return."
+            ? `You’ll go to ${hubOriginFor("mainnet")} and need to sign in again. Agents, wallets, and policy on that host are separate from testnet.`
+            : `You’ll go to ${hubOriginFor("testnet")} and need to sign in again. Agents, wallets, and policy on that host are separate from mainnet.`
         }
-        confirmLabel={pending === "mainnet" ? "Use mainnet" : "Use testnet"}
+        confirmLabel={pending === "mainnet" ? "Go to mainnet" : "Go to testnet"}
         onConfirm={confirmSwitch}
       />
     </>
