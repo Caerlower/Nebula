@@ -42,20 +42,6 @@ export async function getWorkspace(): Promise<Workspace> {
   };
 }
 
-/** Persist preferred Stellar network for this account (drives Hub + MCP). */
-export async function setNetwork(
-  network: Workspace["network"],
-): Promise<Workspace> {
-  const res = await hubJson<{ ok: true; network: string }>("/api/me", {
-    method: "PATCH",
-    body: JSON.stringify({ network }),
-  });
-  return {
-    name: "Nebula",
-    network: res.network === "mainnet" ? "mainnet" : "testnet",
-  };
-}
-
 export async function updateAccount(patch: {
   name?: string;
 }): Promise<{ ok: true; name: string }> {

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { networkFromHostname } from "@/lib/network";
 import type { ThemeMode } from "@/lib/theme";
 
 /**
@@ -14,9 +15,14 @@ function initialTheme(): ThemeMode {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-/** Initial UI network before /api/me hydrates preferredNetwork. */
+/** Initial UI network: Host subdomain, else NEXT_PUBLIC_HUB_NETWORK / STELLAR_NETWORK. */
 function initialNetwork(): "testnet" | "mainnet" {
+  if (typeof window !== "undefined") {
+    const fromHost = networkFromHostname(window.location.hostname);
+    if (fromHost) return fromHost;
+  }
   if (typeof process === "undefined") return "testnet";
+  if (process.env.NEXT_PUBLIC_HUB_NETWORK === "mainnet") return "mainnet";
   return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet"
     ? "mainnet"
     : "testnet";
@@ -31,7 +37,7 @@ interface UIState {
   setMobileNavOpen: (open: boolean) => void;
   commandOpen: boolean;
   setCommandOpen: (open: boolean) => void;
-  /** Preferred Stellar network for this account (persisted via /api/me). */
+  /** Stellar network for this Host (testnet.* / mainnet.*). */
   network: "testnet" | "mainnet";
   setNetwork: (network: "testnet" | "mainnet") => void;
   /** cross-page quick actions (command palette → target page) */

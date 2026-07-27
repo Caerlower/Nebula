@@ -4,9 +4,11 @@ import { PrivyClient, type User } from "@privy-io/node";
 import { NextRequest } from "next/server";
 
 import { hashNebulaToken, prisma } from "@/lib/db";
+import { hostFromHeaders } from "@/lib/app-url";
 import {
   networkFromPrincipal,
   parseHubNetwork,
+  resolveHubNetwork,
   type HubNetwork,
 } from "@/lib/network";
 import { SESSION_COOKIE, readWalletSession } from "@/lib/wallet/auth";
@@ -64,7 +66,7 @@ export type AuthPrincipal = {
   accountType: "custodial" | "external";
   /** Where signatures come from for this account's spends. */
   signerStrategy: "privy" | "partner_callback" | "client_side";
-  /** Preferred Stellar ledger for this account's Hub traffic. */
+  /** Stellar ledger for this Hub request (Host subdomain, else preference/env). */
   network: HubNetwork;
 };
 
@@ -89,7 +91,12 @@ async function principalFromUser(
     preferredNetwork?: string | null;
   },
   source: AuthPrincipal["source"],
-  extra?: { agentId?: string | null; tokenId?: string | null },
+  extra?: {
+    agentId?: string | null;
+    tokenId?: string | null;
+    /** Request Host → ledger (dashboard). Ignored when agent wallet binds network. */
+    hostname?: string | null;
+  },
 ): Promise<AuthPrincipal> {
   return {
     userId: user.id,
@@ -103,8 +110,9 @@ async function principalFromUser(
     // (Freighter/EOA) accounts are external/client_side.
     accountType: user.accountType === "external" ? "external" : "custodial",
     signerStrategy: normalizeSignerStrategy(user.signerStrategy),
-    network: networkFromPrincipal({
-      network: parseHubNetwork(user.preferredNetwork),
+    network: resolveHubNetwork({
+      hostname: extra?.hostname ?? null,
+      preferred: parseHubNetwork(user.preferredNetwork),
     }),
   };
 }
@@ -134,11 +142,6 @@ function applyAgentWallet(
   };
 }
 
-/** Drop cached principals after network (or other) preference changes. */
-export function invalidateAuthPrincipalCache(): void {
-  principalCache.clear();
-}
-
 function bearerToken(req: NextRequest): string | null {
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return null;
@@ -153,6 +156,8 @@ export async function resolveAuth(
   req: NextRequest,
 ): Promise<AuthPrincipal | null> {
   const token = bearerToken(req);
+  const hostname = hostFromHeaders(req.headers);
+  const hostNetwork = resolveHubNetwork({ hostname });
   // Partner (Tael) attribution: a company token + this header identifies which
   // card is calling. It changes the resolved principal, so it must key the cache.
   const taelAgent = req.headers.get("x-tael-agent")?.trim() || null;
@@ -160,10 +165,14 @@ export async function resolveAuth(
   const sessionToken = token
     ? null
     : (req.cookies.get(SESSION_COOKIE)?.value ?? null);
+  // Include Host ledger so the same Privy/session token on testnet vs mainnet
+  // does not reuse a principal with the wrong network.
   const cacheKey = token
-    ? tokenCacheKey(taelAgent ? `${token}::${taelAgent}` : token)
+    ? tokenCacheKey(
+        `${taelAgent ? `${token}::${taelAgent}` : token}::${hostNetwork}`,
+      )
     : sessionToken
-      ? tokenCacheKey(sessionToken)
+      ? tokenCacheKey(`${sessionToken}::${hostNetwork}`)
       : null;
   if (cacheKey) {
     const cached = getCachedPrincipal(cacheKey);
@@ -189,10 +198,11 @@ export async function resolveAuth(
     const principal = await principalFromUser(row.user, "nebula_token", {
       agentId: row.agentId,
       tokenId: row.id,
+      hostname,
     });
     // A token bound to an agent operates the AGENT's own wallet + signer +
-    // ledger — never the owner's preferredNetwork. Preference only drives the
-    // dashboard NetworkChip; MCP traffic must stay on the twin that was minted.
+    // ledger — never the Host subdomain. MCP traffic stays on the twin that
+    // was minted (applyAgentWallet overrides network below).
     if (row.agent) {
       const bound = applyAgentWallet(principal, row.agent);
       if (cacheKey) cachePrincipal(cacheKey, bound);
@@ -238,7 +248,9 @@ export async function resolveAuth(
               name: existing.name,
             }).catch(() => {});
           }
-          const principal = await principalFromUser(existing, "privy_session");
+          const principal = await principalFromUser(existing, "privy_session", {
+            hostname,
+          });
           if (cacheKey) cachePrincipal(cacheKey, principal);
           return principal;
         }
@@ -255,7 +267,9 @@ export async function resolveAuth(
           email: emailAccount,
           name,
         });
-        const principal = await principalFromUser(user, "privy_session");
+        const principal = await principalFromUser(user, "privy_session", {
+          hostname,
+        });
         if (cacheKey) cachePrincipal(cacheKey, principal);
         return principal;
       } catch (error) {
@@ -270,7 +284,9 @@ export async function resolveAuth(
     if (claims) {
       const user = await prisma.user.findUnique({ where: { id: claims.sub } });
       if (user) {
-        const principal = await principalFromUser(user, "wallet_session");
+        const principal = await principalFromUser(user, "wallet_session", {
+          hostname,
+        });
         if (cacheKey) cachePrincipal(cacheKey, principal);
         return principal;
       }
@@ -300,15 +316,16 @@ export async function resolveAuth(
         privyWalletId: demoPrivyWalletId(),
       },
     });
-    const network = networkFromPrincipal({
-      network: parseHubNetwork(user.preferredNetwork),
+    const network = resolveHubNetwork({
+      hostname,
+      preferred: parseHubNetwork(user.preferredNetwork),
     });
     await prisma.policySettings.upsert({
       where: { userId_network: { userId: user.id, network } },
       create: { userId: user.id, network },
       update: {},
     });
-    return principalFromUser(user, "dev_mint");
+    return principalFromUser(user, "dev_mint", { hostname });
   }
 
   return null;
