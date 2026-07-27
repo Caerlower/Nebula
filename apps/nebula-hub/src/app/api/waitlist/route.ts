@@ -1,10 +1,8 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { BETA_COOKIE, isValidBetaCode } from "@/lib/auth/beta";
 import { getSupabaseAdmin } from "@/lib/db";
 
 /**
@@ -26,6 +24,13 @@ interface WaitlistEntry {
 
 /** Postgres unique-violation — an email that's already on the list is a success. */
 const UNIQUE_VIOLATION = "23505";
+
+function adminAuthorized(header: string | null): boolean {
+  const secret = process.env.WAITLIST_ADMIN_SECRET?.trim();
+  if (!secret || secret.length < 8) return false;
+  if (!header?.startsWith("Bearer ")) return false;
+  return header.slice("Bearer ".length).trim() === secret;
+}
 
 export async function POST(request: Request) {
   let body: { email?: unknown; source?: unknown };
@@ -68,10 +73,9 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-/** GET → list signups. Beta members only (that's you). */
-export async function GET() {
-  const store = await cookies();
-  if (!isValidBetaCode(store.get(BETA_COOKIE)?.value)) {
+/** GET → list signups. Requires Authorization: Bearer $WAITLIST_ADMIN_SECRET. */
+export async function GET(request: Request) {
+  if (!adminAuthorized(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
 
