@@ -31,7 +31,7 @@ npx -y nebulamcp-stdio
 | Variable       | Required | Description                                                              |
 | -------------- | -------- | ------------------------------------------------------------------------ |
 | `NEBULA_TOKEN` | yes      | `nbl_live_…` from the Hub **Connect** page                               |
-| `NEBULA_HUB`   | no       | Default `https://www.nebulaonchain.xyz` — use `http://localhost:3000` locally |
+| `NEBULA_HUB`   | no       | Default `https://testnet.nebulaonchain.xyz` — use mainnet.* when the token was minted there; `http://localhost:3000` locally |
 
 ## Claude Desktop / Cursor
 
@@ -43,7 +43,7 @@ npx -y nebulamcp-stdio
       "args": ["-y", "nebulamcp-stdio"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
-        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
+        "NEBULA_HUB": "https://testnet.nebulaonchain.xyz"
       }
     }
   }
@@ -57,7 +57,7 @@ npx -y nebulamcp-stdio
 The Hub also speaks Streamable HTTP directly, for clients that can call HTTP (e.g. Claude Code):
 
 ```
-POST https://www.nebulaonchain.xyz/mcp
+POST https://testnet.nebulaonchain.xyz/mcp
 Authorization: Bearer nbl_live_…
 ```
 

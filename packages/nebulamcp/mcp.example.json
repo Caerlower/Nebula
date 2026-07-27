@@ -5,7 +5,7 @@
       "args": ["-y", "nebulamcp-stdio"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_YOUR_TOKEN",
-        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
+        "NEBULA_HUB": "https://testnet.nebulaonchain.xyz"
       }
     }
   }

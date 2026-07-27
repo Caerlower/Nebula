@@ -55,7 +55,7 @@ flowchart LR
 | Human approve → Privy sign+submit | Done |
 | Policy whitelist / denylist / caps (Hub DB) | Done |
 | On-chain policy (`POLICY_CONTRACT_ID_TESTNET` / `_MAINNET` → `check_spend`) | Done when configured per ledger |
-| Testnet / mainnet twin agents (NetworkChip) | Done |
+| Testnet / mainnet twin agents (subdomain Host + NetworkChip) | Done |
 | Dashboard live data | Done |
 | Remote Streamable HTTP MCP + OAuth DCR | Done |
 | Blend treasury (testnet XLM; mainnet XLM + USDC pools) | Done |

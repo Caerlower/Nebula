@@ -101,7 +101,16 @@ Full phase status and stack map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Networks (testnet / mainnet)
 
-Switching the **NetworkChip** (dashboard) updates `User.preferredNetwork` and reloads the Hub against that ledger.
+Production Hub is **split by subdomain** (separate logins, same DB):
+
+| Host | Ledger |
+| ---- | ------ |
+| [testnet.nebulaonchain.xyz](https://testnet.nebulaonchain.xyz) | Testnet (default product entry) |
+| [mainnet.nebulaonchain.xyz](https://mainnet.nebulaonchain.xyz) | Mainnet |
+| [nebulaonchain.xyz](https://nebulaonchain.xyz) `/` | Marketing landing |
+| apex/www product routes (`/login`, `/agents`, …) | 308 → testnet.* |
+
+The dashboard **NetworkChip** navigates to the other host (you sign in again). Agents, policy, treasury, and history stay twin-scoped by `network` in the DB.
 
 | | Testnet | Mainnet |
 | - | ------- | ------- |
@@ -111,9 +120,11 @@ Switching the **NetworkChip** (dashboard) updates `User.preferredNetwork` and re
 | Blend | TestnetV2 (XLM) | Fixed + YieldBlox (XLM + USDC) |
 | Fianza / TrustLine credit | Available | Not enabled until Fianza pubnet API |
 
-MCP tokens bound to an agent always use **that agent’s ledger**, not the owner’s NetworkChip preference.
+MCP tokens bound to an agent always use **that agent’s ledger**. Point `NEBULA_HUB` at the host where you minted the token.
 
 Deploy notes and invoke examples: [contracts/policy/README.md](contracts/policy/README.md). Schema backfill SQL: `apps/nebula-hub/prisma/sql/20260725_network_isolation.sql`.
+
+**Ops:** add both subdomains on the Vercel Hub project; allowlist both origins in Privy.
 
 ---
 
@@ -186,8 +197,8 @@ Optional: `MAINNET_ENABLED=0` (kill-switch), `TAEL_PARTNER_SIGN_URL` / `TAEL_HMA
 
 ## Connect an agent (MCP)
 
-1. Sign in at [nebulaonchain.xyz](https://nebulaonchain.xyz) → pick **TESTNET** or **MAINNET** → **Connect** → create an agent on that ledger → copy its `nbl_live_…` token.
-2. Pick a path below. Prefer the **www** Hub host so Bearer tokens survive redirects.
+1. Sign in at [testnet.nebulaonchain.xyz](https://testnet.nebulaonchain.xyz) (or mainnet.*) → **Connect** → create an agent → copy its `nbl_live_…` token.
+2. Point MCP at **that same host** so Bearer tokens are not dropped on redirects.
 
 > **Never put a Stellar secret key in MCP config** — only `NEBULA_TOKEN`.
 
@@ -203,7 +214,7 @@ Published: [`nebulamcp-stdio`](https://www.npmjs.com/package/nebulamcp-stdio) (d
       "args": ["-y", "nebulamcp-stdio"],
       "env": {
         "NEBULA_TOKEN": "nbl_live_…",
-        "NEBULA_HUB": "https://www.nebulaonchain.xyz"
+        "NEBULA_HUB": "https://testnet.nebulaonchain.xyz"
       }
     }
   }
@@ -217,14 +228,14 @@ Package docs: [packages/nebulamcp/README.md](packages/nebulamcp/README.md).
 No npm install — point the client at Hub Streamable HTTP:
 
 ```
-POST https://www.nebulaonchain.xyz/mcp
+POST https://testnet.nebulaonchain.xyz/mcp
 Authorization: Bearer nbl_live_…
 ```
 
 Claude Code:
 
 ```bash
-claude mcp add --transport http nebula https://www.nebulaonchain.xyz/mcp \
+claude mcp add --transport http nebula https://testnet.nebulaonchain.xyz/mcp \
   -s user \
   --header "Authorization: Bearer nbl_live_…"
 ```
