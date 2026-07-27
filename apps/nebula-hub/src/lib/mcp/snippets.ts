@@ -1,4 +1,4 @@
-import { PRODUCTION_APP_URL } from "@/lib/app-url";
+import { PRODUCTION_APP_URL } from "@/lib/network";
 import type { Framework } from "@/types/domain";
 
 /**
@@ -6,6 +6,9 @@ import type { Framework } from "@/types/domain";
  * Shared by the Connect page (placeholder token) and the agent-created success
  * screen (real token substituted). Keeping a single source means both screens
  * always agree on server name ("nebula"), Hub host, and transport.
+ *
+ * Do not import `@/lib/app-url` here — that module uses node:async_hooks and
+ * must stay server-only (Connect is a client page).
  */
 
 export const HUB =

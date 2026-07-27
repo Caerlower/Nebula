@@ -7,12 +7,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
+  DEFAULT_HUB_ORIGIN_TESTNET,
   hubOriginFor,
   isApexOrWwwHost,
   networkFromHostname,
 } from "@/lib/network";
-
-export const PRODUCTION_APP_URL = "https://testnet.nebulaonchain.xyz";
 
 const appRequestAls = new AsyncLocalStorage<{ origin: string }>();
 
@@ -80,7 +79,7 @@ function appBaseUrlFromEnv(): string {
     return canonicalizeAppUrl(`https://${process.env.VERCEL_URL.trim()}`);
   }
   if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
-    return PRODUCTION_APP_URL;
+    return DEFAULT_HUB_ORIGIN_TESTNET;
   }
   return "http://localhost:3000";
 }
