@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
+import { runWithAppRequestAsync } from "@/lib/app-url";
 import { runHubTool } from "@/lib/hub-tools";
 import { rateLimitOrThrow } from "@/lib/route-cache";
 
@@ -15,45 +16,47 @@ import { rateLimitOrThrow } from "@/lib/route-cache";
  *   { "tool": "check_balance", "arguments": { … } }
  */
 export async function POST(req: NextRequest) {
-  const principal = await resolveAuth(req);
-  if (!principal) {
-    return unauthorized();
-  }
+  return runWithAppRequestAsync(req, async () => {
+    const principal = await resolveAuth(req);
+    if (!principal) {
+      return unauthorized();
+    }
 
-  let body: unknown = {};
-  try {
-    body = await req.json();
-  } catch {
-    body = {};
-  }
+    let body: unknown = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
 
-  const record = (body ?? {}) as Record<string, unknown>;
-  const tool = typeof record.tool === "string" ? record.tool.trim() : "";
-  if (!tool) {
-    return Response.json(
-      { status: "error", reason: "missing_tool" },
-      { status: 400 },
-    );
-  }
-  const args =
-    record.arguments && typeof record.arguments === "object"
-      ? (record.arguments as Record<string, unknown>)
-      : {};
+    const record = (body ?? {}) as Record<string, unknown>;
+    const tool = typeof record.tool === "string" ? record.tool.trim() : "";
+    if (!tool) {
+      return Response.json(
+        { status: "error", reason: "missing_tool" },
+        { status: 400 },
+      );
+    }
+    const args =
+      record.arguments && typeof record.arguments === "object"
+        ? (record.arguments as Record<string, unknown>)
+        : {};
 
-  const limited = await rateLimitOrThrow(`tool:${principal.userId}:${tool}`);
-  if (!limited.success) {
-    return Response.json(
-      { status: "error", reason: "rate_limited" },
-      { status: 429 },
-    );
-  }
+    const limited = await rateLimitOrThrow(`tool:${principal.userId}:${tool}`);
+    if (!limited.success) {
+      return Response.json(
+        { status: "error", reason: "rate_limited" },
+        { status: 429 },
+      );
+    }
 
-  const result = await runHubTool(tool, args, principal);
-  const status =
-    result.status === "rejected"
-      ? 403
-      : result.status === "error"
-        ? 400
-        : 200;
-  return Response.json(result, { status });
+    const result = await runHubTool(tool, args, principal);
+    const status =
+      result.status === "rejected"
+        ? 403
+        : result.status === "error"
+          ? 400
+          : 200;
+    return Response.json(result, { status });
+  });
 }

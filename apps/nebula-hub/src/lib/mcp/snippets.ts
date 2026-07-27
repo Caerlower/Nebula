@@ -10,6 +10,7 @@ import type { Framework } from "@/types/domain";
 
 export const HUB =
   process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
+  process.env.NEXT_PUBLIC_HUB_ORIGIN_TESTNET?.trim().replace(/\/$/, "") ||
   PRODUCTION_APP_URL;
 export const MCP_URL = `${HUB}/mcp`;
 
@@ -150,7 +151,7 @@ console.log(balance);`,
         path: `POST ${MCP_URL} with Authorization: Bearer`,
       },
     ],
-    note: `Endpoint: POST ${MCP_URL} with Authorization: Bearer ${TOKEN_PLACEHOLDER}. Use the www host (apex redirects can drop the Bearer header). OAuth DCR for hosted connectors: /api/oauth/register → /authorize → /oauth/token.`,
+    note: `Endpoint: POST ${MCP_URL} with Authorization: Bearer ${TOKEN_PLACEHOLDER}. Point NEBULA_HUB at the ledger host where the token was minted (testnet.nebulaonchain.xyz or mainnet.nebulaonchain.xyz) — apex/www redirects can drop the Bearer header. OAuth DCR: /api/oauth/register → /authorize → /oauth/token.`,
   },
   "openai-sdk": {
     install: {

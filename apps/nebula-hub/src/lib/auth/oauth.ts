@@ -12,8 +12,6 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-export { appBaseUrl } from "@/lib/app-url";
-
 export function hashOpaque(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
