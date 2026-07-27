@@ -17,7 +17,7 @@ import {
   onchainSetTreasuryBand,
   policyContractConfigured,
 } from "@/lib/policy/onchain";
-import { networkFromPrincipal, parseHubNetwork } from "@/lib/network";
+import { parseHubNetwork, resolveHubNetwork } from "@/lib/network";
 import { explorerTxUrl, fetchBalances } from "../stellar";
 import { executeX402Tool } from "../x402/execute";
 import {
@@ -1054,7 +1054,7 @@ export async function executeApprovedConfirmation(
           ? "partner_callback"
           : "privy",
     // Execute on the ledger stamped at create time — not live preference.
-    network: networkFromPrincipal({ network: confNetwork }),
+    network: resolveHubNetwork({ preferred: confNetwork }),
   };
 
   // All confirmations store _agentId so approve signs with the agent wallet

@@ -11,7 +11,7 @@ export type { HubNetwork };
 const EXPLORER_BASE_URL =
   process.env.STELLAR8004_EXPLORER_URL?.trim() ?? "https://stellar8004.com";
 
-/** Deploy default — prefer {@link networkFromPrincipal} for authenticated work. */
+/** Deploy default — use Host-based resolveHubNetwork for authenticated work. */
 export function hubNetwork(): HubNetwork {
   return envHubNetwork();
 }

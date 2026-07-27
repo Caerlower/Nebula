@@ -12,8 +12,6 @@ const APEX_HOSTS = new Set(["nebulaonchain.xyz", "www.nebulaonchain.xyz"]);
 
 export const DEFAULT_HUB_ORIGIN_TESTNET = "https://testnet.nebulaonchain.xyz";
 export const DEFAULT_HUB_ORIGIN_MAINNET = "https://mainnet.nebulaonchain.xyz";
-/** Canonical production Hub URL for client snippets (testnet entry). */
-export const PRODUCTION_APP_URL = DEFAULT_HUB_ORIGIN_TESTNET;
 
 export function envHubNetwork(): HubNetwork {
   const pub = process.env.NEXT_PUBLIC_HUB_NETWORK?.trim();
@@ -103,13 +101,6 @@ export function resolveHubNetwork(opts: {
   }
   if (preferred) return preferred;
   return envHubNetwork();
-}
-
-/** @deprecated Prefer resolveHubNetwork — kept for call-site compatibility. */
-export function networkFromPrincipal(principal: {
-  network?: HubNetwork | null;
-}): HubNetwork {
-  return resolveHubNetwork({ preferred: principal.network ?? null });
 }
 
 /**

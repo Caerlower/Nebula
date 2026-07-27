@@ -84,21 +84,6 @@ function appBaseUrlFromEnv(): string {
   return "http://localhost:3000";
 }
 
-export function appBaseUrl(hostHint?: string | null): string {
-  const fromAls = appRequestAls.getStore()?.origin;
-  if (fromAls) return fromAls;
-
-  if (hostHint?.trim()) {
-    const host = stripPort(hostHint.trim().toLowerCase());
-    const network = networkFromHostname(host);
-    if (network) return hubOriginFor(network);
-    if (isApexOrWwwHost(host)) return hubOriginFor("testnet");
-    const proto =
-      host.startsWith("localhost") || host.startsWith("127.0.0.1")
-        ? "http"
-        : "https";
-    return `${proto}://${hostHint.trim()}`.replace(/\/$/, "");
-  }
-
-  return appBaseUrlFromEnv();
+export function appBaseUrl(): string {
+  return appRequestAls.getStore()?.origin ?? appBaseUrlFromEnv();
 }

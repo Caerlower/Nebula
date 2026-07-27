@@ -6,7 +6,6 @@ import { NextRequest } from "next/server";
 import { hashNebulaToken, prisma } from "@/lib/db";
 import { hostFromHeaders } from "@/lib/app-url";
 import {
-  networkFromPrincipal,
   parseHubNetwork,
   resolveHubNetwork,
   type HubNetwork,
@@ -134,7 +133,7 @@ function applyAgentWallet(
   return {
     ...principal,
     agentId: agent.id,
-    network: networkFromPrincipal({ network }),
+    network: resolveHubNetwork({ preferred: network }),
     stellarAddress: agent.stellarAddress ?? principal.stellarAddress,
     privyWalletId: agent.privyWalletId ?? principal.privyWalletId,
     accountType: agent.accountType === "external" ? "external" : "custodial",
@@ -335,10 +334,6 @@ export function unauthorized(): Response {
   return Response.json({ status: "error", reason: "unauthorized" }, { status: 401 });
 }
 
-export function forbidden(reason: string): Response {
-  return Response.json({ status: "rejected", reason }, { status: 403 });
-}
-
 export function isDashboardAuth(principal: AuthPrincipal): boolean {
   return (
     principal.source === "privy_session" ||
@@ -392,8 +387,8 @@ export async function ensureUserFromPrivy(claims: {
         name: claims.name ?? null,
       },
     });
-    const network = networkFromPrincipal({
-      network: parseHubNetwork(user.preferredNetwork),
+    const network = resolveHubNetwork({
+      preferred: parseHubNetwork(user.preferredNetwork),
     });
     await prisma.policySettings.create({
       data: { userId: user.id, network },
