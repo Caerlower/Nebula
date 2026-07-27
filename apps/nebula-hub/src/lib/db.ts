@@ -13,7 +13,7 @@ function withPoolParams(url: string): string {
   if (!url || url.includes("connection_limit=")) return url;
   const limit =
     process.env.PRISMA_CONNECTION_LIMIT?.trim() ||
-    (process.env.NODE_ENV === "development" ? "10" : "3");
+    (process.env.NODE_ENV === "development" ? "10" : "8");
   const sep = url.includes("?") ? "&" : "?";
   const params = new URLSearchParams();
   params.set("connection_limit", limit);

@@ -17,6 +17,17 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (principal && principal.userId !== conf.userId) {
     return Response.json({ status: "error", reason: "forbidden" }, { status: 403 });
   }
+  // Dashboard session: only show confirmations for this Host's ledger.
+  if (
+    principal &&
+    principal.source !== "nebula_token" &&
+    conf.network !== principal.network
+  ) {
+    return Response.json(
+      { status: "error", reason: "network_mismatch" },
+      { status: 409 },
+    );
+  }
 
   return Response.json({
     id: conf.id,

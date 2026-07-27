@@ -139,10 +139,19 @@ async function uncachedGET(req: NextRequest) {
   ]);
 
   const spendByAgent = new Map<string, number>();
-  for (const row of spendRows) {
-    if (!row.agentId) continue;
-    const usdc = await rowSpendUsdc(row);
-    spendByAgent.set(row.agentId, (spendByAgent.get(row.agentId) ?? 0) + usdc);
+  const spendParts = await Promise.all(
+    spendRows.map(async (row) => {
+      if (!row.agentId) return null;
+      const usdc = await rowSpendUsdc(row);
+      return { agentId: row.agentId, usdc };
+    }),
+  );
+  for (const part of spendParts) {
+    if (!part) continue;
+    spendByAgent.set(
+      part.agentId,
+      (spendByAgent.get(part.agentId) ?? 0) + part.usdc,
+    );
   }
 
   // Each agent has its own wallet — report its own balance, not the owner's.

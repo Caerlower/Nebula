@@ -4,13 +4,15 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useLoad } from "@/hooks/use-load";
 import * as api from "@/lib/api";
-import { useAgentStore } from "@/stores/agent";
+import { networkFromHostname } from "@/lib/network";
+import { syncAgentSelectionToNetwork, useAgentStore } from "@/stores/agent";
 import { useUIStore } from "@/stores/ui";
 import type { Agent } from "@/types/domain";
 
@@ -26,17 +28,19 @@ interface AgentScopeValue {
 
 const AgentScopeContext = createContext<AgentScopeValue | null>(null);
 
-export function AgentScopeProvider({ children }: { children: React.ReactNode }) {
+/**
+ * Remounted when `network` changes so agent lists never soft-refresh across
+ * ledgers (would briefly validate the wrong twin's agent ids).
+ */
+function AgentScopeInner({ children }: { children: React.ReactNode }) {
   const { data, loading, reload } = useLoad(() => api.getAgents(), []);
   const agents = useMemo(() => data ?? [], [data]);
 
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const setSelectedAgentId = useAgentStore((s) => s.setSelectedAgentId);
 
-  // Keep the selection valid: auto-select the first agent when nothing is
-  // selected or the previously selected agent no longer exists.
   useEffect(() => {
-    if (loading) return;
+    if (loading && agents.length === 0) return;
     if (agents.length === 0) {
       if (selectedAgentId !== null) setSelectedAgentId(null);
       return;
@@ -50,17 +54,31 @@ export function AgentScopeProvider({ children }: { children: React.ReactNode }) 
     [agents, selectedAgentId],
   );
 
+  const selectionReady =
+    agents.length === 0
+      ? !loading
+      : selectedAgentId !== null &&
+        agents.some((a) => a.id === selectedAgentId);
+
   const value = useMemo<AgentScopeValue>(
     () => ({
       agents,
-      loading,
+      loading: loading || !selectionReady,
       hasAgents: agents.length > 0,
-      selectedAgentId,
-      selectedAgent,
+      selectedAgentId: selectionReady ? selectedAgentId : null,
+      selectedAgent: selectionReady ? selectedAgent : null,
       setSelectedAgentId,
       reloadAgents: reload,
     }),
-    [agents, loading, selectedAgentId, selectedAgent, setSelectedAgentId, reload],
+    [
+      agents,
+      loading,
+      selectionReady,
+      selectedAgentId,
+      selectedAgent,
+      setSelectedAgentId,
+      reload,
+    ],
   );
 
   return (
@@ -68,6 +86,24 @@ export function AgentScopeProvider({ children }: { children: React.ReactNode }) 
       {children}
     </AgentScopeContext.Provider>
   );
+}
+
+export function AgentScopeProvider({ children }: { children: React.ReactNode }) {
+  const network = useUIStore((s) => s.network);
+  const setNetwork = useUIStore((s) => s.setNetwork);
+
+  // Align store with Host before any child fetches keyed by selectedAgentId.
+  useLayoutEffect(() => {
+    const fromHost = networkFromHostname(window.location.hostname);
+    if (fromHost) {
+      if (fromHost !== useUIStore.getState().network) setNetwork(fromHost);
+      syncAgentSelectionToNetwork(fromHost);
+      return;
+    }
+    syncAgentSelectionToNetwork(useUIStore.getState().network);
+  }, [setNetwork]);
+
+  return <AgentScopeInner key={network}>{children}</AgentScopeInner>;
 }
 
 export function useAgentScope(): AgentScopeValue {

@@ -6,6 +6,10 @@ import { toast } from "sonner";
 /**
  * Standard data-loading hook: skeleton while pending, sonner toast with a
  * retry action on failure. `deps` re-runs the loader (e.g. filters).
+ *
+ * Soft refresh: once data exists, dep changes keep showing the previous
+ * payload instead of flipping back to a full-page skeleton (avoids thrash
+ * when selectedAgentId settles after rehydrate).
  */
 export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -14,14 +18,18 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[] = 
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
   const generation = useRef(0);
+  const hasDataRef = useRef(false);
 
   const run = useCallback(async () => {
     const gen = ++generation.current;
-    setLoading(true);
+    // Initial load only — keep prior data visible during background refresh.
+    if (!hasDataRef.current) setLoading(true);
     setError(null);
     try {
       const result = await loaderRef.current();
-      if (gen === generation.current) setData(result);
+      if (gen !== generation.current) return;
+      hasDataRef.current = true;
+      setData(result);
     } catch (err) {
       if (gen !== generation.current) return;
       const e = err instanceof Error ? err : new Error(String(err));

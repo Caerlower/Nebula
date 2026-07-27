@@ -801,6 +801,7 @@ async function executePolicyReadTools(
     const rows = await prisma.transaction.findMany({
       where: {
         userId: principal.userId,
+        network: principal.network,
         // Agent tokens see only their own agent's activity.
         ...(principal.agentId ? { agentId: principal.agentId } : {}),
         status: "confirmed",
