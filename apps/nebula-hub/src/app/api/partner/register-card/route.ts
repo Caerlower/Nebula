@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { resolveAuth, unauthorized } from "@/lib/auth";
-import { appBaseUrl } from "@/lib/app-url";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
 import { buildMcpConfig } from "@/lib/mcp/config";
 import { bustRouteCache } from "@/lib/route-cache";
@@ -105,6 +104,12 @@ export async function POST(req: NextRequest) {
 
   bustRouteCache("agents:");
 
+  const mcp = buildMcpConfig({
+    token: plaintext,
+    serverName: agent.name,
+    network: principal.network,
+  });
+
   return Response.json({
     status: "ok",
     agent_id: agent.id,
@@ -115,9 +120,9 @@ export async function POST(req: NextRequest) {
       token: plaintext,
       warning: "Plaintext shown once. Store safely.",
     },
-    mcp: buildMcpConfig({ token: plaintext, serverName: agent.name }),
-    mcp_url: `${appBaseUrl()}/mcp`,
-    tools_url: `${appBaseUrl()}/api/tools/{tool}`,
+    mcp,
+    mcp_url: mcp.mcp_url,
+    tools_url: `${mcp.hub}/api/tools/{tool}`,
     // Whether Nebula is configured to call the partner sign endpoint.
     signer_ready: partnerSignerConfigFromEnv() != null,
   });

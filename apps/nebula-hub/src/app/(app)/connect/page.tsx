@@ -8,8 +8,9 @@ import { SectionRule } from "@/components/design/primitives";
 import { AgentTokensPanel } from "@/components/shared/api-keys-card";
 import { FRAMEWORK_META } from "@/components/shared/status-badges";
 import { useAgentScope } from "@/components/agent-scope/agent-scope";
-import { getSnippet } from "@/lib/mcp/snippets";
+import { getSnippet, resolveSnippetHub } from "@/lib/mcp/snippets";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
 import type { Framework } from "@/types/domain";
 
 function CopyChip({ value }: { value: string }) {
@@ -33,11 +34,14 @@ function CopyChip({ value }: { value: string }) {
 
 export default function ConnectPage() {
   const { selectedAgent } = useAgentScope();
+  const network = useUIStore((s) => s.network);
   const [client, setClient] = useState<Framework>("claude-code");
   const [openStep, setOpenStep] = useState(1);
   const [pasted, setPasted] = useState(false);
-  const snippet = getSnippet(client);
+  const snippet = getSnippet(client, network);
   const frameworks = Object.keys(FRAMEWORK_META) as Framework[];
+  const hub = resolveSnippetHub(network);
+  const mcpUrl = `${hub}/mcp`;
 
   const steps = [
     {
@@ -127,10 +131,24 @@ export default function ConnectPage() {
   return (
     <div>
       <div className="pb-6">
-        <SectionRule>CONNECT · MCP</SectionRule>
+        <SectionRule>CONNECT · MCP · {network.toUpperCase()}</SectionRule>
         <h1 className="page-title">
           Wire {selectedAgent?.name ?? "your agent"} into your client
         </h1>
+        <p className="mt-3 max-w-[560px] text-[13px] text-muted-foreground">
+          All LIVE CONFIG URLs below are for{" "}
+          <span className="font-mono text-[12px] text-foreground">{network}</span>
+          . Claude.ai / remote MCP: paste{" "}
+          <span className="font-mono text-[12px] text-primary-2">{mcpUrl}</span>
+          {" — "}
+          not the apex domain.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <code className="rounded-lg border border-border bg-[var(--panel-3)] px-3 py-1.5 font-mono text-[11px] text-foreground">
+            {mcpUrl}
+          </code>
+          <CopyChip value={mcpUrl} />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_440px]">
@@ -195,12 +213,12 @@ export default function ConnectPage() {
         </div>
 
         <div className="soft-panel bg-elevated px-7 py-7">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground">
-              LIVE CONFIG
+              LIVE CONFIG · {network.toUpperCase()}
             </span>
             <span className="font-mono text-[9px] tracking-[0.12em] text-primary-2">
-              UPDATES AS YOU GO
+              {hub.replace(/^https?:\/\//, "")}
             </span>
           </div>
           <div className="relative mt-4">

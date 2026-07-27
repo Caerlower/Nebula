@@ -5,7 +5,7 @@ import { resolveAuth, unauthorized } from "@/lib/auth";
 import { hashNebulaToken, mintNebulaTokenPlaintext, prisma } from "@/lib/db";
 import { demoPrivyWalletId, demoStellarAddress } from "@/lib/auth";
 import { buildMcpConfig } from "@/lib/mcp/config";
-import { networkFromPrincipal, parseHubNetwork } from "@/lib/network";
+import { parseHubNetwork, resolveHubNetwork, type HubNetwork } from "@/lib/network";
 
 /** null = never expires. Allowed UI presets: 7 / 30 / 180 days. */
 const createSchema = z.object({
@@ -72,8 +72,8 @@ export async function POST(req: NextRequest) {
         },
       });
       userId = user.id;
-      const network = networkFromPrincipal({
-        network: parseHubNetwork(user.preferredNetwork),
+      const network = resolveHubNetwork({
+        preferred: parseHubNetwork(user.preferredNetwork),
       });
       await prisma.policySettings.upsert({
         where: { userId_network: { userId: user.id, network } },
@@ -104,17 +104,17 @@ export async function POST(req: NextRequest) {
       ? null
       : new Date(Date.now() + expiresInDays * 86_400_000);
 
+  let agentNetwork: HubNetwork = principal?.network ?? "testnet";
+
   if (body.data.agentId) {
-    const network =
-      principal?.network ??
-      networkFromPrincipal({ network: "testnet" });
+    const network = principal?.network ?? "testnet";
     const agent = await prisma.agent.findFirst({
       where: {
         id: body.data.agentId,
         userId: userId!,
         network,
       },
-      select: { id: true },
+      select: { id: true, network: true },
     });
     if (!agent) {
       return Response.json(
@@ -122,6 +122,10 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    agentNetwork =
+      agent.network === "mainnet" || agent.network === "testnet"
+        ? agent.network
+        : network;
   }
 
   const plaintext = mintNebulaTokenPlaintext();
@@ -143,6 +147,10 @@ export async function POST(req: NextRequest) {
     expiresAt: row.expiresAt?.toISOString() ?? null,
     warning:
       "This is the only time the plaintext token is shown. Store it safely.",
-    mcp: buildMcpConfig({ token: plaintext, serverName: row.label }),
+    mcp: buildMcpConfig({
+      token: plaintext,
+      serverName: row.label,
+      network: agentNetwork,
+    }),
   });
 }

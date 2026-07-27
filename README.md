@@ -223,14 +223,23 @@ Published: [`nebulamcp-stdio`](https://www.npmjs.com/package/nebulamcp-stdio) (d
 
 Package docs: [packages/nebulamcp/README.md](packages/nebulamcp/README.md).
 
-### Remote HTTP (Claude Code / custom agents)
+### Remote HTTP (Claude Code / custom agents / Claude.ai)
 
-No npm install — point the client at Hub Streamable HTTP:
+No npm install — point the client at **that ledger’s** Streamable HTTP endpoint:
+
+| Ledger | MCP URL |
+| ------ | ------- |
+| Testnet | `https://testnet.nebulaonchain.xyz/mcp` |
+| Mainnet | `https://mainnet.nebulaonchain.xyz/mcp` |
+
+Do **not** use `https://nebulaonchain.xyz/mcp` (apex/www redirects and can break auth).
 
 ```
 POST https://testnet.nebulaonchain.xyz/mcp
 Authorization: Bearer nbl_live_…
 ```
+
+**Claude.ai** (website custom connector / OAuth): paste the ledger MCP URL above (same host you signed into).
 
 Claude Code:
 

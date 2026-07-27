@@ -1,16 +1,15 @@
-import { appBaseUrl } from "@/lib/app-url";
+import { hubOriginFor, type HubNetwork } from "@/lib/network";
 
 /**
- * Build ready-to-paste MCP client configs for a freshly minted Nebula token.
- * The plaintext token is only available at mint time, so this is the one moment
- * we can hand the user a one-click config. Returns both the remote Streamable
- * HTTP form (Cursor / Claude Code / custom) and the stdio bridge form
- * (Claude Desktop / OpenAI Agents) so the UI can show whichever the agent uses.
+ * Ready-to-paste MCP client configs for a freshly minted Nebula token.
+ * Plaintext is only available at mint time.
  */
 export function buildMcpConfig(params: {
   token: string;
   /** Server label in the client config; defaults to "nebula". */
   serverName?: string;
+  /** Ledger for NEBULA_HUB — Agent.network / request Host. */
+  network: HubNetwork;
 }): {
   hub: string;
   mcp_url: string;
@@ -19,19 +18,19 @@ export function buildMcpConfig(params: {
   claude_desktop: Record<string, unknown>;
   claude_code_command: string;
 } {
-  const hub = appBaseUrl();
+  const hub = hubOriginFor(params.network).replace(/\/$/, "");
   const mcpUrl = `${hub}/mcp`;
-  const name = (params.serverName ?? "nebula")
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40) || "nebula";
+  const name =
+    (params.serverName ?? "nebula")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "nebula";
 
   return {
     hub,
     mcp_url: mcpUrl,
     server_name: name,
-    // Cursor / Claude Code / any Streamable HTTP client — no local package.
     streamable_http: {
       mcpServers: {
         [name]: {
@@ -40,7 +39,6 @@ export function buildMcpConfig(params: {
         },
       },
     },
-    // Claude Desktop / OpenAI Agents — stdio bridge forwards to the Hub.
     claude_desktop: {
       mcpServers: {
         [name]: {

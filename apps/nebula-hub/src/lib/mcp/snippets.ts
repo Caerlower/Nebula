@@ -1,46 +1,47 @@
-import { PRODUCTION_APP_URL } from "@/lib/network";
+import {
+  hubOriginFor,
+  isLocalHostname,
+  networkFromHostname,
+  type HubNetwork,
+} from "@/lib/network";
 import type { Framework } from "@/types/domain";
 
 /**
- * Canonical, copy-paste MCP client configs, one per supported client.
- * Shared by the Connect page (placeholder token) and the agent-created success
- * screen (real token substituted). Keeping a single source means both screens
- * always agree on server name ("nebula"), Hub host, and transport.
- *
- * Do not import `@/lib/app-url` here — that module uses node:async_hooks and
- * must stay server-only (Connect is a client page).
+ * Copy-paste MCP client configs for the Connect page.
+ * Do not import `@/lib/app-url` here — it uses node:async_hooks (server-only).
  */
 
-export const HUB =
-  process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
-  process.env.NEXT_PUBLIC_HUB_ORIGIN_TESTNET?.trim().replace(/\/$/, "") ||
-  PRODUCTION_APP_URL;
-export const MCP_URL = `${HUB}/mcp`;
+const TOKEN_PLACEHOLDER = "nbl_live_…";
+const HUB_PLACEHOLDER = "__NEBULA_HUB__";
+const MCP_PLACEHOLDER = "__NEBULA_MCP__";
 
-/** Placeholder that {@link getSnippet} swaps for a real token when provided. */
-export const TOKEN_PLACEHOLDER = "nbl_live_…";
+/** Hub origin for Connect snippets — Host on the client, else ledger default. */
+export function resolveSnippetHub(network?: HubNetwork | null): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const fromHost = networkFromHostname(host);
+    if (fromHost) return hubOriginFor(fromHost);
+    if (isLocalHostname(host)) {
+      return window.location.origin.replace(/\/$/, "");
+    }
+  }
+  if (network === "mainnet" || network === "testnet") {
+    return hubOriginFor(network);
+  }
+  return hubOriginFor("testnet");
+}
 
 export interface Snippet {
-  install: { code: string; language: "bash"; title: string };
   config: {
     code: string;
     language: "bash" | "json" | "typescript" | "python";
     title: string;
   };
-  /** Where to paste LIVE CONFIG for this client (shown on Connect step 03). */
   pasteTargets: { label: string; path: string }[];
-  note: string;
 }
 
 const SNIPPETS: Record<Framework, Snippet> = {
   "claude-desktop": {
-    install: {
-      title: "prerequisites",
-      language: "bash",
-      code: `# 1. Mint a token above (${TOKEN_PLACEHOLDER})
-# 2. Node 20+ on the machine that runs Claude Desktop
-node --version`,
-    },
     config: {
       title: "claude_desktop_config.json",
       language: "json",
@@ -51,7 +52,7 @@ node --version`,
       "args": ["-y", "nebulamcp-stdio"],
       "env": {
         "NEBULA_TOKEN": "${TOKEN_PLACEHOLDER}",
-        "NEBULA_HUB": "${HUB}"
+        "NEBULA_HUB": "${HUB_PLACEHOLDER}"
       }
     }
   }
@@ -67,30 +68,17 @@ node --version`,
         path: "%APPDATA%\\Claude\\claude_desktop_config.json",
       },
     ],
-    note: `macOS: ~/Library/Application Support/Claude/claude_desktop_config.json · Windows: %APPDATA%\\Claude\\claude_desktop_config.json. Restart Claude Desktop after saving. Never put a Stellar secret key here — only NEBULA_TOKEN.`,
   },
   "claude-code": {
-    install: {
-      title: "prerequisites",
-      language: "bash",
-      code: `# Mint a token above first (${TOKEN_PLACEHOLDER})
-claude --version`,
-    },
     config: {
       title: "add Nebula (recommended)",
       language: "bash",
       code: `# Remote Streamable HTTP — no npm install. Talks straight to the Hub.
-claude mcp add --transport http nebula ${MCP_URL} \\
+claude mcp add --transport http nebula ${MCP_PLACEHOLDER} \\
   --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}"
 
 # Confirm it registered
-claude mcp list
-
-# Optional: project-only vs user-wide
-#   claude mcp add --transport http nebula ${MCP_URL} --scope project \\
-#     --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}"
-#   claude mcp add --transport http nebula ${MCP_URL} --scope user \\
-#     --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}"`,
+claude mcp list`,
     },
     pasteTargets: [
       {
@@ -106,15 +94,8 @@ claude mcp list
         path: ".mcp.json",
       },
     ],
-    note: `Prefer HTTP for Claude Code — it hits ${MCP_URL} with your token. Stdio fallback (local npx bridge): claude mcp add nebula -e NEBULA_TOKEN=${TOKEN_PLACEHOLDER} -e NEBULA_HUB=${HUB} -- npx -y nebulamcp-stdio`,
   },
   "custom-mcp": {
-    install: {
-      title: "install",
-      language: "bash",
-      code: `npm install @modelcontextprotocol/sdk
-# Mint a token above first (${TOKEN_PLACEHOLDER})`,
-    },
     config: {
       title: "remote Streamable HTTP",
       language: "typescript",
@@ -124,7 +105,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 const token = process.env.NEBULA_TOKEN!; // ${TOKEN_PLACEHOLDER}
 
 const transport = new StreamableHTTPClientTransport(
-  new URL("${MCP_URL}"),
+  new URL("${MCP_PLACEHOLDER}"),
   {
     requestInit: {
       headers: { Authorization: \`Bearer \${token}\` },
@@ -146,24 +127,20 @@ console.log(balance);`,
     },
     pasteTargets: [
       {
+        label: "Claude.ai · Custom connector",
+        path: `${MCP_PLACEHOLDER}  (OAuth — do not use apex/www)`,
+      },
+      {
         label: "Your agent code",
         path: "src/agent.ts (or your entrypoint)",
       },
       {
         label: "HTTP endpoint",
-        path: `POST ${MCP_URL} with Authorization: Bearer`,
+        path: `POST ${MCP_PLACEHOLDER} with Authorization: Bearer`,
       },
     ],
-    note: `Endpoint: POST ${MCP_URL} with Authorization: Bearer ${TOKEN_PLACEHOLDER}. Point NEBULA_HUB at the ledger host where the token was minted (testnet.nebulaonchain.xyz or mainnet.nebulaonchain.xyz) — apex/www redirects can drop the Bearer header. OAuth DCR: /api/oauth/register → /authorize → /oauth/token.`,
   },
   "openai-sdk": {
-    install: {
-      title: "install",
-      language: "bash",
-      code: `pip install openai-agents
-# Mint a token above first (${TOKEN_PLACEHOLDER})
-# Requires Node 20+ on PATH for npx nebulamcp-stdio`,
-    },
     config: {
       title: "agent.py",
       language: "python",
@@ -179,7 +156,7 @@ nebula = MCPServerStdio(
         "env": {
             **os.environ,
             "NEBULA_TOKEN": os.environ["NEBULA_TOKEN"],
-            "NEBULA_HUB": os.environ.get("NEBULA_HUB", "${HUB}"),
+            "NEBULA_HUB": os.environ.get("NEBULA_HUB", "${HUB_PLACEHOLDER}"),
         },
     },
 )
@@ -205,25 +182,28 @@ if __name__ == "__main__":
       },
       {
         label: "Environment",
-        path: "Export NEBULA_TOKEN in your shell env",
+        path: "Export NEBULA_TOKEN (+ NEBULA_HUB for this ledger) in your shell env",
       },
     ],
-    note: `Stdio bridge: nebulamcp-stdio presents NEBULA_TOKEN to the Hub. Prefer async with MCPServerStdio so the subprocess cleans up. For remote HTTP instead, POST ${MCP_URL} with Bearer ${TOKEN_PLACEHOLDER} (same as Custom MCP).`,
   },
 };
 
-/**
- * Return the snippet for a client. When `token` is supplied, the placeholder is
- * replaced with the real key so the config is paste-ready.
- */
-export function getSnippet(framework: Framework, token?: string): Snippet {
+/** LIVE CONFIG for a client. URLs match the current ledger Host. */
+export function getSnippet(
+  framework: Framework,
+  network?: HubNetwork | null,
+): Snippet {
   const base = SNIPPETS[framework];
-  if (!token) return base;
-  const sub = (code: string) => code.split(TOKEN_PLACEHOLDER).join(token);
+  const hub = resolveSnippetHub(network).replace(/\/$/, "");
+  const mcp = `${hub}/mcp`;
+  const fill = (code: string) =>
+    code.split(HUB_PLACEHOLDER).join(hub).split(MCP_PLACEHOLDER).join(mcp);
+
   return {
-    install: { ...base.install, code: sub(base.install.code) },
-    config: { ...base.config, code: sub(base.config.code) },
-    pasteTargets: base.pasteTargets,
-    note: sub(base.note),
+    config: { ...base.config, code: fill(base.config.code) },
+    pasteTargets: base.pasteTargets.map((t) => ({
+      ...t,
+      path: fill(t.path),
+    })),
   };
 }
