@@ -1,11 +1,9 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { glowTexture } from '../lib/glow'
 import { STORY, range, easeOutBack } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 type OrbDef = {
   name: 'wallet' | 'yield' | 'pulse' | 'star'
@@ -88,12 +86,6 @@ function Orb({ def }: { def: OrbDef }) {
   const inner = useRef<THREE.Group>(null)
   const glowMat = useRef<THREE.SpriteMaterial>(null)
   const color = theme[def.colorKey]
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    if (glowMat.current) tl.add(tweenThreeColor(glowMat.current.color, next[def.colorKey]), 0)
-    return () => tl.kill()
-  })
 
   useFrame(({ clock }) => {
     const p = STORY.smooth

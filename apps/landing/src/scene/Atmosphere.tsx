@@ -1,12 +1,10 @@
 import { useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { glowTexture } from '../lib/glow'
 import { Q } from '../lib/device'
 import { STORY, range, smooth01 } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 type Haze = { z: number; size: [number, number]; colorKey: 'atmos1' | 'atmos2' | 'atmos3'; opacity: number }
 
@@ -79,14 +77,6 @@ export function Atmosphere() {
     return { points, base, speed, n }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    hazeMats.forEach((m, i) => tl.add(tweenThreeColor(m.color, next[HAZE[i].colorKey]), 0))
-    tl.add(tweenThreeColor(backMat.color, next.atmosBeam), 0)
-    tl.add(tweenThreeColor((motes.points.material as THREE.PointsMaterial).color, next.atmosFog), 0)
-    return () => tl.kill()
-  })
 
   useEffect(
     () => () => {

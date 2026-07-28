@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { glowTexture } from '../lib/glow'
 import { Q } from '../lib/device'
 import { STORY, range, smooth01, lerp, easeOutCubic, spike } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 export function Agent() {
   const { theme } = useTheme()
@@ -90,26 +88,6 @@ export function Agent() {
     return new THREE.Points(geo, mat)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    tl.add(tweenThreeColor(palette.dimBody, next.agentDim), 0)
-    tl.add(tweenThreeColor(palette.dimEmissive, next.agentEmissiveDim), 0)
-    tl.add(tweenThreeColor(palette.litBody, next.agentLit), 0)
-    tl.add(tweenThreeColor(palette.litHead, next.agentHeadLit), 0)
-    tl.add(tweenThreeColor(palette.litEmissiveBody, next.agentEmissiveLit), 0)
-    tl.add(tweenThreeColor(palette.litEmissiveHead, next.agentEmissiveHeadLit), 0)
-    tl.add(tweenThreeColor(palette.coreDim, next.coreDim), 0)
-    tl.add(tweenThreeColor(palette.coreWarm, next.coreWarm), 0)
-    tl.add(tweenThreeColor(palette.coreLit, next.coreLit), 0)
-    tl.add(tweenThreeColor(palette.visorDim, next.visorDim), 0)
-    tl.add(tweenThreeColor(palette.visorLit, next.visorLit), 0)
-    tl.add(tweenThreeColor(palette.warm, next.agentWarm), 0)
-    tl.add(tweenThreeColor((aura.material as THREE.PointsMaterial).color, next.agentAura, 0.6), 0)
-    if (poolMat.current) tl.add(tweenThreeColor(poolMat.current.color, next.agentPool, 0.6), 0)
-    if (light.current) tl.add(tweenThreeColor(light.current.color, next.agentWarm, 0.6), 0)
-    return () => tl.kill()
-  })
 
   useEffect(
     () => () => {

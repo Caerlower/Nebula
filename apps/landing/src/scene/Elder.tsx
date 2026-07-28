@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { glowTexture } from '../lib/glow'
 import { STORY, range, smooth01, lerp } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 const HELD = new THREE.Vector3()
 const TARGET = new THREE.Vector3(0, 0.7, 0.3)
@@ -46,17 +44,6 @@ export function Elder() {
     return { cloakGeo, cloakMat, faceMat }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    tl.add(tweenThreeColor(cloakMat.color, next.elderCloak), 0)
-    tl.add(tweenThreeColor(cloakMat.emissive, next.elderCloakEmissive), 0)
-    tl.add(tweenThreeColor(faceMat.emissive, next.elderFace), 0)
-    if (orbCoreMat.current) tl.add(tweenThreeColor(orbCoreMat.current.color, next.orb), 0)
-    if (orbGlowMat.current) tl.add(tweenThreeColor(orbGlowMat.current.color, next.orb), 0)
-    if (orbLight.current) tl.add(tweenThreeColor(orbLight.current.color, next.orb), 0)
-    return () => tl.kill()
-  })
 
   useEffect(
     () => () => {

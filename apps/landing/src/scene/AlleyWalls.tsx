@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { glowTexture } from '../lib/glow'
 import { STORY, range, smooth01, lerp } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 const WALL_X = 3.3
 const WALL = { w: 3.5, h: 9, d: 10 }
@@ -74,20 +72,6 @@ function Wall({ side }: { side: 1 | -1 }) {
     return { wall, strip, beam, pool }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [side])
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    const nextStrip = side === -1 ? next.stripLeft : next.stripRight
-    const nextBeam = side === -1 ? next.beamEmissiveLeft : next.beamEmissiveRight
-    tl.add(tweenThreeColor(mats.wall.color, next.wallDim), 0)
-    tl.add(tweenThreeColor(mats.wall.emissive, next.wallEmissive), 0)
-    tl.add(tweenThreeColor(mats.strip.emissive, nextStrip), 0)
-    tl.add(tweenThreeColor(mats.beam.emissive, nextBeam), 0)
-    tl.add(tweenThreeColor(mats.pool.color, nextStrip), 0)
-    if (l1.current) tl.add(tweenThreeColor(l1.current.color, nextStrip), 0)
-    if (l2.current) tl.add(tweenThreeColor(l2.current.color, nextStrip), 0)
-    return () => tl.kill()
-  })
 
   useEffect(
     () => () => {

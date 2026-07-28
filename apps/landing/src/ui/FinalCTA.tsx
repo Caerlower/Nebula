@@ -1,10 +1,16 @@
 import { useId, useState, type FormEvent } from 'react'
-import { useWaitlist } from './WaitlistContext'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+function submitEmail(email: string) {
+  void fetch('/api/waitlist', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, source: 'landing' }),
+  }).catch(() => {})
+}
+
 export function FinalCTA() {
-  const { submit } = useWaitlist()
   const errorId = useId()
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
@@ -17,7 +23,7 @@ export function FinalCTA() {
       setError('Enter a valid email address.')
       return
     }
-    submit(value)
+    submitEmail(value)
     setDone(true)
   }
 
@@ -43,8 +49,12 @@ export function FinalCTA() {
 
         {done ? (
           <div className="mx-auto mt-[42px] max-w-[440px] border border-border bg-surface px-6 py-5">
-            <p className="m-0 font-display text-xl tracking-[-0.02em] text-text">You&apos;re on the list.</p>
-            <p className="mt-2 mb-0 text-sm text-muted">We&apos;ll email when there&apos;s something worth opening.</p>
+            <p className="m-0 font-display text-xl tracking-[-0.02em] text-text">
+              You&apos;re on the list.
+            </p>
+            <p className="mt-2 mb-0 text-sm text-muted">
+              We&apos;ll email when there&apos;s something worth opening.
+            </p>
           </div>
         ) : (
           <form
@@ -54,7 +64,10 @@ export function FinalCTA() {
           >
             <label className="relative min-w-0 flex-1">
               <span className="sr-only">Email</span>
-              <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle" aria-hidden>
+              <span
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle"
+                aria-hidden
+              >
                 <MailIcon />
               </span>
               <input
@@ -70,7 +83,10 @@ export function FinalCTA() {
                 className="w-full border border-border bg-surface py-[14px] pl-11 pr-4 font-mono text-[13px] text-text outline-none transition placeholder:text-subtle focus:border-accent/65"
               />
             </label>
-            <button type="submit" className="btn-primary shrink-0 px-7 py-[14px] text-sm sm:min-w-[132px]">
+            <button
+              type="submit"
+              className="btn-primary shrink-0 px-7 py-[14px] text-sm sm:min-w-[132px]"
+            >
               Sign up
             </button>
           </form>

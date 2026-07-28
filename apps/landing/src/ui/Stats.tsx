@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { CHIPS, COUNTERS } from '../lib/content'
+import { easeOutCubic } from '../lib/story'
 
 export function Stats() {
   const root = useRef<HTMLElement>(null)
@@ -41,8 +42,7 @@ export function Stats() {
             })
           const step = (now: number) => {
             const k = Math.min(1, (now - t0) / dur)
-            const eased = 1 - Math.pow(1 - k, 3)
-            el.textContent = fmt(to * eased)
+            el.textContent = fmt(to * easeOutCubic(k))
             if (k < 1) requestAnimationFrame(step)
           }
           requestAnimationFrame(step)

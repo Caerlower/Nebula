@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { glowTexture } from '../lib/glow'
 import { Q } from '../lib/device'
 import { STORY, range, easeOutCubic, spike, BEAT } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 const dummy = new THREE.Object3D()
 const ORIGIN = new THREE.Vector3(0, 0.72, 0.3)
@@ -57,20 +55,6 @@ export function BurstFX() {
     return { mesh: im, seeds }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    const nextPalette = [next.burst1, next.burst2, next.burst3, next.burst4]
-    const c = new THREE.Color()
-    for (let i = 0; i < Q.burst; i++) {
-      mesh.setColorAt(i, c.set(nextPalette[i % nextPalette.length]))
-    }
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-    if (ringAMat.current) tl.add(tweenThreeColor(ringAMat.current.color, next.burst1), 0)
-    if (ringBMat.current) tl.add(tweenThreeColor(ringBMat.current.color, next.burst2), 0)
-    if (flashMat.current) tl.add(tweenThreeColor(flashMat.current.color, next.burstCore), 0)
-    return () => tl.kill()
-  })
 
   useEffect(
     () => () => {

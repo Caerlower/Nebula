@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { Q } from '../lib/device'
 import { STORY, range, smooth01, spike } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 const frag = /* glsl */ `
 precision highp float;
@@ -106,15 +104,6 @@ export function NebulaBackdrop() {
     return mat
     // eslint-disable-next-line react-hooks/exhaustive-deps -- init once; uniforms tween on toggle
   }, [])
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    tl.add(tweenThreeColor(material.uniforms.uViolet.value, next.nebulaViolet), 0)
-    tl.add(tweenThreeColor(material.uniforms.uBlue.value, next.nebulaBlue), 0)
-    tl.add(tweenThreeColor(material.uniforms.uTeal.value, next.nebulaTeal), 0)
-    tl.add(tweenThreeColor(material.uniforms.uHorizon.value, next.nebulaHorizon), 0)
-    return () => tl.kill()
-  })
 
   useEffect(() => () => material.dispose(), [material])
 

@@ -1,10 +1,8 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { gsap } from 'gsap'
 import * as THREE from 'three'
 import { STORY, range, lerp } from '../lib/story'
-import { useTheme, useThemeTransition } from '../ui/ThemeContext'
-import { tweenThreeColor } from '../lib/theme'
+import { useTheme } from '../ui/ThemeContext'
 
 const WALKERS = [
   { colorKey: 'bgAgent1' as const, from: -3.4, to: 3.4, start: 0.0, end: 0.24, z: -12.5, s: 0.85 },
@@ -20,13 +18,6 @@ function Walker({ colorKey, from, to, start, end, z, s }: WalkerDef) {
   const bodyMat = useRef<THREE.MeshStandardMaterial>(null)
   const headMat = useRef<THREE.MeshStandardMaterial>(null)
   const emissive = theme[colorKey]
-
-  useThemeTransition((next) => {
-    const tl = gsap.timeline()
-    if (bodyMat.current) tl.add(tweenThreeColor(bodyMat.current.emissive, next[colorKey]), 0)
-    if (headMat.current) tl.add(tweenThreeColor(headMat.current.emissive, next[colorKey]), 0)
-    return () => tl.kill()
-  })
 
   useFrame(({ clock }) => {
     const t = range(STORY.smooth, start, end)
