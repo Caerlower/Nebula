@@ -1,11 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { applyCssTheme, resolveInitialTheme, THEMES } from './lib/theme'
+import { applyCssTheme, THEMES } from './lib/theme'
 import './index.css'
 import App from './App'
 
-const initialMode = resolveInitialTheme()
-applyCssTheme(THEMES[initialMode], initialMode)
+/** Landing is locked to the cinematic dark palette — avoid a light flash. */
+applyCssTheme(THEMES.dark, 'dark')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

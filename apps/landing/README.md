@@ -1,7 +1,8 @@
 # Nebula — scroll-driven landing page
 
-A cinematic, scroll-scrubbed 3D story for Nebula: an MCP that gives AI agents a
-Stellar wallet with automated yield, x402/MPP payments, and on-chain reputation.
+A cinematic, scroll-scrubbed 3D story for Nebula: treasury infrastructure for
+AI agents on Stellar — custodied wallets, on-chain policy, Blend yield, and
+x402/MPP through MCP.
 
 **Stack:** Vite · React · TypeScript · Three.js (react-three-fiber + drei) ·
 GSAP ScrollTrigger · Lenis · Tailwind v4. All 3D is procedural — primitives,
@@ -21,10 +22,13 @@ GLSL, instanced particles. No model files, no external assets.
 ## Run it
 
 ```bash
-npm install
-npm run dev      # → http://localhost:5173
-npm run build    # typecheck + production build
+cd apps/landing
+pnpm install
+pnpm dev      # → http://127.0.0.1:5173/landing/  (HMR enabled)
+pnpm build   # typecheck + write into apps/nebula-hub/public/landing
 ```
+
+Use **exactly** `http://127.0.0.1:5173/landing/` — not `localhost` (that can hit a stale IPv6 listener) and not the Hub/production URL (that serves a built snapshot until you rebuild/deploy).
 
 Requires Node 18+.
 

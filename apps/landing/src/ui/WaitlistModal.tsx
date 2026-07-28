@@ -1,13 +1,8 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-} from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { gsap } from 'gsap'
 import { useWaitlist } from './WaitlistContext'
+import { HUB_SIGNUP } from '../lib/links'
+import { startLenis, stopLenis } from '../lib/scroll'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -16,6 +11,9 @@ export function WaitlistModal() {
   const backdrop = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
+  const previouslyFocused = useRef<HTMLElement | null>(null)
+  const titleId = useId()
+  const errorId = useId()
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -25,34 +23,68 @@ export function WaitlistModal() {
     setDone(false)
     setEmail('')
     setError('')
-    const tl = gsap.timeline()
-    tl.fromTo(
-      backdrop.current,
-      { autoAlpha: 0 },
-      { autoAlpha: 1, duration: 0.25, ease: 'power2.out' },
-    ).fromTo(
-      panel.current,
-      { autoAlpha: 0, scale: 0.92, y: 14, filter: 'blur(14px)' },
-      { autoAlpha: 1, scale: 1, y: 0, filter: 'blur(0px)', duration: 0.4, ease: 'power3.out' },
-      0.05,
-    )
-    const t = setTimeout(() => input.current?.focus(), 250)
+    previouslyFocused.current = document.activeElement as HTMLElement | null
+    stopLenis()
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced) {
+      if (backdrop.current) backdrop.current.style.opacity = '1'
+      if (panel.current) panel.current.style.opacity = '1'
+    } else {
+      const tl = gsap.timeline()
+      tl.fromTo(
+        backdrop.current,
+        { autoAlpha: 0 },
+        { autoAlpha: 1, duration: 0.25, ease: 'power2.out' },
+      ).fromTo(
+        panel.current,
+        { autoAlpha: 0, y: 12 },
+        { autoAlpha: 1, y: 0, duration: 0.35, ease: 'power3.out' },
+        0.05,
+      )
+      return () => {
+        tl.kill()
+        startLenis()
+      }
+    }
+
     return () => {
-      tl.kill()
-      clearTimeout(t)
+      startLenis()
     }
   }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
+    const t = window.setTimeout(() => input.current?.focus(), 50)
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
+      if (e.key === 'Escape') {
+        close()
+        return
+      }
+      if (e.key !== 'Tab' || !panel.current) return
+      const focusable = panel.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     window.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => {
+      window.clearTimeout(t)
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
+      previouslyFocused.current?.focus?.()
     }
   }, [isOpen, close])
 
@@ -74,95 +106,91 @@ export function WaitlistModal() {
       ref={backdrop}
       role="dialog"
       aria-modal="true"
-      aria-label="Join the waitlist"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-5 backdrop-blur-md"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-[90] flex items-center justify-center px-6"
+      style={{ background: 'rgba(9,9,11,.8)', backdropFilter: 'blur(10px)' }}
       onClick={(e) => {
         if (e.target === e.currentTarget) close()
       }}
     >
-      <div ref={panel} className="card-surface relative w-full max-w-md rounded-2xl p-8 sm:p-10">
-        <button
-          onClick={close}
-          aria-label="Close"
-          className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-muted transition hover:bg-surface-elevated hover:text-text"
-        >
-          ✕
-        </button>
-
+      <div
+        ref={panel}
+        className="w-full max-w-[430px] border bg-surface px-[34px] py-9 pb-[30px]"
+        style={{ borderColor: 'rgba(139,92,246,.28)' }}
+      >
         {done ? (
-          <Success />
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">
+              Updates
+            </div>
+            <div id={titleId} className="font-display mt-4 text-[28px] font-medium tracking-[-0.03em]">
+              You&apos;re on the list.
+            </div>
+            <p className="mt-3 mb-0 text-[13.5px] leading-[1.6] text-muted">
+              We&apos;ll email when there&apos;s something worth opening.
+            </p>
+            <button
+              type="button"
+              onClick={close}
+              className="mt-6 w-full bg-accent py-[13px] text-sm font-medium text-bg transition hover:bg-[#9E75FF]"
+            >
+              Done
+            </button>
+          </div>
         ) : (
           <form onSubmit={onSubmit} noValidate>
-            <p className="eyebrow">Early access</p>
-            <h3 className="font-display mt-3 text-3xl text-text">Join the waitlist</h3>
-            <p className="mt-2 text-sm text-muted">
-              Be first to give your agent a Stellar wallet.
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">
+              Updates
+            </div>
+            <div id={titleId} className="font-display mt-4 text-[28px] font-medium tracking-[-0.03em]">
+              Product notes, not noise.
+            </div>
+            <p className="mt-3 mb-6 text-[13.5px] leading-[1.6] text-muted">
+              New policy primitives, MCP changes, and release notes. Occasional — never spam.
             </p>
-            <input
-              ref={input}
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value)
-                setError('')
-              }}
-              placeholder="you@yourdomain.com"
-              aria-label="Email address"
-              className="mt-6 w-full rounded-xl border border-border bg-surface-elevated px-4 py-3 text-text outline-none transition placeholder:text-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--nebula-selection)]"
-            />
-            {error && <p className="mt-2 text-xs text-accent">{error}</p>}
-            <button type="submit" className="btn-primary mt-4 w-full rounded-xl px-5 py-3 font-medium">
-              Request access
-            </button>
-            <p className="mt-3 text-center text-[11px] text-subtle">
-              No spam. One email when your slot opens.
+            <div className="flex flex-col gap-2.5">
+              <input
+                ref={input}
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  setError('')
+                }}
+                placeholder="you@company.com"
+                aria-label="Email address"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
+                className="border border-line bg-bg px-[15px] py-[13px] font-mono text-[12.5px] text-text outline-none transition placeholder:text-subtle focus:border-accent/65"
+              />
+              {error ? (
+                <p id={errorId} className="m-0 text-xs text-accent" role="alert">
+                  {error}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                className="border-none bg-accent py-[13px] text-sm font-medium text-bg transition hover:bg-[#9E75FF]"
+              >
+                Join the list
+              </button>
+              <button
+                type="button"
+                onClick={close}
+                className="border-none bg-transparent py-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-subtle transition hover:text-muted"
+              >
+                Not now
+              </button>
+            </div>
+            <p className="mt-4 mb-0 text-center font-mono text-[10px] tracking-[0.08em] text-subtle">
+              Or{' '}
+              <a href={HUB_SIGNUP} className="text-muted underline underline-offset-2 hover:text-text">
+                open the Hub
+              </a>
             </p>
           </form>
         )}
       </div>
-    </div>
-  )
-}
-
-function Success() {
-  return (
-    <div className="flex flex-col items-center py-4 text-center">
-      <div className="relative">
-        <svg className="block" viewBox="0 0 72 72" width="88" height="88" aria-hidden="true">
-          <circle
-            className="check-ring"
-            cx="36"
-            cy="36"
-            r="30"
-            fill="none"
-            stroke="var(--nebula-accent)"
-            strokeWidth="3"
-          />
-          <path
-            className="check-mark"
-            d="M23 37.5 32 46.5 50 27.5"
-            fill="none"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <div className="success-burst" aria-hidden="true">
-          {Array.from({ length: 14 }).map((_, i) => (
-            <span
-              key={i}
-              style={
-                {
-                  '--a': `${(360 / 14) * i}deg`,
-                  animationDelay: `${0.15 + (i % 5) * 0.03}s`,
-                } as CSSProperties
-              }
-            />
-          ))}
-        </div>
-      </div>
-      <h3 className="font-display mt-5 text-3xl text-text">You're on the list</h3>
-      <p className="mt-2 text-sm text-muted">We'll reach out when your slot opens.</p>
     </div>
   )
 }

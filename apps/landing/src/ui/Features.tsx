@@ -1,60 +1,57 @@
-import { Reveal } from './Reveal'
-
-const FEATURES = [
-  {
-    title: 'On-chain spending policy',
-    body: 'Limits live in a Soroban contract, not a config file. The chain enforces them.',
-    wide: true,
-  },
-  {
-    title: 'Automated treasury',
-    body: 'Idle funds auto-earn on Blend pools and return the moment your agent needs them.',
-  },
-  {
-    title: 'x402 & MPP payments',
-    body: 'Native machine-to-machine payments — per-call, per-resource, streaming.',
-  },
-  {
-    title: 'Stellar8004 reputation',
-    body: 'Every action builds a verifiable on-chain track record other agents can trust.',
-  },
-  {
-    title: 'Works with any MCP agent',
-    body: 'Claude, custom frameworks, your own stack. If it speaks MCP, it gets a wallet.',
-  },
-]
+import { CAPS } from '../lib/content'
 
 export function Features() {
-  const [hero, ...rest] = FEATURES
-
   return (
-    <section className="relative mx-auto max-w-6xl px-6 py-24 sm:py-32">
-      <Reveal>
-        <p className="section-eyebrow">
-          <span className="section-eyebrow-dot">•</span>
-          Capabilities
-        </p>
-        <h2 className="mt-4 max-w-xl text-left text-4xl font-semibold tracking-tight text-text sm:text-5xl">
-          Everything the powered agent has.
-        </h2>
-      </Reveal>
+    <section
+      id="capabilities"
+      className="relative overflow-hidden px-8 py-[120px] pb-[130px]"
+      style={{
+        background:
+          'radial-gradient(80% 70% at 10% 0%, rgba(139,92,246,.11) 0%, rgba(11,11,13,0) 58%), #0B0B0D',
+      }}
+    >
+      <div className="section-dots" aria-hidden />
+      <div className="relative mx-auto max-w-[1360px]">
+        <div className="mb-[70px] flex flex-wrap items-end justify-between gap-14">
+          <div>
+            <div className="eyebrow mb-[26px]">
+              <span className="eyebrow-rule" />
+              What Nebula does
+            </div>
+            <h2 className="headline-lg m-0">
+              Spending power,
+              <br />
+              <span className="text-dim">with a hard ceiling.</span>
+            </h2>
+          </div>
+          <p className="m-0 max-w-[330px] text-[14.5px] leading-[1.66] text-muted text-pretty">
+            Your agent pays for what it needs on its own. You keep a limit it cannot raise — not
+            with a clever prompt, not with a bug.
+          </p>
+        </div>
 
-      <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        <Reveal className="md:col-span-2 lg:col-span-2">
-          <article className="feature-card feature-card-wide card-surface h-full rounded-2xl p-8">
-            <h3 className="text-xl font-medium text-text">{hero.title}</h3>
-            <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted">{hero.body}</p>
-          </article>
-        </Reveal>
-
-        {rest.map((f, i) => (
-          <Reveal key={f.title} delay={(i + 1) * 0.08}>
-            <article className="feature-card card-surface h-full rounded-2xl p-7">
-              <h3 className="text-lg font-medium text-text">{f.title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-muted">{f.body}</p>
-            </article>
-          </Reveal>
-        ))}
+        <div className="caps-grid cell-grid grid-cols-2">
+          {CAPS.map((c) => (
+            <div
+              key={c.n}
+              className="cell flex min-h-[300px] flex-col px-[38px] py-10 pb-[34px]"
+            >
+              <div className="font-mono text-[10.5px] tracking-[0.2em] text-accent">{c.n}</div>
+              <h3 className="font-display mt-[22px] m-0 text-[27px] font-medium tracking-[-0.028em] text-text">
+                {c.title}
+              </h3>
+              <p className="mt-3.5 mb-0 max-w-[440px] text-sm leading-[1.68] text-muted text-pretty">
+                {c.body}
+              </p>
+              <div className="mt-auto flex flex-wrap items-baseline gap-3.5 border-t border-border pt-[34px]">
+                <div className="font-display shrink-0 text-[26px] font-medium tracking-[-0.03em] whitespace-nowrap text-text">
+                  {c.stat}
+                </div>
+                <div className="mono-label">{c.statLabel}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )
