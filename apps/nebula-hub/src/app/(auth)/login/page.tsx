@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, Suspense } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useLoginWithEmail,
@@ -381,16 +380,6 @@ function LoginForm() {
           Continue with Freighter
         </button>
       </div>
-
-      <p className="mt-8 text-[13px] text-muted-foreground">
-        New to Nebula?{" "}
-        <Link
-          href="/signup"
-          className="text-foreground underline-offset-4 hover:underline"
-        >
-          Create an account
-        </Link>
-      </p>
     </div>
   );
 }

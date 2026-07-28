@@ -48,7 +48,7 @@ Production site: Hub roots on Vercel; landing is static under Hub. See root [REA
 src/
 ├── app/              # Next.js App Router (pages + API routes)
 │   ├── (app)/        # Product shell: dashboard, treasury, policy, …
-│   ├── (auth)/       # login / signup
+│   ├── (auth)/       # login (signup aliases to login)
 │   └── api/          # HTTP APIs (agents, policy, tools, wallet, …)
 ├── components/
 │   ├── shell/        # App chrome (nav, switcher, command palette)
