@@ -45,6 +45,9 @@ tael-protocol/
 # Claude Code local settings
 .claude/
 
+# Cursor
+.cursor/
+
 # Agent skills (install locally with npx skills add)
 .agents/
 skills-lock.json
