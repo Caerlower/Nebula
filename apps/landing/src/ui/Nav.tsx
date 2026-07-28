@@ -13,54 +13,50 @@ export function Nav() {
   const [open, setOpen] = useState(false)
 
   return (
-    <header className="nav-bar">
-      <a
-        href="#top"
-        className="font-display shrink-0 text-[19px] font-semibold tracking-[-0.03em] text-text"
-        onClick={() => setOpen(false)}
-      >
-        Nebula
-      </a>
-
-      <nav className="nav-links" aria-label="Primary">
-        {LINKS.map((l) =>
-          'external' in l && l.external ? (
-            <a key={l.href} href={l.href} target="_blank" rel="noreferrer">
-              {l.label}
-              <span className="sr-only"> (opens in new tab)</span>
-            </a>
-          ) : (
-            <a key={l.href} href={l.href}>
-              {l.label}
-            </a>
-          ),
-        )}
-      </nav>
-
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="nav-menu-btn"
-          aria-expanded={open}
-          aria-controls="mobile-nav"
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? 'Close' : 'Menu'}
-        </button>
+    <header className="nav-shell">
+      <div className={`nav-pill${open ? ' is-open' : ''}`}>
         <a
-          href={HUB_LOGIN}
-          className="btn-primary shrink-0 px-5 py-[9px] text-[12.5px] tracking-[0.01em]"
+          href="#top"
+          className="nav-brand"
+          onClick={() => setOpen(false)}
         >
-          Sign in
+          Nebula
         </a>
+
+        <nav className="nav-links" aria-label="Primary">
+          {LINKS.map((l) =>
+            'external' in l && l.external ? (
+              <a key={l.href} href={l.href} target="_blank" rel="noreferrer">
+                {l.label}
+                <span className="sr-only"> (opens in new tab)</span>
+              </a>
+            ) : (
+              <a key={l.href} href={l.href}>
+                {l.label}
+              </a>
+            ),
+          )}
+        </nav>
+
+        <div className="nav-actions">
+          <button
+            type="button"
+            className="nav-menu-btn"
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
+            <span className={`nav-burger${open ? ' is-open' : ''}`} aria-hidden />
+          </button>
+          <a href={HUB_LOGIN} className="nav-cta">
+            Sign in
+          </a>
+        </div>
       </div>
 
       {open ? (
-        <nav
-          id="mobile-nav"
-          className="nav-mobile"
-          aria-label="Mobile"
-        >
+        <nav id="mobile-nav" className="nav-mobile" aria-label="Mobile">
           {LINKS.map((l) =>
             'external' in l && l.external ? (
               <a
