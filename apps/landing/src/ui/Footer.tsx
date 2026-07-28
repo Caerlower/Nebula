@@ -1,4 +1,4 @@
-import { DOCS_URL, HUB_LOGIN, X_URL } from '../lib/links'
+import { DOCS_URL, HUB_LOGIN, TESTNET_HUB_LOGIN, X_URL } from '../lib/links'
 
 export function Footer() {
   return (
@@ -25,6 +25,9 @@ export function Footer() {
           </a>
           <a href={HUB_LOGIN} className="text-muted transition hover:text-text">
             Sign in
+          </a>
+          <a href={TESTNET_HUB_LOGIN} className="text-muted transition hover:text-text">
+            Testnet
           </a>
         </div>
 
