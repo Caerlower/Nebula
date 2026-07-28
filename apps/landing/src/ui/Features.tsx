@@ -10,7 +10,6 @@ export function Features() {
           'radial-gradient(80% 70% at 10% 0%, rgba(139,92,246,.11) 0%, rgba(11,11,13,0) 58%), #0B0B0D',
       }}
     >
-      <div className="section-dots" aria-hidden />
       <div className="relative mx-auto max-w-[1360px]">
         <div className="mb-[70px] flex flex-wrap items-end justify-between gap-14">
           <div>
@@ -24,9 +23,8 @@ export function Features() {
               <span className="text-dim">with a hard ceiling.</span>
             </h2>
           </div>
-          <p className="m-0 max-w-[330px] text-[14.5px] leading-[1.66] text-muted text-pretty">
-            Your agent pays for what it needs on its own. You keep a limit it cannot raise — not
-            with a clever prompt, not with a bug.
+          <p className="m-0 max-w-[300px] text-[14.5px] leading-[1.66] text-muted text-pretty">
+            Your agent pays on its own. You keep a limit it cannot raise.
           </p>
         </div>
 

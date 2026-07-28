@@ -4,14 +4,13 @@ export function Security() {
   return (
     <section
       id="security"
-      className="relative overflow-hidden border-t border-border px-8 py-[120px] pb-[130px]"
+      className="relative border-t border-border px-8 py-[120px] pb-[130px]"
       style={{
         background:
           'radial-gradient(70% 60% at 88% 10%, rgba(143,191,159,.08) 0%, rgba(11,11,13,0) 60%), #0B0B0D',
       }}
     >
-      <div className="section-dots" aria-hidden />
-      <div className="relative mx-auto max-w-[1360px]">
+      <div className="mx-auto max-w-[1360px]">
         <div className="mb-16 flex flex-wrap items-end justify-between gap-14">
           <div>
             <div className="eyebrow mb-[26px]">

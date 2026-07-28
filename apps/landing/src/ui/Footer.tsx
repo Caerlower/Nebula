@@ -7,8 +7,8 @@ export function Footer() {
         <div>
           <div className="font-display mb-4 text-[19px] font-semibold tracking-[-0.03em]">Nebula</div>
           <p className="m-0 max-w-[320px] text-[13px] leading-[1.68] text-subtle text-pretty">
-            Treasury infrastructure for AI agents on Stellar. Wallets, on-chain policy, idle yield
-            and machine payments behind one MCP.
+            Treasury for AI agents on Stellar. Wallets, on-chain policy, idle yield, and machine
+            payments behind one MCP.
           </p>
         </div>
 

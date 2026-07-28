@@ -144,10 +144,16 @@ export function StorySection() {
 
         <div
           data-beat="3"
-          className="absolute bottom-[10vh] left-1/2 -translate-x-1/2 px-6 text-center opacity-0"
+          className="absolute bottom-[12vh] left-1/2 -translate-x-1/2 px-6 text-center opacity-0"
           aria-hidden="true"
         >
-          <p className="story-mono">Wallet issued · policy signed</p>
+          <div className="story-status">
+            <span className="story-status-line" />
+            <p className="story-mono">Wallet issued</p>
+            <p className="story-mono" style={{ letterSpacing: '0.22em', opacity: 0.85 }}>
+              Policy signed
+            </p>
+          </div>
         </div>
 
         <div
@@ -177,7 +183,7 @@ export function StorySection() {
               <span className="text-dim">a treasury.</span>
             </h1>
             <p className="mt-[30px] max-w-[440px] text-[16.5px] leading-[1.6] text-muted text-pretty">
-              One MCP. On-chain spend limits. Yield when idle — payments when it works.
+              One MCP. On-chain spend limits. Yield when idle, payments when it works.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <a href={HUB_LOGIN} className="btn-primary px-7 py-[13px] text-sm">

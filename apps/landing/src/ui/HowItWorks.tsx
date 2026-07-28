@@ -2,9 +2,8 @@ import { STEPS } from '../lib/content'
 
 export function HowItWorks() {
   return (
-    <section id="process" className="relative overflow-hidden border-t border-border bg-bg px-8 py-[120px] pb-[130px]">
-      <div className="section-dots" aria-hidden />
-      <div className="relative mx-auto max-w-[1360px]">
+    <section id="process" className="relative border-t border-border bg-bg px-8 py-[120px] pb-[130px]">
+      <div className="mx-auto max-w-[1360px]">
         <div className="mb-[70px]">
           <div className="eyebrow mb-[26px]">
             <span className="eyebrow-rule" />

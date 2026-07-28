@@ -14,7 +14,6 @@ import { Docs } from './ui/Docs'
 import { FinalCTA } from './ui/FinalCTA'
 import { Footer } from './ui/Footer'
 import { WaitlistProvider } from './ui/WaitlistContext'
-import { WaitlistModal } from './ui/WaitlistModal'
 import { ThemeProvider } from './ui/ThemeContext'
 import { setLenis } from './lib/scroll'
 
@@ -79,7 +78,6 @@ export default function App() {
           <FinalCTA />
         </main>
         <Footer />
-        <WaitlistModal />
       </WaitlistProvider>
     </ThemeProvider>
   )

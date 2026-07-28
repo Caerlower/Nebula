@@ -2,9 +2,8 @@ import { STACK } from '../lib/content'
 
 export function Protocol() {
   return (
-    <section id="stack" className="relative overflow-hidden border-t border-border bg-bg px-8 py-[120px] pb-[130px]">
-      <div className="section-dots-soft" aria-hidden />
-      <div className="relative mx-auto max-w-[1360px]">
+    <section id="stack" className="relative border-t border-border bg-bg px-8 py-[120px] pb-[130px]">
+      <div className="mx-auto max-w-[1360px]">
         <div className="mb-16 grid items-end gap-[60px] md:grid-cols-[minmax(300px,1fr)_minmax(280px,0.7fr)]">
           <div>
             <div className="eyebrow mb-[26px]">
@@ -18,8 +17,8 @@ export function Protocol() {
             </h2>
           </div>
           <p className="m-0 text-[14.5px] leading-[1.66] text-muted text-pretty">
-            USDC moves through Soroban policy contracts and Blend pools. Agents call it all through
-            one MCP surface and settle over x402 or MPP.
+            USDC moves through Soroban policy and Blend pools. Agents call it through one MCP
+            surface and settle over x402 or MPP.
           </p>
         </div>
 

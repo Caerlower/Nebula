@@ -1,4 +1,4 @@
-/** Landing copy sourced from Nebula Landing v2 Design Canvas. */
+/** Landing copy. Keep lines short and readable. */
 
 export const TICKER = [
   'One MCP endpoint',
@@ -14,28 +14,28 @@ export const CAPS = [
   {
     n: '01',
     title: 'On-chain policy',
-    body: 'Per-transaction and daily ceilings, category allowlists and destination rules live in a Soroban contract. A payment that breaks one never reaches the network.',
+    body: 'Caps, categories, and destinations live in a Soroban contract. Anything outside those rules never leaves the Hub.',
     stat: 'Soroban',
     statLabel: 'contract-enforced limits',
   },
   {
     n: '02',
     title: 'Automated treasury',
-    body: 'Idle USDC sweeps into Blend above your liquid floor and unwinds the moment a payment needs it. Set a band, the Hub holds the balance inside it.',
+    body: 'Idle USDC earns in Blend above your liquid floor, then unwinds when a payment needs cash. You set the band.',
     stat: '~5s',
     statLabel: 'unwind to spendable',
   },
   {
     n: '03',
     title: 'Machine payments',
-    body: 'Agents pay per request against metered APIs and settle with other agents directly. No card, no invoice, no human in the loop.',
+    body: 'Agents pay metered APIs and settle with each other over x402 and MPP. No cards, invoices, or humans in the loop.',
     stat: 'x402 · MPP',
     statLabel: 'two payment rails',
   },
   {
     n: '04',
     title: 'Keys stay in the Hub',
-    body: 'The agent holds a scoped credential, never a signing key. Pause every rail within one ledger or revoke an agent outright without touching its code.',
+    body: 'Agents get a scoped credential, never a signing key. Pause or revoke one agent without touching the rest.',
     stat: 'Privy',
     statLabel: 'custody + rotation',
   },
@@ -45,22 +45,22 @@ export const STEPS = [
   {
     n: '01',
     title: 'Connect',
-    body: 'Point the agent at one MCP endpoint. Any framework that speaks MCP works unchanged.',
+    body: 'Point any MCP client at one endpoint. No custom SDK glue.',
   },
   {
     n: '02',
     title: 'Set policy',
-    body: 'Caps, categories and a yield band, signed on chain in a single transaction.',
+    body: 'Caps, categories, and a yield band. Signed on chain in one transaction.',
   },
   {
     n: '03',
     title: 'Spend',
-    body: 'The agent transacts inside its limits and earns on everything it is not using.',
+    body: 'The agent pays inside its limits. Idle balance keeps earning.',
   },
   {
     n: '04',
     title: 'Review',
-    body: 'Every call, payment and rebalance attributed to an agent and exportable.',
+    body: 'Every call, payment, and rebalance is attributed and exportable.',
   },
 ]
 
@@ -113,7 +113,7 @@ export const STACK = [
   {
     role: 'Network',
     name: 'Stellar',
-    note: 'Settlement in seconds, fees in fractions of a cent.',
+    note: 'Fast settlement. Fees in fractions of a cent.',
   },
   {
     role: 'Contracts',
@@ -123,17 +123,17 @@ export const STACK = [
   {
     role: 'Money',
     name: 'Circle USDC',
-    note: 'What agents actually hold and spend.',
+    note: 'What agents hold and spend.',
   },
   {
     role: 'Yield',
     name: 'Blend',
-    note: 'Where idle balances earn until they are needed.',
+    note: 'Where idle balances earn until needed.',
   },
   {
     role: 'Payments',
     name: 'x402 and MPP',
-    note: 'Metered API calls and agent-to-agent settlement.',
+    note: 'Metered APIs and agent-to-agent settlement.',
   },
   {
     role: 'Custody',
@@ -146,40 +146,40 @@ export const SECURITY = [
   {
     n: '01',
     title: 'Limits enforced by contract',
-    body: 'Caps and allowlists are contract state. Nothing in the agent runtime can raise them, including a compromised prompt.',
+    body: 'Caps and allowlists are contract state. A compromised prompt cannot raise them.',
   },
   {
     n: '02',
     title: 'Scoped agent credentials',
-    body: 'Each agent gets its own credential and wallet. Revoking one leaves every other agent untouched.',
+    body: 'Each agent has its own credential and wallet. Revoking one leaves the others alone.',
   },
   {
     n: '03',
     title: 'One-ledger pause',
-    body: 'Pause stops every rail for an agent inside a single ledger close. Funds stay put; nothing is lost.',
+    body: 'Pause stops every rail for an agent in a single ledger close. Funds stay put.',
   },
   {
     n: '04',
     title: 'Attributable ledger',
-    body: 'Every tool call, payment and rebalance is recorded against an agent and exportable for audit.',
+    body: 'Every tool call, payment, and rebalance is recorded against an agent for audit.',
   },
 ]
 
 export const DOCS = [
   {
     title: 'MCP reference',
-    body: 'Every tool the agent can call, with argument shapes and policy errors.',
+    body: 'Tools, argument shapes, and policy errors.',
   },
   {
     title: 'Policy contracts',
-    body: 'Soroban sources for caps, categories and destination rules.',
+    body: 'Soroban sources for caps, categories, and destinations.',
   },
   {
     title: 'Treasury automation',
-    body: 'How the liquid floor, sweeps and unwinds are computed.',
+    body: 'Liquid floor, sweeps, and unwinds.',
   },
   {
     title: 'Payment rails',
-    body: 'Wiring x402 metered requests and MPP agent-to-agent settlement.',
+    body: 'x402 metered requests and MPP settlement.',
   },
 ]

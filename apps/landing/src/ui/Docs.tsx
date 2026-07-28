@@ -3,9 +3,8 @@ import { DOCS_URL } from '../lib/links'
 
 export function Docs() {
   return (
-    <section id="code" className="relative overflow-hidden border-t border-border bg-bg px-8 py-[120px] pb-[130px]">
-      <div className="section-dots-soft" aria-hidden />
-      <div className="relative mx-auto max-w-[1360px]">
+    <section id="code" className="relative border-t border-border bg-bg px-8 py-[120px] pb-[130px]">
+      <div className="mx-auto max-w-[1360px]">
         <div className="mb-[60px] flex flex-wrap items-end justify-between gap-14">
           <div>
             <div className="eyebrow mb-[26px]">
@@ -15,7 +14,7 @@ export function Docs() {
             <h2 className="headline-lg m-0">
               Read the docs.
               <br />
-              <span className="text-dim">Wire it in an afternoon.</span>
+              <span className="text-dim">Ship the same day.</span>
             </h2>
           </div>
           <a

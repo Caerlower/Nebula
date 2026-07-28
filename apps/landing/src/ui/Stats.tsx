@@ -58,14 +58,13 @@ export function Stats() {
   return (
     <section
       ref={root}
-      className="relative overflow-hidden border-t border-border px-8 py-[130px]"
+      className="relative border-t border-border px-8 py-[130px]"
       style={{
         background:
           'radial-gradient(70% 90% at 50% 100%, rgba(139,92,246,.16) 0%, rgba(11,11,13,0) 60%), #0B0B0D',
       }}
     >
-      <div className="section-dots" aria-hidden />
-      <div className="relative mx-auto max-w-[1360px]">
+      <div className="mx-auto max-w-[1360px]">
         <div className="mb-20 text-center">
           <div className="mb-6 font-mono text-[10.5px] uppercase tracking-[0.2em] text-subtle">
             Enforced
