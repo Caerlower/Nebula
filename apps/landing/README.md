@@ -70,8 +70,8 @@ quality tiers on mobile (fewer particles/stars, 3 noise octaves, no MSAA),
 
 ## Waitlist
 
-Emails are stored in in-memory React state only (`WaitlistContext`) — resets
-on refresh by design. Wire `submit()` to a backend when ready.
+The final CTA posts to `/api/waitlist` (same-origin Hub route in production).
+Local Vite-only sessions ignore failed requests by design.
 
 ## Polish backlog (next passes)
 
